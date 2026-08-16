@@ -1,0 +1,25 @@
+# SIH 2026 — Problem Statement
+
+- **Problem Statement ID:** SIH26040
+- **Problem Statement Title:** FloatChat – AI-Powered Conversational Interface for ARGO Ocean Data Discovery and Visualization
+- **Theme:** Miscellaneous (Ocean Technology)
+- **PS Category:** Software
+- **Team Name:** Ctrl Alt Elites
+
+## Description
+Build an AI-powered conversational interface (FloatChat) that makes 4000+ Argo ocean float data accessible to non-technical users through natural language queries (voice + text), multilingual support (Hindi, Tamil, Telugu, English), and interactive 3D ocean visualizations.
+
+## Core Features (Approved)
+1. OceanVoice — Voice-first interface (Web Speech API + Whisper)
+2. AnomalyRadar — Proactive anomaly detection & alert engine
+3. WhatsApp/Telegram Bot — Zero app download delivery
+4. OceanLens 3D — WebGL depth cross-section visualization
+5. FloatChat Classroom — "Adopt a Float" education module
+
+## Tech Stack (Locked)
+- Frontend: React + TypeScript + Tailwind CSS + Three.js/Deck.gl + Leaflet
+- Backend: FastAPI (Python)
+- Database: PostgreSQL + FAISS/Chroma
+- AI/LLM: LLaMA/Mistral via OmniRoute + RAG pipeline
+- Data Pipeline: xarray + netCDF4 + argopy
+- Delivery: Web App + WhatsApp Business API + Telegram Bot
