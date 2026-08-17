@@ -33,7 +33,7 @@ interface ChatMessageProps {
 
 // Icon resolver for dynamic stat chips
 function renderStatIcon(iconName: string) {
-  const iconClass = "w-3.5 h-3.5 text-slate-400 mb-1";
+  const iconClass = "w-3.5 h-3.5 text-ocean-cyan shrink-0";
   switch (iconName.toLowerCase()) {
     case 'map-pin':
     case 'mappin':
@@ -65,7 +65,7 @@ function renderStatIcon(iconName: string) {
     case 'mld':
       return <Activity className={iconClass} />;
     case 'alert':
-      return <AlertTriangle className={iconClass} />;
+      return <AlertTriangle className="w-3.5 h-3.5 text-coral-alert shrink-0" />;
     default:
       return <Gauge className={iconClass} />;
   }
@@ -157,8 +157,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         <div
           className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 border shadow-md ${
             isUser
-              ? 'bg-slate-800 border-slate-700 text-slate-200'
-              : 'bg-cyan-950/80 border-cyan-500/40 text-cyan-300 shadow-cyan-950/40'
+              ? 'bg-abyssal-800 border-abyssal-700 text-slate-200'
+              : 'bg-abyssal-900 border-ocean-cyan/40 text-ocean-cyan shadow-glow-cyan-sm'
           }`}
         >
           {isUser ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
@@ -168,8 +168,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         <div
           className={`relative rounded-2xl p-4 transition-all duration-200 ${
             isUser
-              ? 'bg-cyan-500 text-slate-950 font-medium rounded-tr-sm shadow-lg shadow-cyan-500/20'
-              : 'bg-slate-900/90 border border-slate-800/90 text-slate-100 rounded-tl-sm shadow-xl shadow-slate-950/50 backdrop-blur-md w-full'
+              ? 'bg-gradient-to-r from-ocean-cyan to-teal-400 text-abyssal-950 font-medium rounded-tr-sm shadow-lg shadow-ocean-cyan/20'
+              : 'bg-abyssal-900/90 border border-abyssal-800/90 text-slate-100 rounded-tl-sm shadow-2xl backdrop-blur-xl w-full'
           }`}
         >
           {/* USER MESSAGE VIEW */}
@@ -181,10 +181,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             /* ASSISTANT STRUCTURED CARD VIEW */
             <>
               {/* 1. Header with Metadata & Progressive Disclosure Meatball Menu */}
-              <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-slate-800/80 text-[10px] text-slate-400">
+              <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-abyssal-800/80 text-[10px] text-slate-400">
                 <div className="flex items-center space-x-1.5">
-                  <Sparkles className="w-3 h-3 text-cyan-400" />
-                  <span className="font-bold tracking-wider uppercase text-cyan-300 font-mono">
+                  <Sparkles className="w-3 h-3 text-ocean-cyan" />
+                  <span className="font-bold tracking-wider uppercase text-ocean-cyan font-mono">
                     Lehar AI Ocean Intelligence
                   </span>
                 </div>
@@ -199,29 +199,29 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                     <button
                       onClick={() => setMenuOpen(!menuOpen)}
                       title="More data actions"
-                      className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                      className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-abyssal-800 transition cursor-pointer"
                     >
                       <MoreHorizontal className="w-3.5 h-3.5" />
                     </button>
 
                     {menuOpen && (
-                      <div className="absolute right-0 mt-1 w-44 bg-slate-950 border border-slate-800 rounded-xl shadow-2xl p-1 z-30 space-y-0.5 animate-in fade-in zoom-in-95 duration-100">
+                      <div className="absolute right-0 mt-1 w-44 bg-abyssal-950 border border-abyssal-800 rounded-xl shadow-2xl p-1 z-30 space-y-0.5 animate-in fade-in zoom-in-95 duration-100">
                         {message.sql && (
                           <button
                             onClick={() => {
                               setShowSql(!showSql);
                               setMenuOpen(false);
                             }}
-                            className="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-xs text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer font-mono"
+                            className="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-xs text-slate-300 hover:text-white hover:bg-abyssal-800 transition cursor-pointer font-mono"
                           >
-                            <Code2 className="w-3.5 h-3.5 text-cyan-400" />
+                            <Code2 className="w-3.5 h-3.5 text-ocean-cyan" />
                             <span>{showSql ? 'Hide SQL' : 'View SQL Query'}</span>
                           </button>
                         )}
                         {message.data && message.data.length > 0 && (
                           <button
                             onClick={handleExportCSV}
-                            className="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-xs text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                            className="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-xs text-slate-300 hover:text-white hover:bg-abyssal-800 transition cursor-pointer"
                           >
                             <Download className="w-3.5 h-3.5 text-slate-400" />
                             <span>Export as CSV</span>
@@ -233,7 +233,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                               handleCopySql();
                               setMenuOpen(false);
                             }}
-                            className="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-xs text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                            className="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-xs text-slate-300 hover:text-white hover:bg-abyssal-800 transition cursor-pointer"
                           >
                             {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
                             <span>{copied ? 'Copied' : 'Copy SQL Text'}</span>
@@ -254,8 +254,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 
               {/* 3. Hero Metric Block (Big Focus Value) */}
               {message.hero_stat && (
-                <div className="mb-3 p-3 rounded-xl bg-gradient-to-r from-slate-950 via-cyan-950/40 to-slate-950 border border-cyan-500/30 shadow-inner">
-                  <div className="text-[10px] uppercase font-bold tracking-widest text-cyan-400/90 font-mono">
+                <div className="mb-3 p-3 rounded-xl bg-gradient-to-r from-abyssal-950 via-abyssal-900 to-abyssal-950 border border-ocean-cyan/30 shadow-inner">
+                  <div className="text-[10px] uppercase font-bold tracking-widest text-ocean-cyan font-mono">
                     {message.hero_stat.label}
                   </div>
                   <div className="flex items-baseline space-x-2 mt-0.5">
@@ -263,7 +263,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                       {message.hero_stat.value}
                     </span>
                     {message.hero_stat.unit && (
-                      <span className="text-xs font-semibold text-cyan-300/80">
+                      <span className="text-xs font-semibold text-cyan-300/80 font-mono">
                         {message.hero_stat.unit}
                       </span>
                     )}
@@ -277,7 +277,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                   {message.stats.map((stat: StatItem, idx: number) => (
                     <div
                       key={idx}
-                      className="p-2 rounded-xl bg-slate-950/70 border border-slate-800/90 flex flex-col justify-center text-left hover:border-slate-700/80 transition-colors"
+                      className="p-2.5 rounded-xl bg-abyssal-950/70 border border-abyssal-800/90 flex flex-col justify-center text-left hover:border-ocean-cyan/30 transition-all duration-150"
                     >
                       <div className="flex items-center space-x-1.5">
                         {renderStatIcon(stat.icon)}
@@ -285,7 +285,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                           {stat.label}
                         </span>
                       </div>
-                      <div className="text-xs font-bold text-slate-200 mt-0.5 truncate" title={stat.value}>
+                      <div className="text-xs font-bold text-slate-200 mt-1 truncate" title={stat.value}>
                         {stat.value}
                       </div>
                     </div>
@@ -300,11 +300,11 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                   onClick={handlePlayVoice}
                   className={`flex items-center justify-center space-x-2 py-2 px-3 rounded-xl border text-xs font-semibold transition active:scale-[0.98] cursor-pointer ${
                     isPlayingAudio
-                      ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse'
-                      : 'bg-slate-950/70 hover:bg-slate-800 border-slate-800 text-slate-200 hover:text-cyan-300 hover:border-cyan-500/30'
+                      ? 'bg-coral-alert/20 text-coral-glow border-coral-alert/40 animate-pulse shadow-glow-coral'
+                      : 'bg-abyssal-950/80 hover:bg-abyssal-800 border-abyssal-800 text-slate-200 hover:text-ocean-cyan hover:border-ocean-cyan/40'
                   }`}
                 >
-                  <Volume2 className="w-4 h-4 text-cyan-400" />
+                  <Volume2 className="w-4 h-4 text-ocean-cyan" />
                   <span>{isPlayingAudio ? 'Stop Audio' : 'Listen Voice'}</span>
                 </button>
 
@@ -312,22 +312,22 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                 {message.chart?.chart_type === 'depth_profile' && onView3D ? (
                   <button
                     onClick={onView3D}
-                    className="flex items-center justify-center space-x-2 py-2 px-3 rounded-xl bg-cyan-950/40 hover:bg-cyan-900/50 border border-cyan-500/30 hover:border-cyan-500/50 text-cyan-300 text-xs font-semibold transition active:scale-[0.98] cursor-pointer"
+                    className="flex items-center justify-center space-x-2 py-2 px-3 rounded-xl bg-ocean-cyan/15 hover:bg-ocean-cyan/25 border border-ocean-cyan/40 hover:border-ocean-cyan/60 text-ocean-cyan text-xs font-semibold transition active:scale-[0.98] cursor-pointer shadow-glow-cyan-sm"
                   >
-                    <Box className="w-4 h-4 text-cyan-400" />
+                    <Box className="w-4 h-4 text-ocean-cyan" />
                     <span>Open 3D Lens</span>
                   </button>
                 ) : message.map_markers && message.map_markers.length > 0 && onFocusMap ? (
                   <button
                     onClick={() => onFocusMap(message.map_markers!)}
-                    className="flex items-center justify-center space-x-2 py-2 px-3 rounded-xl bg-cyan-950/40 hover:bg-cyan-900/50 border border-cyan-500/30 hover:border-cyan-500/50 text-cyan-300 text-xs font-semibold transition active:scale-[0.98] cursor-pointer"
+                    className="flex items-center justify-center space-x-2 py-2 px-3 rounded-xl bg-ocean-cyan/15 hover:bg-ocean-cyan/25 border border-ocean-cyan/40 hover:border-ocean-cyan/60 text-ocean-cyan text-xs font-semibold transition active:scale-[0.98] cursor-pointer shadow-glow-cyan-sm"
                   >
-                    <MapPin className="w-4 h-4 text-cyan-400" />
+                    <MapPin className="w-4 h-4 text-ocean-cyan" />
                     <span>Show on map ({message.map_markers.length})</span>
                   </button>
                 ) : (
-                  <div className="flex items-center justify-center text-[10px] font-mono text-slate-500 bg-slate-950/40 rounded-xl border border-slate-800/50">
-                    <Database className="w-3 h-3 mr-1 text-cyan-400" />
+                  <div className="flex items-center justify-center text-[10px] font-mono text-slate-400 bg-abyssal-950/60 rounded-xl border border-abyssal-800">
+                    <Database className="w-3 h-3 mr-1 text-ocean-cyan" />
                     <span>{readingCount} readings</span>
                   </div>
                 )}
@@ -335,9 +335,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 
               {/* Collapsible SQL Block */}
               {showSql && message.sql && (
-                <div className="mt-2 p-3 rounded-xl bg-slate-950 border border-slate-800 font-mono text-xs text-cyan-300 overflow-x-auto">
-                  <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-800/80 text-[10px] text-slate-400">
-                    <span className="uppercase tracking-wider font-bold text-cyan-400">Safe SELECT Query:</span>
+                <div className="mt-2 p-3 rounded-xl bg-abyssal-950 border border-abyssal-800 font-mono text-xs text-ocean-cyan overflow-x-auto shadow-inner">
+                  <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-abyssal-800/80 text-[10px] text-slate-400">
+                    <span className="uppercase tracking-wider font-bold text-ocean-cyan">Safe SELECT Query:</span>
                     <button
                       onClick={handleCopySql}
                       className="flex items-center space-x-1 text-slate-400 hover:text-white transition cursor-pointer"

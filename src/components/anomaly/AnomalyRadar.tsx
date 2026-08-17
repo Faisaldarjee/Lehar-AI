@@ -36,30 +36,30 @@ export const AnomalyRadar: React.FC<AnomalyRadarProps> = ({
   const getSeverityBadge = (severity: string) => {
     switch (severity) {
       case 'critical':
-        return 'bg-rose-500/20 text-rose-300 border-rose-500/40';
+        return 'bg-coral-alert/20 text-coral-glow border-coral-alert/50 shadow-glow-coral';
       case 'high':
-        return 'bg-amber-500/20 text-amber-300 border-amber-500/40';
+        return 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm';
       case 'medium':
-        return 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40';
+        return 'bg-ocean-cyan/20 text-ocean-cyan border-ocean-cyan/40 shadow-sm';
       default:
-        return 'bg-slate-800 text-slate-400 border-slate-700';
+        return 'bg-abyssal-800 text-slate-400 border-abyssal-700';
     }
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-950/80 border border-slate-800/80 rounded-2xl p-4 shadow-xl space-y-4">
+    <div className="flex flex-col h-full bg-abyssal-950/85 border border-abyssal-800/90 rounded-2xl p-4 md:p-5 shadow-2xl backdrop-blur-2xl space-y-4 overflow-hidden">
       
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-abyssal-800/80">
         <div className="flex items-center space-x-3">
-          <div className="p-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400">
+          <div className="p-2.5 rounded-xl bg-coral-alert/10 border border-coral-alert/30 text-coral-alert shadow-glow-coral">
             <Radar className="w-5 h-5 animate-spin" style={{ animationDuration: '4s' }} />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-base font-bold text-white font-heading">AnomalyRadar Watchdog</h3>
-              <span className="px-2 py-0.5 text-[10px] font-bold uppercase rounded bg-rose-500/20 text-rose-400 border border-rose-500/30">
-                24/7 Ocean Health Alert
+              <span className="px-2 py-0.5 text-[10px] font-bold uppercase rounded-md bg-coral-alert/20 text-coral-glow border border-coral-alert/30 font-mono">
+                24/7 Ocean Alert
               </span>
             </div>
             <p className="text-xs text-slate-400">
@@ -71,11 +71,12 @@ export const AnomalyRadar: React.FC<AnomalyRadarProps> = ({
         {/* Scan Trigger Button */}
         {onTriggerScan && (
           <button
+            type="button"
             onClick={onTriggerScan}
             disabled={isScanning}
-            className="flex items-center space-x-2 px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-semibold text-slate-200 hover:text-white transition disabled:opacity-50 cursor-pointer shadow-md"
+            className="flex items-center space-x-2 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-ocean-cyan to-teal-400 text-abyssal-950 font-bold text-xs shadow-md shadow-ocean-cyan/25 transition active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${isScanning ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 text-abyssal-950 ${isScanning ? 'animate-spin' : ''}`} />
             <span>{isScanning ? 'Scanning Profiles...' : 'Run Live Scan'}</span>
           </button>
         )}
@@ -83,15 +84,16 @@ export const AnomalyRadar: React.FC<AnomalyRadarProps> = ({
 
       {/* Severity Filter Tabs */}
       <div className="flex items-center gap-2 text-xs">
-        <span className="text-slate-500 font-medium mr-1">Severity:</span>
+        <span className="text-slate-400 font-semibold mr-1 font-heading">Severity:</span>
         {['all', 'critical', 'high', 'medium', 'low'].map((sev) => (
           <button
             key={sev}
+            type="button"
             onClick={() => setFilterSeverity(sev)}
-            className={`px-2.5 py-1 rounded-lg font-medium capitalize transition cursor-pointer ${
+            className={`px-3 py-1 rounded-xl font-semibold capitalize transition active:scale-95 cursor-pointer ${
               filterSeverity === sev
-                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                ? 'bg-ocean-cyan text-abyssal-950 shadow-md shadow-ocean-cyan/20 font-bold'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-abyssal-850'
             }`}
           >
             {sev}
@@ -99,79 +101,95 @@ export const AnomalyRadar: React.FC<AnomalyRadarProps> = ({
         ))}
       </div>
 
-      {/* Alert Cards Feed */}
-      <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+      {/* Alert Feed Stream */}
+      <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
         {filtered.length === 0 ? (
-          <div className="h-48 flex flex-col items-center justify-center text-center text-slate-500 space-y-2">
-            <CheckCircle2 className="w-8 h-8 text-emerald-400/60" />
-            <p className="text-sm font-semibold text-slate-300 font-heading">All Parameters Normal</p>
-            <p className="text-xs max-w-xs">No active anomalies matching this severity filter in the Indian Ocean sector.</p>
+          <div className="h-full flex flex-col items-center justify-center text-center p-8 bg-abyssal-900/40 rounded-xl border border-abyssal-800">
+            <CheckCircle2 className="w-10 h-10 text-emerald-400 mb-2" />
+            <p className="text-sm font-bold text-slate-200 font-heading">All Ocean Sectors Nominal</p>
+            <p className="text-xs text-slate-400 max-w-xs mt-1">
+              No anomalies exceeding climatological threshold detected in current filter view.
+            </p>
           </div>
         ) : (
           filtered.map((alert) => {
-            const isHovered = activeAlertId === alert.id;
+            const isTemp = alert.parameter.toLowerCase().includes('temp');
+            const isSal = alert.parameter.toLowerCase().includes('sal');
+            const isSelected = activeAlertId === alert.id;
+
             return (
               <div
                 key={alert.id}
-                onMouseEnter={() => {
+                onMouseEnter={() => onHoverAnomaly && onHoverAnomaly(alert)}
+                onMouseLeave={() => onHoverAnomaly && onHoverAnomaly(null)}
+                onClick={() => {
                   setActiveAlertId(alert.id);
-                  if (onHoverAnomaly) onHoverAnomaly(alert);
+                  if (onSelectAnomaly) onSelectAnomaly(alert);
                 }}
-                onMouseLeave={() => {
-                  setActiveAlertId(null);
-                }}
-                onClick={() => onSelectAnomaly && onSelectAnomaly(alert)}
-                className={`group p-4 rounded-xl border transition-all duration-200 cursor-pointer shadow-md space-y-2 ${
-                  isHovered
-                    ? 'bg-slate-900 border-cyan-500/60 shadow-cyan-950/40 ring-1 ring-cyan-500/30'
-                    : 'bg-slate-900/60 hover:bg-slate-900 border-slate-800/90'
+                className={`p-3.5 rounded-xl border transition-all duration-200 cursor-pointer shadow-sm ${
+                  isSelected
+                    ? 'bg-abyssal-850 border-ocean-cyan/60 shadow-glow-cyan-sm ring-1 ring-ocean-cyan/40'
+                    : 'bg-abyssal-900/90 hover:bg-abyssal-850 border-abyssal-800 hover:border-abyssal-700'
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center space-x-2">
-                    {alert.parameter === 'temperature' ? (
-                      <Flame className="w-4 h-4 text-rose-400 shrink-0" />
-                    ) : (
-                      <Droplets className="w-4 h-4 text-cyan-400 shrink-0" />
-                    )}
-                    <span className="font-bold text-white text-sm font-heading">
-                      {alert.parameter === 'temperature' ? 'Surface Temperature Spike' : 'Salinity Influx Anomaly'}
-                    </span>
-                    {alert.mhw_category && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40">
-                        {alert.mhw_category}
-                      </span>
-                    )}
+                    <div
+                      className={`p-2 rounded-lg ${
+                        isTemp
+                          ? 'bg-coral-alert/10 text-coral-alert border border-coral-alert/30'
+                          : isSal
+                          ? 'bg-ocean-cyan/10 text-ocean-cyan border border-ocean-cyan/30'
+                          : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                      }`}
+                    >
+                      {isTemp ? <Flame className="w-4 h-4" /> : <Droplets className="w-4 h-4" />}
+                    </div>
+
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs font-bold text-white font-heading">
+                          {alert.parameter ? alert.parameter.toUpperCase() : 'Ocean Alert'}
+                        </h4>
+                        <span
+                          className={`text-[10px] font-bold px-1.5 py-0.2 rounded uppercase border font-mono ${getSeverityBadge(
+                            alert.severity
+                          )}`}
+                        >
+                          {alert.severity}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-0.5">{alert.description}</p>
+                    </div>
                   </div>
 
-                  <span
-                    className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${getSeverityBadge(
-                      alert.severity
-                    )}`}
-                  >
-                    {alert.severity}
-                  </span>
+                  <div className="text-right shrink-0">
+                    <div className="text-xs font-bold text-white font-mono">
+                      {alert.value}
+                      <span className="text-[10px] text-slate-400 ml-0.5">
+                        {isTemp ? '°C' : isSal ? 'PSU' : ''}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-mono text-slate-500">
+                      {new Date(alert.date).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                    </span>
+                  </div>
                 </div>
 
-                <p className="text-xs text-slate-300 leading-relaxed">{alert.description}</p>
-
-                {/* Telemetry Footer */}
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/60 text-[11px] font-mono text-slate-400">
-                  <div className="flex items-center gap-3">
-                    <span className="flex items-center gap-1 text-slate-300">
-                      <MapPin className="w-3 h-3 text-cyan-400" />
+                {/* Bottom Footer Info */}
+                <div className="mt-2.5 pt-2 border-t border-abyssal-800/80 flex items-center justify-between text-[10px] font-mono text-slate-400">
+                  <div className="flex items-center space-x-2">
+                    <span className="flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-ocean-cyan" />
                       {alert.latitude.toFixed(2)}°N, {alert.longitude.toFixed(2)}°E
                     </span>
-                    <span>
-                      Observed: <strong className="text-white">{alert.value}</strong> vs Threshold{' '}
-                      <strong className="text-slate-300">{alert.threshold}</strong>
-                    </span>
+                    <span>•</span>
+                    <span>Float #{alert.float_id || 'Alert-Probe'}</span>
                   </div>
 
-                  <div className="flex items-center gap-1 text-cyan-400 group-hover:translate-x-0.5 transition-transform">
-                    <span>Focus Map</span>
-                    <ArrowUpRight className="w-3 h-3" />
-                  </div>
+                  <span className="flex items-center gap-0.5 text-ocean-cyan hover:underline">
+                    View on Map <ArrowUpRight className="w-3 h-3" />
+                  </span>
                 </div>
               </div>
             );

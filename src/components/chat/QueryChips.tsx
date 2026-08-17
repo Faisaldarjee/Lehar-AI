@@ -40,10 +40,10 @@ export const QueryChips: React.FC<QueryChipsProps> = ({ onSelectQuery }) => {
   ];
 
   return (
-    <div className="w-full flex flex-col space-y-2 py-1.5">
+    <div className="w-full flex flex-col space-y-1.5 py-1">
       <div className="flex items-center space-x-1.5 text-xs text-slate-400 font-medium px-1">
-        <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-        <span>Discovery Queries (Hindi & English):</span>
+        <Sparkles className="w-3.5 h-3.5 text-ocean-cyan" />
+        <span className="font-heading font-semibold text-slate-300">Quick Discovery Queries:</span>
       </div>
       
       <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
@@ -52,12 +52,13 @@ export const QueryChips: React.FC<QueryChipsProps> = ({ onSelectQuery }) => {
           return (
             <button
               key={idx}
+              type="button"
               onClick={() => onSelectQuery(item.query)}
-              className="group flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-850 border border-slate-800 hover:border-cyan-500/40 text-xs text-slate-300 hover:text-white transition-all duration-150 whitespace-nowrap shadow-sm active:scale-98 cursor-pointer"
+              className="group flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-abyssal-900/90 hover:bg-abyssal-850 border border-abyssal-800 hover:border-ocean-cyan/50 text-xs text-slate-300 hover:text-white transition-all duration-200 whitespace-nowrap shadow-sm active:scale-95 cursor-pointer"
             >
-              <Icon className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-105 transition-transform" />
-              <span>{item.label}</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800/90 text-slate-400 group-hover:bg-cyan-500/20 group-hover:text-cyan-300 font-mono">
+              <Icon className="w-3.5 h-3.5 text-ocean-cyan group-hover:scale-110 transition-transform duration-200" />
+              <span className="font-medium">{item.label}</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded bg-abyssal-800 text-slate-400 group-hover:bg-ocean-cyan/20 group-hover:text-ocean-cyan font-mono transition-colors">
                 {item.tag}
               </span>
             </button>

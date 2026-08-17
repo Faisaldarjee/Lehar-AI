@@ -254,7 +254,7 @@ export default function App() {
   const isStageActive = hasEverQueried || messages.length > 0;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-white">
+    <div className="min-h-screen bg-abyssal-950 text-slate-100 flex flex-col font-sans selection:bg-ocean-cyan selection:text-abyssal-950">
       
       {/* Top Main Navigation */}
       <Navbar
@@ -299,18 +299,18 @@ export default function App() {
             </div>
 
             {/* Right Smart Stage: Single Context-Aware Panel (7 Cols) */}
-            <div className="lg:col-span-7 flex flex-col h-full bg-slate-950/80 border border-slate-800/80 rounded-2xl overflow-hidden shadow-2xl relative">
+            <div className="lg:col-span-7 flex flex-col h-full bg-abyssal-950/85 border border-abyssal-800/90 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-2xl relative">
               
               {/* Stage Top Floating Segmented Switch (Visible only after first query) */}
               {isStageActive && (
-                <div className="absolute top-3 right-3 z-30 flex items-center gap-1 bg-slate-950/95 backdrop-blur-md p-1 rounded-xl border border-slate-800/90 shadow-xl animate-in fade-in zoom-in-95 duration-150">
+                <div className="absolute top-3 right-3 z-30 flex items-center gap-1 bg-abyssal-950/95 backdrop-blur-xl p-1 rounded-xl border border-abyssal-800/90 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
                   <button
                     type="button"
                     onClick={() => setStageView('map')}
-                    className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                    className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer active:scale-95 ${
                       stageView === 'map'
-                        ? 'bg-cyan-500 text-slate-950 font-bold shadow'
-                        : 'text-slate-400 hover:text-slate-200'
+                        ? 'bg-gradient-to-r from-ocean-cyan to-teal-400 text-abyssal-950 font-bold shadow-md shadow-ocean-cyan/25'
+                        : 'text-slate-400 hover:text-slate-100 hover:bg-abyssal-800/50'
                     }`}
                   >
                     <MapPin className="w-3.5 h-3.5" />
@@ -320,10 +320,10 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setStageView('chart')}
-                    className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                    className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer active:scale-95 ${
                       stageView === 'chart'
-                        ? 'bg-cyan-500 text-slate-950 font-bold shadow'
-                        : 'text-slate-400 hover:text-slate-200'
+                        ? 'bg-gradient-to-r from-ocean-cyan to-teal-400 text-abyssal-950 font-bold shadow-md shadow-ocean-cyan/25'
+                        : 'text-slate-400 hover:text-slate-100 hover:bg-abyssal-800/50'
                     }`}
                   >
                     <LineChart className="w-3.5 h-3.5" />
@@ -333,10 +333,10 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setStageView('3d')}
-                    className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                    className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer active:scale-95 ${
                       stageView === '3d'
-                        ? 'bg-cyan-500 text-slate-950 font-bold shadow'
-                        : 'text-slate-400 hover:text-slate-200'
+                        ? 'bg-gradient-to-r from-ocean-cyan to-teal-400 text-abyssal-950 font-bold shadow-md shadow-ocean-cyan/25'
+                        : 'text-slate-400 hover:text-slate-100 hover:bg-abyssal-800/50'
                     }`}
                   >
                     <Box className="w-3.5 h-3.5" />
@@ -348,16 +348,16 @@ export default function App() {
               {/* Stage Content: Ambient Idle Placeholder vs Active Visual Stage */}
               {!isStageActive ? (
                 /* AMBIENT IDLE STATE (Before First Query) */
-                <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-8 text-center space-y-6 bg-gradient-to-b from-slate-950 via-slate-900/60 to-slate-950">
+                <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-8 text-center space-y-6 bg-gradient-to-b from-abyssal-950 via-abyssal-900/70 to-abyssal-950">
                   
                   {/* Subtle Branded Pulse Emblem */}
                   <div className="relative">
-                    <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-cyan-500/20 via-teal-500/10 to-slate-900 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-2xl shadow-cyan-500/10">
+                    <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-ocean-cyan/20 via-teal-500/10 to-abyssal-900 border border-ocean-cyan/30 flex items-center justify-center text-ocean-cyan shadow-glow-cyan">
                       <Waves className="w-10 h-10 animate-pulse" />
                     </div>
                     <span className="absolute -top-1 -right-1 flex h-4 w-4">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-4 w-4 bg-cyan-500"></span>
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-ocean-cyan opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-4 w-4 bg-ocean-cyan"></span>
                     </span>
                   </div>
 
@@ -373,15 +373,15 @@ export default function App() {
 
                   {/* 3 Capabilities Preview Cards */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-lg text-left">
-                    <div className="p-3 rounded-xl bg-slate-900/70 border border-slate-800/80 space-y-1 hover:border-cyan-500/30 transition">
-                      <div className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 w-fit">
+                    <div className="p-3.5 rounded-xl bg-abyssal-900/80 border border-abyssal-800 space-y-1 hover:border-ocean-cyan/40 hover:shadow-glow-cyan-sm transition-all duration-200">
+                      <div className="p-1.5 rounded-lg bg-ocean-cyan/10 text-ocean-cyan w-fit">
                         <MapPin className="w-3.5 h-3.5" />
                       </div>
                       <h4 className="text-xs font-bold text-slate-200 font-heading">Fleet Map & PFZ</h4>
                       <p className="text-[10px] text-slate-400 leading-tight">97 active floats with thermal front fishing advisories</p>
                     </div>
 
-                    <div className="p-3 rounded-xl bg-slate-900/70 border border-slate-800/80 space-y-1 hover:border-teal-500/30 transition">
+                    <div className="p-3.5 rounded-xl bg-abyssal-900/80 border border-abyssal-800 space-y-1 hover:border-teal-400/40 hover:shadow-sm transition-all duration-200">
                       <div className="p-1.5 rounded-lg bg-teal-500/10 text-teal-400 w-fit">
                         <LineChart className="w-3.5 h-3.5" />
                       </div>
@@ -389,7 +389,7 @@ export default function App() {
                       <p className="text-[10px] text-slate-400 leading-tight">Temperature & salinity down to 2,000m depth</p>
                     </div>
 
-                    <div className="p-3 rounded-xl bg-slate-900/70 border border-slate-800/80 space-y-1 hover:border-cyan-400/30 transition">
+                    <div className="p-3.5 rounded-xl bg-abyssal-900/80 border border-abyssal-800 space-y-1 hover:border-cyan-400/40 hover:shadow-glow-cyan-sm transition-all duration-200">
                       <div className="p-1.5 rounded-lg bg-cyan-400/10 text-cyan-300 w-fit">
                         <Box className="w-3.5 h-3.5" />
                       </div>
@@ -406,15 +406,15 @@ export default function App() {
                         setHasEverQueried(true);
                         setStageView('map');
                       }}
-                      className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-cyan-950/60 hover:bg-cyan-900/70 border border-cyan-500/40 text-cyan-300 text-xs font-semibold transition cursor-pointer active:scale-98 shadow-md"
+                      className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-ocean-cyan/15 hover:bg-ocean-cyan/25 border border-ocean-cyan/40 text-ocean-cyan text-xs font-semibold transition cursor-pointer active:scale-95 shadow-glow-cyan-sm"
                     >
                       <Compass className="w-3.5 h-3.5" />
                       <span>Browse Fleet Map Directly</span>
                       <ArrowRight className="w-3.5 h-3.5 ml-0.5" />
                     </button>
 
-                    <div className="flex items-center space-x-1.5 text-[10px] font-mono text-slate-400 bg-slate-900/80 px-3 py-2 rounded-xl border border-slate-800">
-                      <Database className="w-3 h-3 text-cyan-400" />
+                    <div className="flex items-center space-x-1.5 text-[10px] font-mono text-slate-400 bg-abyssal-900/90 px-3 py-2 rounded-xl border border-abyssal-800 shadow-sm">
+                      <Database className="w-3 h-3 text-ocean-cyan" />
                       <span>646 Profiles • 97 Floats Live</span>
                     </div>
                   </div>
@@ -455,16 +455,16 @@ export default function App() {
 
         {/* VIEW 2: OCEAN EXPLORER (MERGED MAP & 3D WITH INTERNAL TOGGLE) */}
         {(currentMode === 'map' || currentMode === '3d') && (
-          <div className="flex-1 min-h-[580px] h-[calc(100vh-80px)] flex flex-col relative rounded-2xl overflow-hidden shadow-2xl border border-slate-800/80">
+          <div className="flex-1 min-h-[580px] h-[calc(100vh-80px)] flex flex-col relative rounded-2xl overflow-hidden shadow-2xl border border-abyssal-800/80">
             
             {/* Top Explorer View Selector */}
-            <div className="absolute top-3 left-16 z-30 flex items-center gap-1 bg-slate-950/95 backdrop-blur-md p-1 rounded-xl border border-slate-800 shadow-xl">
+            <div className="absolute top-3 left-16 z-30 flex items-center gap-1 bg-abyssal-950/95 backdrop-blur-xl p-1 rounded-xl border border-abyssal-800 shadow-2xl">
               <button
                 type="button"
                 onClick={() => setExplorerView('map')}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer active:scale-95 ${
                   explorerView === 'map'
-                    ? 'bg-cyan-500 text-slate-950 font-bold shadow'
+                    ? 'bg-gradient-to-r from-ocean-cyan to-teal-400 text-abyssal-950 font-bold shadow-md shadow-ocean-cyan/25'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
@@ -475,9 +475,9 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setExplorerView('3d')}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer active:scale-95 ${
                   explorerView === '3d'
-                    ? 'bg-cyan-500 text-slate-950 font-bold shadow'
+                    ? 'bg-gradient-to-r from-ocean-cyan to-teal-400 text-abyssal-950 font-bold shadow-md shadow-ocean-cyan/25'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
@@ -570,8 +570,8 @@ export default function App() {
 
       </main>
 
-      {/* Clean Footer Bar (No duplicated telemetry numbers) */}
-      <footer className="border-t border-slate-900 bg-slate-950/80 px-4 py-2 text-center text-[10px] text-slate-500">
+      {/* Clean Footer Bar */}
+      <footer className="border-t border-abyssal-900 bg-abyssal-950/90 px-4 py-2 text-center text-[10px] text-slate-500">
         <p>Lehar AI 1.0 • Know the Sea. Know the Way. • Developed for INCOIS & Ministry of Earth Sciences (SIH26040)</p>
       </footer>
 

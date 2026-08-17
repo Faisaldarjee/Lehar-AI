@@ -34,7 +34,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (e) e.preventDefault();
     if (!inputText.trim() || isLoading) return;
     
-    // If voice was listening, turn it off on submit
     if (isListening) {
       toggleListening();
     }
@@ -54,26 +53,26 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     <div className="w-full flex flex-col space-y-2">
       {/* Listening State Banner */}
       {isListening && (
-        <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-gradient-to-r from-rose-950/90 via-slate-900 to-cyan-950/90 border border-rose-500/50 text-rose-300 text-xs shadow-lg animate-pulse">
+        <div className="flex items-center justify-between px-3.5 py-2 rounded-xl bg-gradient-to-r from-coral-alert/30 via-abyssal-900 to-ocean-cyan/20 border border-coral-alert/60 text-coral-glow text-xs shadow-glow-coral animate-pulse">
           <div className="flex items-center space-x-2">
-            <Radio className="w-4 h-4 text-rose-400 animate-spin" />
+            <Radio className="w-4 h-4 text-coral-alert animate-spin" />
             <span className="font-bold text-white">Mic Active: Speak now in {selectedLanguage.split('-')[0].toUpperCase()}</span>
             <span className="text-slate-400 text-[11px] hidden sm:inline">(Your speech is typing below in real-time)</span>
           </div>
           <button
             type="button"
             onClick={toggleListening}
-            className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-rose-500 hover:bg-rose-600 text-white transition cursor-pointer shadow-sm"
+            className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-coral-alert hover:bg-rose-600 text-white transition cursor-pointer shadow-md"
           >
-            Click Mic or Here to Stop
+            Stop Listening
           </button>
         </div>
       )}
 
       {/* Error Message if Mic permission denied */}
       {errorMsg && (
-        <div className="flex items-center space-x-1.5 px-3 py-1 rounded-lg bg-rose-950/80 border border-rose-500/30 text-rose-300 text-xs">
-          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+        <div className="flex items-center space-x-1.5 px-3 py-1 rounded-lg bg-coral-dark/80 border border-coral-alert/40 text-coral-glow text-xs">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0 text-coral-alert" />
           <span>{errorMsg}</span>
         </div>
       )}
@@ -81,10 +80,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       {/* Input Form Bar */}
       <form
         onSubmit={handleSubmit}
-        className={`relative flex items-center bg-slate-900/95 border rounded-2xl shadow-xl px-3 py-2 transition-all duration-200 ${
+        className={`relative flex items-center bg-abyssal-900/95 border rounded-2xl shadow-2xl px-3 py-2 transition-all duration-200 ${
           isListening 
-            ? 'border-rose-500/80 ring-2 ring-rose-500/20 shadow-rose-950/30' 
-            : 'border-slate-800 focus-within:border-cyan-500/50 shadow-slate-950/50'
+            ? 'border-coral-alert/80 ring-2 ring-coral-alert/30 shadow-glow-coral' 
+            : 'border-abyssal-800 focus-within:border-ocean-cyan/60 focus-within:shadow-glow-cyan-sm'
         }`}
       >
         {/* OceanVoice Mic Toggle Button */}
@@ -94,8 +93,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           title={isListening ? 'Stop Listening (Click to stop)' : 'Click to Speak (Speech-to-Text)'}
           className={`p-2 rounded-xl transition-all duration-200 shrink-0 cursor-pointer ${
             isListening
-              ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/40 scale-105 animate-pulse'
-              : 'text-slate-400 hover:text-cyan-300 hover:bg-slate-800/80 active:scale-95'
+              ? 'bg-coral-alert text-white shadow-glow-coral scale-105 animate-pulse'
+              : 'text-slate-400 hover:text-ocean-cyan hover:bg-abyssal-800/80 active:scale-95'
           }`}
         >
           {isListening ? (
@@ -118,7 +117,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               : "Ask ocean data (or click Mic to speak)..."
           }
           disabled={isLoading}
-          className="flex-1 bg-transparent px-3 py-1.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none disabled:opacity-50"
+          className="flex-1 bg-transparent px-3 py-1.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none disabled:opacity-50 font-medium"
         />
 
         {/* Clear Button */}
@@ -126,7 +125,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           <button
             type="button"
             onClick={() => setInputText('')}
-            className="p-1 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition mr-1 cursor-pointer"
+            className="p-1 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-abyssal-800 transition mr-1 cursor-pointer"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -136,14 +135,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         <button
           type="submit"
           disabled={!inputText.trim() || isLoading}
-          className="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-bold text-xs shadow-md shadow-cyan-500/25 transition-all duration-150 active:scale-98 shrink-0 cursor-pointer"
+          className="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-ocean-cyan to-teal-400 hover:from-teal-300 hover:to-cyan-300 disabled:opacity-40 disabled:cursor-not-allowed text-abyssal-950 font-bold text-xs shadow-md shadow-ocean-cyan/25 transition-all duration-150 active:scale-95 shrink-0 cursor-pointer"
         >
           {isLoading ? (
             <Sparkles className="w-3.5 h-3.5 animate-spin" />
           ) : (
-            <Send className="w-3.5 h-3.5 text-slate-950" />
+            <Send className="w-3.5 h-3.5 text-abyssal-950" />
           )}
-          <span className="hidden sm:inline">Query Ocean</span>
+          <span className="hidden sm:inline font-heading">Query Ocean</span>
         </button>
       </form>
     </div>

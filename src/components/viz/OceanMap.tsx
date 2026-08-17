@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { Navigation, RefreshCw, Fish, ChevronDown } from 'lucide-react';
+import { Fish, ChevronDown, Compass } from 'lucide-react';
 import type { FloatSummary, MapMarker, PFZAdvisory } from '../../types';
 import { getPFZAdvisories } from '../../services/api';
 
@@ -24,7 +24,7 @@ interface OceanMapProps {
 
 // Function to create styled SVG pulsating markers
 function createFloatIcon(isHighlighted: boolean, isSelected: boolean) {
-  const color = isSelected ? '#f59e0b' : isHighlighted ? '#38bdf8' : '#06b6d4';
+  const color = isSelected ? '#f59e0b' : isHighlighted ? '#2dd4bf' : '#06b6d4';
   const size = isSelected ? 24 : isHighlighted ? 20 : 14;
 
   const svgHtml = `
@@ -46,7 +46,7 @@ function createFloatIcon(isHighlighted: boolean, isSelected: boolean) {
         border-radius: 50%;
         background-color: ${color};
         border: 2px solid #ffffff;
-        box-shadow: 0 0 10px ${color};
+        box-shadow: 0 0 12px ${color};
       "></span>
     </div>
   `;
@@ -100,101 +100,110 @@ export const OceanMap: React.FC<OceanMapProps> = ({
     if (trajectory && trajectory.length > 0) {
       const latest = trajectory[trajectory.length - 1];
       setMapCenter([latest.latitude, latest.longitude]);
-      setMapZoom(5);
+      setMapZoom(6);
     }
   }, [trajectory]);
 
-  // Convert trajectory to polyline coordinates
-  const polylinePositions: [number, number][] = trajectory
-    ? trajectory.map((p) => [p.latitude, p.longitude])
-    : [];
-
-  const handleResetView = () => {
-    setMapCenter([14.0, 75.0]);
-    setMapZoom(5);
+  // Handle focus on specific ocean sectors
+  const handleFocusSector = (sector: 'arabian' | 'bengal' | 'equatorial' | 'south' | 'all') => {
+    switch (sector) {
+      case 'arabian':
+        setMapCenter([16.0, 68.0]);
+        setMapZoom(6);
+        break;
+      case 'bengal':
+        setMapCenter([15.0, 88.0]);
+        setMapZoom(6);
+        break;
+      case 'equatorial':
+        setMapCenter([0.0, 78.0]);
+        setMapZoom(5);
+        break;
+      case 'south':
+        setMapCenter([-15.0, 80.0]);
+        setMapZoom(5);
+        break;
+      case 'all':
+      default:
+        setMapCenter([12.0, 78.0]);
+        setMapZoom(5);
+        break;
+    }
+    setSectorMenuOpen(false);
   };
 
-  const handleRegionFocus = (lat: number, lon: number, zoom: number) => {
-    setMapCenter([lat, lon]);
-    setMapZoom(zoom);
-  };
+  const polylinePositions: [number, number][] =
+    trajectory?.map((t) => [t.latitude, t.longitude] as [number, number]) || [];
 
   return (
-    <div className="relative w-full h-full min-h-[350px] rounded-2xl overflow-hidden border border-slate-800/80 shadow-2xl bg-slate-950">
+    <div className="relative w-full h-full min-h-[420px] rounded-2xl overflow-hidden border border-abyssal-800/80 bg-abyssal-950 shadow-2xl flex flex-col">
       
-      {/* Top Map Action Bar */}
+      {/* Map Floating Control Header */}
       <div className="absolute top-3 left-3 right-3 z-[1000] flex flex-wrap items-center justify-between gap-2 pointer-events-none">
         
-        {/* Region Quick Selector Dropdown */}
+        {/* Left: Sector Selector Dropdown */}
         <div className="relative pointer-events-auto">
           <button
+            type="button"
             onClick={() => setSectorMenuOpen(!sectorMenuOpen)}
-            className="flex items-center gap-1.5 bg-slate-950/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-800 hover:border-cyan-500/40 text-xs font-semibold text-slate-300 hover:text-white transition shadow-lg cursor-pointer"
+            className="flex items-center space-x-2 bg-abyssal-950/95 backdrop-blur-md px-3 py-1.5 rounded-xl border border-abyssal-800 text-xs font-bold text-slate-200 hover:text-white shadow-xl transition cursor-pointer active:scale-95"
           >
-            <Navigation className="w-3.5 h-3.5 text-cyan-400" />
+            <Compass className="w-3.5 h-3.5 text-ocean-cyan" />
             <span>Jump to sector</span>
-            <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${sectorMenuOpen ? 'rotate-180 text-cyan-400' : ''}`} />
+            <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${sectorMenuOpen ? 'rotate-180 text-ocean-cyan' : ''}`} />
           </button>
 
+          {/* Sector Menu Popover */}
           {sectorMenuOpen && (
-            <div className="absolute left-0 mt-1.5 w-48 bg-slate-950/95 backdrop-blur-xl border border-slate-800 rounded-xl shadow-2xl p-1 z-[1100] space-y-0.5 animate-in fade-in zoom-in-95 duration-100">
+            <div className="absolute left-0 mt-1.5 w-52 bg-abyssal-950 border border-abyssal-800 rounded-xl shadow-2xl p-1.5 z-50 space-y-1 animate-in fade-in zoom-in-95 duration-100">
+              <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">
+                Indian Ocean Sectors
+              </div>
               {[
-                { label: 'Mumbai Coast', lat: 18.9, lon: 70.5, zoom: 6 },
-                { label: 'Gujarat / Saurashtra', lat: 21.0, lon: 69.0, zoom: 6 },
-                { label: 'Arabian Sea Central', lat: 15.0, lon: 66.0, zoom: 5 },
-                { label: 'Kochi / South Coast', lat: 9.5, lon: 75.5, zoom: 6 },
-                { label: 'Bay of Bengal Central', lat: 15.0, lon: 85.0, zoom: 5 },
-                { label: 'Chennai Coast', lat: 13.0, lon: 81.5, zoom: 6 },
-                { label: 'Visakhapatnam (Vizag)', lat: 17.5, lon: 84.0, zoom: 6 },
-              ].map((sector) => (
+                { id: 'all', label: 'Entire Indian Ocean', coord: '12°N, 78°E' },
+                { id: 'arabian', label: 'Arabian Sea (West Coast)', coord: '16°N, 68°E' },
+                { id: 'bengal', label: 'Bay of Bengal (East Coast)', coord: '15°N, 88°E' },
+                { id: 'equatorial', label: 'Equatorial Indian Ocean', coord: '0°N, 78°E' },
+                { id: 'south', label: 'South Indian Ocean', coord: '15°S, 80°E' },
+              ].map((item) => (
                 <button
-                  key={sector.label}
-                  onClick={() => {
-                    handleRegionFocus(sector.lat, sector.lon, sector.zoom);
-                    setSectorMenuOpen(false);
-                  }}
-                  className="w-full px-2.5 py-1.5 rounded-lg text-left text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800/80 transition cursor-pointer flex items-center justify-between"
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleFocusSector(item.id as any)}
+                  className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-xs text-slate-300 hover:text-white hover:bg-abyssal-850 transition cursor-pointer"
                 >
-                  <span>{sector.label}</span>
-                  <span className="text-[10px] text-cyan-400 font-mono">Zoom</span>
+                  <span className="font-semibold">{item.label}</span>
+                  <span className="text-[10px] font-mono text-slate-500">{item.coord}</span>
                 </button>
               ))}
             </div>
           )}
         </div>
 
-        {/* Status / Controls */}
+        {/* Right: PFZ Layer Toggle + Float Counter */}
         <div className="flex items-center gap-2 pointer-events-auto">
-          {/* PFZ Toggle */}
           <button
+            type="button"
             onClick={() => setShowPFZ(!showPFZ)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition shadow-lg cursor-pointer ${
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold backdrop-blur-md shadow-xl transition cursor-pointer active:scale-95 ${
               showPFZ
-                ? 'bg-emerald-950/90 border-emerald-500/50 text-emerald-300 shadow-emerald-950/30'
-                : 'bg-slate-950/90 border-slate-800 text-slate-400 hover:text-white'
+                ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300 shadow-emerald-950/40'
+                : 'bg-abyssal-950/90 border-abyssal-800 text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Fish className="w-3.5 h-3.5 text-emerald-400" />
-            <span>{showPFZ ? 'PFZ Active' : 'Show PFZ'}</span>
+            <Fish className={`w-3.5 h-3.5 ${showPFZ ? 'text-emerald-400' : 'text-slate-400'}`} />
+            <span>PFZ Fishing Advisories ({pfzZones.length})</span>
           </button>
 
-          <div className="bg-slate-950/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-800 text-xs text-slate-300 font-mono flex items-center gap-2 shadow-lg">
-            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-            <span>{floats.length} Argo Floats</span>
+          <div className="hidden sm:flex items-center space-x-1.5 bg-abyssal-950/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-abyssal-800 text-xs font-mono text-slate-300 shadow-xl">
+            <span className="w-2 h-2 rounded-full bg-ocean-cyan shadow-sm"></span>
+            <span>{floats.length} Active ARGO Floats</span>
           </div>
-
-          <button
-            onClick={handleResetView}
-            title="Reset to Indian Ocean Center"
-            className="p-2 rounded-xl bg-slate-950/90 backdrop-blur-md border border-slate-800 hover:border-cyan-500/40 text-slate-300 hover:text-white transition shadow-lg cursor-pointer"
-          >
-            <RefreshCw className="w-4 h-4 text-cyan-400" />
-          </button>
         </div>
 
       </div>
 
-      {/* Leaflet Map Canvas */}
+      {/* React Leaflet Map Container */}
       <MapContainer
         center={mapCenter}
         zoom={mapZoom}
@@ -235,8 +244,8 @@ export const OceanMap: React.FC<OceanMapProps> = ({
               >
                 <Popup>
                   <div className="p-1 space-y-2 text-slate-100 min-w-[220px]">
-                    <div className="flex items-center justify-between border-b border-slate-700 pb-1">
-                      <span className="font-bold text-emerald-400 text-sm flex items-center gap-1">
+                    <div className="flex items-center justify-between border-b border-abyssal-800 pb-1">
+                      <span className="font-bold text-emerald-400 text-sm flex items-center gap-1 font-heading">
                         <Fish className="w-3.5 h-3.5" /> PFZ: {pfz.pfz_rating} ({pfz.pfz_score}/100)
                       </span>
                       <span className="text-[10px] font-mono bg-emerald-950 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-700">
@@ -246,7 +255,7 @@ export const OceanMap: React.FC<OceanMapProps> = ({
 
                     <p className="text-xs text-slate-200 leading-relaxed">{pfz.advisory}</p>
 
-                    <div className="grid grid-cols-2 gap-1.5 text-[11px] font-mono text-slate-300 pt-1 border-t border-slate-800">
+                    <div className="grid grid-cols-2 gap-1.5 text-[11px] font-mono text-slate-300 pt-1 border-t border-abyssal-800">
                       <div>
                         <span className="text-slate-500 block text-[9px]">SST</span>
                         {pfz.sst_celsius}°C
@@ -271,7 +280,7 @@ export const OceanMap: React.FC<OceanMapProps> = ({
           <Polyline
             positions={polylinePositions}
             pathOptions={{
-              color: '#38bdf8',
+              color: '#2dd4bf',
               weight: 3,
               opacity: 0.85,
               dashArray: '4, 8',
@@ -296,9 +305,9 @@ export const OceanMap: React.FC<OceanMapProps> = ({
             >
               <Popup>
                 <div className="p-1 space-y-2 text-slate-100 min-w-[200px]">
-                  <div className="flex items-center justify-between border-b border-slate-700 pb-1">
-                    <span className="font-bold text-cyan-400 text-sm">Float #{f.float_id}</span>
-                    <span className="text-[10px] font-mono bg-cyan-950 text-cyan-300 px-1.5 py-0.5 rounded border border-cyan-800">
+                  <div className="flex items-center justify-between border-b border-abyssal-800 pb-1">
+                    <span className="font-bold text-ocean-cyan text-sm font-heading">Float #{f.float_id}</span>
+                    <span className="text-[10px] font-mono bg-abyssal-900 text-ocean-cyan px-1.5 py-0.5 rounded border border-abyssal-800">
                       Active
                     </span>
                   </div>
@@ -325,7 +334,7 @@ export const OceanMap: React.FC<OceanMapProps> = ({
                   {onSelectFloat && (
                     <button
                       onClick={() => onSelectFloat(f.float_id)}
-                      className="w-full mt-2 py-1.5 px-3 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition text-center cursor-pointer"
+                      className="w-full mt-2 py-1.5 px-3 rounded-lg bg-gradient-to-r from-ocean-cyan to-teal-400 text-abyssal-950 font-bold text-xs transition text-center cursor-pointer shadow-md"
                     >
                       Inspect CTD Depth Profile
                     </button>
@@ -338,22 +347,22 @@ export const OceanMap: React.FC<OceanMapProps> = ({
       </MapContainer>
 
       {/* Map Legend Overlay */}
-      <div className="absolute bottom-3 right-3 z-[1000] bg-slate-950/90 backdrop-blur-md p-2.5 rounded-xl border border-slate-800 text-[11px] text-slate-300 space-y-1.5 shadow-lg">
-        <div className="font-bold text-slate-400 text-[10px] uppercase tracking-wider">Fleet & PFZ Legend</div>
+      <div className="absolute bottom-3 right-3 z-[1000] bg-abyssal-950/95 backdrop-blur-xl p-2.5 rounded-xl border border-abyssal-800 text-[10px] text-slate-300 space-y-1.5 shadow-2xl">
+        <div className="font-bold text-slate-400 uppercase tracking-wider font-mono">Fleet & PFZ Legend</div>
         <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-sm shadow-cyan-400"></span>
+          <span className="w-2.5 h-2.5 rounded-full bg-ocean-cyan shadow-glow-cyan-sm"></span>
           <span>ARGO Profiling Float</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400"></span>
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm"></span>
           <span>PFZ Excellent Fishing Zone (SST 27-29°C)</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-sm shadow-amber-400"></span>
+          <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-sm"></span>
           <span>PFZ Good / Selected Float</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-4 h-0.5 border-t-2 border-dashed border-sky-400"></span>
+          <span className="w-4 h-0.5 border-t-2 border-dashed border-ocean-cyan"></span>
           <span>10-Day Drift Trajectory</span>
         </div>
       </div>
