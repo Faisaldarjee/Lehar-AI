@@ -2,7 +2,7 @@ import React, { useRef, useEffect } from 'react';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { QueryChips } from './QueryChips';
-import { Waves, Database, Sparkles, Languages } from 'lucide-react';
+import { Waves, Database, Sparkles } from 'lucide-react';
 import type { ChatMessage as ChatMessageType, DashboardStats } from '../../types';
 
 interface ChatPanelProps {
@@ -37,7 +37,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
       {/* Top Chat Header */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-abyssal-800/80 bg-abyssal-900/60 shadow-inner">
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2.5">
           <div className="p-1.5 rounded-xl bg-ocean-cyan/10 text-ocean-cyan border border-ocean-cyan/25 shadow-glow-cyan-sm">
             <Waves className="w-4 h-4" />
           </div>
@@ -49,17 +49,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center space-x-2 text-[10px] font-mono">
-          {/* Automatic Multi-Language Indicator Badge */}
-          <div className="flex items-center space-x-1.5 bg-abyssal-900/90 px-2.5 py-1 rounded-xl border border-abyssal-800 text-slate-300 shadow-sm">
-            <Languages className="w-3 h-3 text-ocean-cyan" />
-            <span className="text-[10px] font-medium text-ocean-cyan">Auto-Detect Lang</span>
-          </div>
-
-          <span className="hidden md:flex items-center gap-1 bg-abyssal-900/90 px-2.5 py-1 rounded-xl border border-abyssal-800 text-slate-300 shadow-sm">
+        {/* Single Clean Live Ocean Telemetry Badge */}
+        <div className="flex items-center text-[10px] font-mono">
+          <div className="flex items-center space-x-1.5 bg-abyssal-900/90 px-3 py-1 rounded-xl border border-abyssal-800 text-slate-300 shadow-sm">
             <Database className="w-3 h-3 text-ocean-cyan" /> 
-            <span>{stats ? `${stats.total_profiles} Profiles (${stats.total_floats} Floats)` : '646 Profiles (97 Floats)'}</span>
-          </span>
+            <span>{stats ? `${stats.total_profiles} Profiles • ${stats.total_floats} Floats Live` : '646 Profiles • 97 Floats Live'}</span>
+          </div>
         </div>
       </div>
 
@@ -78,7 +73,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                 Ready for Ocean Queries
               </h3>
               <p className="text-xs text-slate-400 max-w-xs leading-relaxed">
-                Ask in English, Hindi, or Hinglish via text or mic.
+                Ask anything in Hindi, Hinglish, or English via text or voice.
               </p>
             </div>
 

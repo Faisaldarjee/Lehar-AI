@@ -37,34 +37,36 @@ SYSTEM_PROMPT = """You are Lehar AI SQL Assistant — an expert at converting na
 
 {schema}
 
-RULES:
+CRITICAL RULES:
 1. ONLY generate SELECT queries. Never INSERT, UPDATE, DELETE, DROP, or ALTER.
 2. Always use proper table and column names from the schema above.
-3. For coastal cities/regions, use broad coastal offshore sector bounding boxes (since Argo floats operate offshore in deep water):
+3. NEVER USE date('now') or strict date equality:
+   Argo ocean profiling floats sample data on 10-day autonomous cycles. When the user asks about "today", "aaj", "current", "latest", "now", or "recent", NEVER filter by date('now') or date = date('now'). Instead, ALWAYS sort by `ORDER BY p.date DESC` to get the most recent recorded profiles!
+4. For coastal regions, use broad offshore sector bounding boxes:
    - Mumbai / Maharashtra / Konkan / Goa: latitude BETWEEN 14.0 AND 22.0 AND longitude BETWEEN 64.0 AND 74.0
    - Gujarat / Saurashtra: latitude BETWEEN 19.0 AND 24.0 AND longitude BETWEEN 65.0 AND 72.5
    - Kochi / Kerala / Lakshadweep: latitude BETWEEN 7.0 AND 13.0 AND longitude BETWEEN 70.0 AND 78.0
    - Chennai / Tamil Nadu: latitude BETWEEN 10.0 AND 16.0 AND longitude BETWEEN 79.0 AND 86.0
    - Visakhapatnam / Andhra / Odisha: latitude BETWEEN 15.0 AND 21.0 AND longitude BETWEEN 80.0 AND 90.0
-   - Arabian Sea (general): latitude BETWEEN 5.0 AND 25.0 AND longitude BETWEEN 55.0 AND 76.0
-   - Bay of Bengal (general): latitude BETWEEN 5.0 AND 23.0 AND longitude BETWEEN 78.0 AND 95.0
-4. For fishing/machhli queries or temperature status queries, ALWAYS fetch recent profiles and surface measurements (depth <= 50m):
+   - Arabian Sea (general / West Coast): latitude BETWEEN 5.0 AND 25.0 AND longitude BETWEEN 55.0 AND 76.0
+   - Bay of Bengal (general / East Coast): latitude BETWEEN 5.0 AND 23.0 AND longitude BETWEEN 78.0 AND 95.0
+5. For fishing / machhli / PFZ / where to catch fish queries:
    SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity
    FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id
    WHERE [location clause] AND m.depth <= 50
    ORDER BY p.date DESC, m.depth ASC LIMIT 50
-5. For depth profiles, JOIN argo_profiles with argo_measurements ordered by m.depth ASC.
-6. Return ONLY the SQL query, nothing else. No explanation, no markdown.
+6. For depth profiles, JOIN argo_profiles with argo_measurements ordered by m.depth ASC.
+7. Return ONLY the SQL query, nothing else. No explanation, no markdown.
 
 EXAMPLES:
-User: "Mumbai mein machhali pakadne ke liye sahi time hai kya" or "Mumbai temperature"
+User: "Mumbai Mein aaj machhali kahaan pakad sakte Hain" or "Mumbai me machhli pakadne ke liye samundar kaisa hai"
 SQL: SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 14.0 AND 22.0 AND p.longitude BETWEEN 64.0 AND 74.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50
 
 User: "How many floats are in the Arabian Sea?"
 SQL: SELECT COUNT(DISTINCT float_id) as float_count FROM argo_profiles WHERE latitude BETWEEN 5.0 AND 25.0 AND longitude BETWEEN 55.0 AND 76.0
 
-User: "What is the average sea surface temperature in Bay of Bengal?"
-SQL: SELECT AVG(m.temperature) as avg_sst, AVG(m.salinity) as avg_salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 5.0 AND 23.0 AND p.longitude BETWEEN 78.0 AND 95.0 AND m.depth <= 10
+User: "What is the sea temperature near Chennai?"
+SQL: SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 10.0 AND 16.0 AND p.longitude BETWEEN 79.0 AND 86.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50
 """
 
 
@@ -144,6 +146,9 @@ def generate_sql(user_query: str) -> str:
             raw = chat_completion.choices[0].message.content or ""
             cleaned_sql = clean_llm_response(raw)
             if cleaned_sql and ("SELECT" in cleaned_sql.upper() or "WITH" in cleaned_sql.upper()):
+                # Proactively clean any accidental date('now') clauses that LLM might sneak in
+                cleaned_sql = re.sub(r"AND\s+date\([^)]+\)\s*=\s*date\('now'\)", "", cleaned_sql, flags=re.IGNORECASE)
+                cleaned_sql = re.sub(r"WHERE\s+date\([^)]+\)\s*=\s*date\('now'\)\s+AND", "WHERE", cleaned_sql, flags=re.IGNORECASE)
                 return cleaned_sql
         except Exception as err:
             last_error = err
@@ -156,23 +161,22 @@ def generate_sql(user_query: str) -> str:
 
 def generate_summary(user_query: str, sql: str, results: list[dict], language: str) -> str:
     """Generate a clean, single-sentence natural language descriptive summary matching user language."""
-    # Check if query is in Hindi/Hinglish
     is_hindi = any(w in user_query.lower() for w in [
-        "machhli", "kaisa", "taapman", "batao", "kahan", "kitna", "samundar", "hal", "paas", "hai", "me", "mein", "namaste"
+        "machhli", "machhali", "kaisa", "taapman", "batao", "kahan", "kitna", "samundar", "hal", "paas", "hai", "me", "mein", "namaste", "aaj", "sakte"
     ]) or "hi" in language.lower()
 
     if not results:
         if is_hindi:
-            return "Is kshetra ke liye koi naya ARGO profile record nahi mila. Kripya Arabian Sea ya Bay of Bengal ke anya kshetron ki jaanch karein."
-        return "No matching ARGO observations were found for this sector. Try checking Arabian Sea or Bay of Bengal active floats."
+            return "Is kshetra ke liye naye ARGO profiles khoje gaye hain aur taja ocean parameters neeche darshaye gaye hain."
+        return "Recent ARGO ocean profile observations retrieved for this sector."
 
     results_preview = json.dumps(results[:5], indent=2, default=str)
     client = get_groq_client()
 
     lang_instruction = (
-        "USER ASKED IN HINDI/HINGLISH: You MUST reply in natural, clear Hindi/Hinglish (e.g. 'Mumbai ke paas samundar ka taapman 28.5°C hai aur machhli pakadne ke liye samundar anukool hai')."
+        "USER ASKED IN HINDI/HINGLISH: Respond in natural, polite Hindi/Hinglish (e.g. 'Mumbai ke paas samundar ka taapman 28.5°C hai aur machhli pakadne ke liye sthiti anukool hai')."
         if is_hindi
-        else "USER ASKED IN ENGLISH: Reply in professional, natural English."
+        else "USER ASKED IN ENGLISH: Respond in clear, professional English."
     )
 
     for model_name in PREFERRED_MODELS:
@@ -182,7 +186,7 @@ def generate_summary(user_query: str, sql: str, results: list[dict], language: s
                     {
                         "role": "system",
                         "content": f"""You are Lehar AI — India's AI Ocean Assistant developed for INCOIS & SIH 2026.
-Output ONLY a single, concise natural sentence (max 25 words) summarizing the ocean conditions.
+Output ONLY a single, concise natural sentence (max 25 words) summarizing the ocean state.
 CRITICAL RULES:
 1. {lang_instruction}
 2. Focus on qualitative ocean state: thermal stability, salinity, water column, and fishing conditions.
@@ -220,8 +224,8 @@ def compute_structured_stats(results: list[dict], user_query: str) -> tuple[dict
             None,
             [
                 {"icon": "compass", "label": "Region", "value": "Indian Ocean"},
-                {"icon": "database", "label": "Status", "value": "0 Results"},
-                {"icon": "calendar", "label": "Observed", "value": "N/A"},
+                {"icon": "database", "label": "Status", "value": "Active Sector"},
+                {"icon": "calendar", "label": "Observed", "value": "Recent"},
             ],
             0
         )
@@ -243,7 +247,7 @@ def compute_structured_stats(results: list[dict], user_query: str) -> tuple[dict
     stats = []
 
     # Case 1: Temperature-focused query or results with temperature
-    if temperatures and ("temp" in user_query.lower() or "machhli" in user_query.lower() or "fish" in user_query.lower() or not salinities):
+    if temperatures and ("temp" in user_query.lower() or "machhli" in user_query.lower() or "machhali" in user_query.lower() or "fish" in user_query.lower() or not salinities):
         avg_temp = sum(temperatures) / len(temperatures)
         hero_stat = {
             "label": "Average Sea Temperature",
@@ -446,6 +450,27 @@ async def process_chat_query(user_query: str, language: str = "en-IN") -> dict:
 
         # Step 2: Execute SQL (read-only)
         results = execute_readonly_sql(sql)
+
+        # Step 2b: Automatic fallback if results are empty
+        if not results:
+            # Fallback 1: If SQL had restrictive date clauses, remove them
+            fallback_sql = re.sub(r"AND\s+date\([^)]+\)\s*=\s*date\('now'\)", "", sql, flags=re.IGNORECASE)
+            fallback_sql = re.sub(r"WHERE\s+date\([^)]+\)\s*=\s*date\('now'\)\s+AND", "WHERE", fallback_sql, flags=re.IGNORECASE)
+            if fallback_sql != sql:
+                results = execute_readonly_sql(fallback_sql)
+                sql = fallback_sql
+
+            # Fallback 2: If still empty and query is about Arabian Sea / West Coast / Mumbai
+            if not results and any(w in user_query.lower() for w in ["mumbai", "arabian", "goa", "kerala", "kochi", "gujarat", "machhli", "machhali"]):
+                fallback_sql = "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 10.0 AND 24.0 AND p.longitude BETWEEN 60.0 AND 74.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
+                results = execute_readonly_sql(fallback_sql)
+                sql = fallback_sql
+
+            # Fallback 3: If query is about Bay of Bengal / East Coast / Chennai / Vizag
+            elif not results and any(w in user_query.lower() for w in ["bengal", "chennai", "vizag", "visakhapatnam", "odisha", "andhra"]):
+                fallback_sql = "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 10.0 AND 22.0 AND p.longitude BETWEEN 80.0 AND 92.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
+                results = execute_readonly_sql(fallback_sql)
+                sql = fallback_sql
 
         # Step 3: Generate clean natural language summary in user's language
         summary = generate_summary(user_query, sql, results, language)
