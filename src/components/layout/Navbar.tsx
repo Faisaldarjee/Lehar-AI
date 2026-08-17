@@ -15,13 +15,12 @@ import type { AppMode } from '../../types';
 interface NavbarProps {
   currentMode: AppMode;
   onSelectMode: (mode: AppMode) => void;
-  backendOnline: boolean;
+  backendOnline?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentMode,
   onSelectMode,
-  backendOnline,
 }) => {
   const [demoOpen, setDemoOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -86,10 +85,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               alt="Lehar AI" 
               className="w-9 h-9 rounded-xl object-cover border border-ocean-cyan/40 shadow-glow-cyan-sm ring-1 ring-ocean-cyan/30 group-hover:scale-105 transition-transform duration-200"
             />
-            <span className="absolute -bottom-1 -right-1 flex h-2.5 w-2.5">
-              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${backendOnline ? 'bg-emerald-400' : 'bg-amber-400'} opacity-75`}></span>
-              <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${backendOnline ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
-            </span>
           </div>
 
           <div>

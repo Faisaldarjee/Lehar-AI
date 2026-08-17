@@ -5,22 +5,26 @@ import { useVoice } from '../../hooks/useVoice';
 interface ChatInputProps {
   onSendMessage: (text: string, mode?: 'text' | 'voice') => void;
   isLoading: boolean;
-  selectedLanguage: string;
+  language?: string;
+  selectedLanguage?: string;
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
   onSendMessage,
   isLoading,
+  language,
   selectedLanguage,
 }) => {
   const [inputText, setInputText] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const activeLang = language === 'auto' || !language ? (selectedLanguage || 'en-IN') : language;
+
   const { isListening, errorMsg, toggleListening } = useVoice({
     onTranscriptChange: (text) => {
       setInputText(text);
     },
-    language: selectedLanguage,
+    language: activeLang,
   });
 
   // Focus input when listening starts
@@ -56,8 +60,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         <div className="flex items-center justify-between px-3.5 py-2 rounded-xl bg-gradient-to-r from-coral-alert/30 via-abyssal-900 to-ocean-cyan/20 border border-coral-alert/60 text-coral-glow text-xs shadow-glow-coral animate-pulse">
           <div className="flex items-center space-x-2">
             <Radio className="w-4 h-4 text-coral-alert animate-spin" />
-            <span className="font-bold text-white">Mic Active: Speak now in {selectedLanguage.split('-')[0].toUpperCase()}</span>
-            <span className="text-slate-400 text-[11px] hidden sm:inline">(Your speech is typing below in real-time)</span>
+            <span className="font-bold text-white">Mic Active: Speak now in Hindi or English</span>
+            <span className="text-slate-400 text-[11px] hidden sm:inline">(Speech transcribed in real-time)</span>
           </div>
           <button
             type="button"

@@ -18,11 +18,18 @@ backend_env = Path(__file__).resolve().parent.parent / '.env'
 load_dotenv(dotenv_path=backend_env)
 load_dotenv()
 
+# Active Groq LLM Models (with automatic fallback)
+PREFERRED_MODELS = [
+    "openai/gpt-oss-120b",
+    "openai/gpt-oss-20b",
+    "qwen/qwen3.6-27b"
+]
+
 
 def get_groq_client():
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key or api_key == "your_groq_api_key_here":
-        raise ValueError("GROQ_API_KEY is not set in .env file. Please add your Groq API key.")
+        raise ValueError("GROQ_API_KEY is not set in backend/.env file. Please add your Groq API key.")
     return Groq(api_key=api_key)
 
 
@@ -75,7 +82,6 @@ def format_timestamp(dt_str: str | None) -> str:
     if not dt_str:
         return "Recent observation"
     try:
-        # Clean string
         cleaned = dt_str.replace("Z", "+00:00")
         if "T" in cleaned:
             dt = datetime.fromisoformat(cleaned)
@@ -84,7 +90,6 @@ def format_timestamp(dt_str: str | None) -> str:
             dt = datetime.fromisoformat(cleaned)
             return dt.strftime("%d %b %Y")
     except Exception:
-        # Fallback to string slicing if unparseable
         if len(dt_str) >= 10:
             return dt_str[:10]
     return dt_str
@@ -103,66 +108,106 @@ def format_depth_range(min_d: float | None, max_d: float | None) -> str:
     return f"{min_d:.1f} m"
 
 
+def clean_llm_response(text: str) -> str:
+    """Strip markdown code blocks, reasoning think tags, and quotes."""
+    cleaned = text.strip()
+    # Strip <think> tags if model produces reasoning
+    if "</think>" in cleaned:
+        cleaned = cleaned.split("</think>")[-1].strip()
+    elif "<think>" in cleaned:
+        cleaned = re.sub(r"<think>.*", "", cleaned, flags=re.DOTALL).strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:sql)?\n?", "", cleaned)
+        cleaned = re.sub(r"\n?```$", "", cleaned)
+    cleaned = re.sub(r'^["\']|["\']$', '', cleaned).strip()
+    return cleaned
+
+
 def generate_sql(user_query: str) -> str:
-    """Convert natural language query to SQL using Groq LLM."""
+    """Convert natural language query to SQL using Groq LLM with fallback models."""
     schema_text = get_db_schema_text()
     system = SYSTEM_PROMPT.format(schema=schema_text)
+    client = get_groq_client()
 
-    chat_completion = get_groq_client().chat.completions.create(
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user_query}
-        ],
-        model="llama-3.3-70b-versatile",
-        temperature=0.1,
-        max_tokens=500,
-    )
+    last_error = None
+    for model_name in PREFERRED_MODELS:
+        try:
+            chat_completion = client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_query}
+                ],
+                model=model_name,
+                temperature=0.1,
+                max_tokens=800,
+            )
+            raw = chat_completion.choices[0].message.content or ""
+            cleaned_sql = clean_llm_response(raw)
+            if cleaned_sql and ("SELECT" in cleaned_sql.upper() or "WITH" in cleaned_sql.upper()):
+                return cleaned_sql
+        except Exception as err:
+            last_error = err
+            continue
 
-    raw = chat_completion.choices[0].message.content.strip()
-
-    # Clean up: remove markdown code fences if present
-    if raw.startswith("```"):
-        raw = re.sub(r"^```(?:sql)?\n?", "", raw)
-        raw = re.sub(r"\n?```$", "", raw)
-
-    return raw.strip()
+    if last_error:
+        raise last_error
+    raise ValueError("Could not generate safe SQL from query.")
 
 
 def generate_summary(user_query: str, sql: str, results: list[dict], language: str) -> str:
-    """Generate a clean, single-sentence natural language descriptive summary without raw numbers."""
+    """Generate a clean, single-sentence natural language descriptive summary matching user language."""
+    # Check if query is in Hindi/Hinglish
+    is_hindi = any(w in user_query.lower() for w in [
+        "machhli", "kaisa", "taapman", "batao", "kahan", "kitna", "samundar", "hal", "paas", "hai", "me", "mein", "namaste"
+    ]) or "hi" in language.lower()
+
     if not results:
-        if "hi" in language.lower() or any(w in user_query.lower() for w in ["kaisa", "machhli", "batao", "kahan"]):
+        if is_hindi:
             return "Is kshetra ke liye koi naya ARGO profile record nahi mila. Kripya Arabian Sea ya Bay of Bengal ke anya kshetron ki jaanch karein."
         return "No matching ARGO observations were found for this sector. Try checking Arabian Sea or Bay of Bengal active floats."
 
     results_preview = json.dumps(results[:5], indent=2, default=str)
+    client = get_groq_client()
 
-    chat_completion = get_groq_client().chat.completions.create(
-        messages=[
-            {
-                "role": "system",
-                "content": """You are Lehar AI — India's AI Ocean Assistant developed for INCOIS & SIH 2026.
-Output ONLY a single, concise descriptive sentence (max 25 words) summarizing the ocean state.
-CRITICAL RULES:
-1. Do NOT include raw numbers, exact decimals, coordinate pairs, or timestamps in this sentence. The frontend UI will display those in dedicated metric blocks.
-2. Focus purely on qualitative ocean conditions (e.g. thermal stability, salinity consistency, water column stratification, favorable fishing conditions, safe sea state).
-3. If the user query is in Hindi, Hinglish, or regional maritime terms, respond in clear, natural Hindi/Hinglish. If in English, respond in professional English.
-4. Output ONLY the 1 sentence. No bullet points, no markdown, no quotes."""
-            },
-            {
-                "role": "user",
-                "content": f"User Query: {user_query}\n\nSQL Results ({len(results)} rows sample):\n{results_preview}"
-            }
-        ],
-        model="llama-3.3-70b-versatile",
-        temperature=0.3,
-        max_tokens=150,
+    lang_instruction = (
+        "USER ASKED IN HINDI/HINGLISH: You MUST reply in natural, clear Hindi/Hinglish (e.g. 'Mumbai ke paas samundar ka taapman 28.5°C hai aur machhli pakadne ke liye samundar anukool hai')."
+        if is_hindi
+        else "USER ASKED IN ENGLISH: Reply in professional, natural English."
     )
 
-    summary = chat_completion.choices[0].message.content.strip()
-    # Strip enclosing quotes if model added them
-    summary = re.sub(r'^["\']|["\']$', '', summary)
-    return summary
+    for model_name in PREFERRED_MODELS:
+        try:
+            chat_completion = client.chat.completions.create(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": f"""You are Lehar AI — India's AI Ocean Assistant developed for INCOIS & SIH 2026.
+Output ONLY a single, concise natural sentence (max 25 words) summarizing the ocean conditions.
+CRITICAL RULES:
+1. {lang_instruction}
+2. Focus on qualitative ocean state: thermal stability, salinity, water column, and fishing conditions.
+3. Output ONLY the 1 sentence. No bullet points, no markdown, no quotes, no extra notes."""
+                    },
+                    {
+                        "role": "user",
+                        "content": f"User Query: {user_query}\n\nSQL Results ({len(results)} rows sample):\n{results_preview}"
+                    }
+                ],
+                model=model_name,
+                temperature=0.3,
+                max_tokens=800,
+            )
+            raw = chat_completion.choices[0].message.content or ""
+            summary = clean_llm_response(raw)
+            if summary:
+                return summary
+        except Exception:
+            continue
+
+    # Deterministic fallback if LLM summary failed
+    if is_hindi:
+        return "INCOIS ARGO data safaltapoorvak prapt ho gaya hai aur naye ocean metrics neeche darshaye gaye hain."
+    return "ARGO ocean profile observations retrieved successfully from the live INCOIS database."
 
 
 def compute_structured_stats(results: list[dict], user_query: str) -> tuple[dict | None, list[dict], int]:
@@ -206,11 +251,9 @@ def compute_structured_stats(results: list[dict], user_query: str) -> tuple[dict
             "unit": "°C"
         }
         
-        # Location stat
         loc_str = format_lat_lon(latitudes[0], longitudes[0]) if latitudes and longitudes else "Indian Ocean"
         stats.append({"icon": "map-pin", "label": "Location", "value": loc_str})
 
-        # Depth range stat
         if depths:
             depth_str = format_depth_range(min(depths), max(depths))
             stats.append({"icon": "ruler", "label": "Depth range", "value": depth_str})
@@ -220,7 +263,6 @@ def compute_structured_stats(results: list[dict], user_query: str) -> tuple[dict
         else:
             stats.append({"icon": "activity", "label": "Float ID", "value": f"#{float_ids[0]}" if float_ids else "Argo"})
 
-        # Recorded timestamp
         rec_date = format_timestamp(dates[0]) if dates else "Recent"
         stats.append({"icon": "calendar", "label": "Recorded", "value": rec_date})
 
@@ -247,7 +289,7 @@ def compute_structured_stats(results: list[dict], user_query: str) -> tuple[dict
         rec_date = format_timestamp(dates[0]) if dates else "Recent"
         stats.append({"icon": "calendar", "label": "Recorded", "value": rec_date})
 
-    # Case 3: Count / Aggregate queries (e.g. float_count, avg_sst directly in columns)
+    # Case 3: Count / Aggregate queries
     elif any(k in first_row for k in ["float_count", "count", "avg_sst", "avg_salinity", "total"]):
         val_key = [k for k in keys if any(s in k for s in ["count", "avg", "total", "sum"])][0]
         raw_val = first_row[val_key]
@@ -405,7 +447,7 @@ async def process_chat_query(user_query: str, language: str = "en-IN") -> dict:
         # Step 2: Execute SQL (read-only)
         results = execute_readonly_sql(sql)
 
-        # Step 3: Generate clean 1-sentence summary
+        # Step 3: Generate clean natural language summary in user's language
         summary = generate_summary(user_query, sql, results, language)
 
         # Step 4: Deterministically compute hero_stat and 3-column stats list
@@ -435,8 +477,8 @@ async def process_chat_query(user_query: str, language: str = "en-IN") -> dict:
 
     except ValueError as e:
         return {
-            "summary": f"Query safety validation stopped execution: {str(e)}",
-            "answer": f"I couldn't process that query safely: {str(e)}",
+            "summary": f"Query safety validation: {str(e)}",
+            "answer": f"Query safety validation: {str(e)}",
             "hero_stat": None,
             "stats": [],
             "reading_count": 0,
@@ -448,8 +490,8 @@ async def process_chat_query(user_query: str, language: str = "en-IN") -> dict:
         }
     except Exception as e:
         return {
-            "summary": "The ocean intelligence engine could not complete that query. Please try selecting a quick discovery query.",
-            "answer": "I couldn't complete that query right now. Please try a shorter question or choose a suggested query.",
+            "summary": f"Error executing query: {str(e)}",
+            "answer": f"Error executing query: {str(e)}",
             "hero_stat": None,
             "stats": [],
             "reading_count": 0,
