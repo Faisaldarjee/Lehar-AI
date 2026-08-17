@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { Navigation, RefreshCw, Fish } from 'lucide-react';
+import { Navigation, RefreshCw, Fish, ChevronDown } from 'lucide-react';
 import type { FloatSummary, MapMarker, PFZAdvisory } from '../../types';
 import { getPFZAdvisories } from '../../services/api';
 
@@ -69,6 +69,7 @@ export const OceanMap: React.FC<OceanMapProps> = ({
   const [mapCenter, setMapCenter] = useState<[number, number]>([14.0, 75.0]); // Indian Ocean
   const [mapZoom, setMapZoom] = useState<number>(5);
   const [showPFZ, setShowPFZ] = useState<boolean>(true);
+  const [sectorMenuOpen, setSectorMenuOpen] = useState<boolean>(false);
   const [pfzZones, setPfzZones] = useState<PFZAdvisory[]>([]);
 
   // Load PFZ advisories
@@ -124,35 +125,42 @@ export const OceanMap: React.FC<OceanMapProps> = ({
       {/* Top Map Action Bar */}
       <div className="absolute top-3 left-3 right-3 z-[1000] flex flex-wrap items-center justify-between gap-2 pointer-events-none">
         
-        {/* Region Quick Selectors */}
-        <div className="flex items-center gap-1.5 bg-slate-950/90 backdrop-blur-md p-1.5 rounded-xl border border-slate-800 pointer-events-auto shadow-lg">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 flex items-center gap-1">
-            <Navigation className="w-3 h-3 text-cyan-400" /> Sector:
-          </span>
+        {/* Region Quick Selector Dropdown */}
+        <div className="relative pointer-events-auto">
           <button
-            onClick={() => handleRegionFocus(18.9, 70.5, 6)}
-            className="px-2 py-1 rounded-lg text-xs font-semibold bg-slate-900 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-300 transition"
+            onClick={() => setSectorMenuOpen(!sectorMenuOpen)}
+            className="flex items-center gap-1.5 bg-slate-950/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-800 hover:border-cyan-500/40 text-xs font-semibold text-slate-300 hover:text-white transition shadow-lg cursor-pointer"
           >
-            Mumbai Coast
+            <Navigation className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Jump to sector</span>
+            <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${sectorMenuOpen ? 'rotate-180 text-cyan-400' : ''}`} />
           </button>
-          <button
-            onClick={() => handleRegionFocus(15.0, 66.0, 5)}
-            className="px-2 py-1 rounded-lg text-xs font-semibold bg-slate-900 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-300 transition"
-          >
-            Arabian Sea
-          </button>
-          <button
-            onClick={() => handleRegionFocus(15.0, 85.0, 5)}
-            className="px-2 py-1 rounded-lg text-xs font-semibold bg-slate-900 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-300 transition"
-          >
-            Bay of Bengal
-          </button>
-          <button
-            onClick={() => handleRegionFocus(9.5, 75.5, 6)}
-            className="px-2 py-1 rounded-lg text-xs font-semibold bg-slate-900 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-300 transition"
-          >
-            Kochi / South
-          </button>
+
+          {sectorMenuOpen && (
+            <div className="absolute left-0 mt-1.5 w-48 bg-slate-950/95 backdrop-blur-xl border border-slate-800 rounded-xl shadow-2xl p-1 z-[1100] space-y-0.5 animate-in fade-in zoom-in-95 duration-100">
+              {[
+                { label: 'Mumbai Coast', lat: 18.9, lon: 70.5, zoom: 6 },
+                { label: 'Gujarat / Saurashtra', lat: 21.0, lon: 69.0, zoom: 6 },
+                { label: 'Arabian Sea Central', lat: 15.0, lon: 66.0, zoom: 5 },
+                { label: 'Kochi / South Coast', lat: 9.5, lon: 75.5, zoom: 6 },
+                { label: 'Bay of Bengal Central', lat: 15.0, lon: 85.0, zoom: 5 },
+                { label: 'Chennai Coast', lat: 13.0, lon: 81.5, zoom: 6 },
+                { label: 'Visakhapatnam (Vizag)', lat: 17.5, lon: 84.0, zoom: 6 },
+              ].map((sector) => (
+                <button
+                  key={sector.label}
+                  onClick={() => {
+                    handleRegionFocus(sector.lat, sector.lon, sector.zoom);
+                    setSectorMenuOpen(false);
+                  }}
+                  className="w-full px-2.5 py-1.5 rounded-lg text-left text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800/80 transition cursor-pointer flex items-center justify-between"
+                >
+                  <span>{sector.label}</span>
+                  <span className="text-[10px] text-cyan-400 font-mono">Zoom</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Status / Controls */}
@@ -167,7 +175,7 @@ export const OceanMap: React.FC<OceanMapProps> = ({
             }`}
           >
             <Fish className="w-3.5 h-3.5 text-emerald-400" />
-            <span>{showPFZ ? 'PFZ Zones Active' : 'Show PFZ Zones'}</span>
+            <span>{showPFZ ? 'PFZ Active' : 'Show PFZ'}</span>
           </button>
 
           <div className="bg-slate-950/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-800 text-xs text-slate-300 font-mono flex items-center gap-2 shadow-lg">

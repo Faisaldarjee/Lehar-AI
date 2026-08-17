@@ -13,6 +13,7 @@ import type { AnomalyAlert } from '../../types';
 interface AnomalyRadarProps {
   anomalies: AnomalyAlert[];
   onSelectAnomaly?: (anomaly: AnomalyAlert) => void;
+  onHoverAnomaly?: (anomaly: AnomalyAlert | null) => void;
   onTriggerScan?: () => void;
   isScanning?: boolean;
 }
@@ -20,10 +21,12 @@ interface AnomalyRadarProps {
 export const AnomalyRadar: React.FC<AnomalyRadarProps> = ({
   anomalies,
   onSelectAnomaly,
+  onHoverAnomaly,
   onTriggerScan,
   isScanning = false,
 }) => {
   const [filterSeverity, setFilterSeverity] = useState<string>('all');
+  const [activeAlertId, setActiveAlertId] = useState<number | null>(null);
 
   const filtered = anomalies.filter((a) => {
     if (filterSeverity === 'all') return true;
@@ -54,8 +57,8 @@ export const AnomalyRadar: React.FC<AnomalyRadarProps> = ({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-base font-bold text-white">AnomalyRadar Watchdog</h3>
-              <span className="px-2 py-0.5 text-[10px] font-bold uppercase rounded-md bg-rose-500/20 text-rose-400 border border-rose-500/30">
+              <h3 className="text-base font-bold text-white font-heading">AnomalyRadar Watchdog</h3>
+              <span className="px-2 py-0.5 text-[10px] font-bold uppercase rounded bg-rose-500/20 text-rose-400 border border-rose-500/30">
                 24/7 Ocean Health Alert
               </span>
             </div>
@@ -85,7 +88,7 @@ export const AnomalyRadar: React.FC<AnomalyRadarProps> = ({
           <button
             key={sev}
             onClick={() => setFilterSeverity(sev)}
-            className={`px-2.5 py-1 rounded-lg font-medium capitalize transition ${
+            className={`px-2.5 py-1 rounded-lg font-medium capitalize transition cursor-pointer ${
               filterSeverity === sev
                 ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
@@ -101,64 +104,78 @@ export const AnomalyRadar: React.FC<AnomalyRadarProps> = ({
         {filtered.length === 0 ? (
           <div className="h-48 flex flex-col items-center justify-center text-center text-slate-500 space-y-2">
             <CheckCircle2 className="w-8 h-8 text-emerald-400/60" />
-            <p className="text-sm font-semibold text-slate-300">All Parameters Normal</p>
+            <p className="text-sm font-semibold text-slate-300 font-heading">All Parameters Normal</p>
             <p className="text-xs max-w-xs">No active anomalies matching this severity filter in the Indian Ocean sector.</p>
           </div>
         ) : (
-          filtered.map((alert) => (
-            <div
-              key={alert.id}
-              onClick={() => onSelectAnomaly && onSelectAnomaly(alert)}
-              className="group p-4 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800/90 hover:border-cyan-500/40 transition-all duration-200 cursor-pointer shadow-md hover:shadow-cyan-950/20 space-y-2"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center space-x-2">
-                  {alert.parameter === 'temperature' ? (
-                    <Flame className="w-4 h-4 text-rose-400 shrink-0" />
-                  ) : (
-                    <Droplets className="w-4 h-4 text-cyan-400 shrink-0" />
-                  )}
-                  <span className="font-bold text-white text-sm">
-                    {alert.parameter === 'temperature' ? 'Surface Temperature Spike' : 'Salinity Influx Anomaly'}
-                  </span>
-                  {alert.mhw_category && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40">
-                      {alert.mhw_category}
+          filtered.map((alert) => {
+            const isHovered = activeAlertId === alert.id;
+            return (
+              <div
+                key={alert.id}
+                onMouseEnter={() => {
+                  setActiveAlertId(alert.id);
+                  if (onHoverAnomaly) onHoverAnomaly(alert);
+                }}
+                onMouseLeave={() => {
+                  setActiveAlertId(null);
+                }}
+                onClick={() => onSelectAnomaly && onSelectAnomaly(alert)}
+                className={`group p-4 rounded-xl border transition-all duration-200 cursor-pointer shadow-md space-y-2 ${
+                  isHovered
+                    ? 'bg-slate-900 border-cyan-500/60 shadow-cyan-950/40 ring-1 ring-cyan-500/30'
+                    : 'bg-slate-900/60 hover:bg-slate-900 border-slate-800/90'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center space-x-2">
+                    {alert.parameter === 'temperature' ? (
+                      <Flame className="w-4 h-4 text-rose-400 shrink-0" />
+                    ) : (
+                      <Droplets className="w-4 h-4 text-cyan-400 shrink-0" />
+                    )}
+                    <span className="font-bold text-white text-sm font-heading">
+                      {alert.parameter === 'temperature' ? 'Surface Temperature Spike' : 'Salinity Influx Anomaly'}
                     </span>
-                  )}
-                </div>
+                    {alert.mhw_category && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                        {alert.mhw_category}
+                      </span>
+                    )}
+                  </div>
 
-                <span
-                  className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${getSeverityBadge(
-                    alert.severity
-                  )}`}
-                >
-                  {alert.severity}
-                </span>
-              </div>
-
-              <p className="text-xs text-slate-300 leading-relaxed">{alert.description}</p>
-
-              {/* Telemetry Footer */}
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/60 text-[11px] font-mono text-slate-400">
-                <div className="flex items-center gap-3">
-                  <span className="flex items-center gap-1 text-slate-300">
-                    <MapPin className="w-3 h-3 text-cyan-400" />
-                    {alert.latitude.toFixed(2)}°N, {alert.longitude.toFixed(2)}°E
-                  </span>
-                  <span>
-                    Observed: <strong className="text-white">{alert.value}</strong> vs Threshold{' '}
-                    <strong className="text-slate-300">{alert.threshold}</strong>
+                  <span
+                    className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${getSeverityBadge(
+                      alert.severity
+                    )}`}
+                  >
+                    {alert.severity}
                   </span>
                 </div>
 
-                <div className="flex items-center gap-1 text-cyan-400 group-hover:translate-x-0.5 transition-transform">
-                  <span>Focus Map</span>
-                  <ArrowUpRight className="w-3 h-3" />
+                <p className="text-xs text-slate-300 leading-relaxed">{alert.description}</p>
+
+                {/* Telemetry Footer */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/60 text-[11px] font-mono text-slate-400">
+                  <div className="flex items-center gap-3">
+                    <span className="flex items-center gap-1 text-slate-300">
+                      <MapPin className="w-3 h-3 text-cyan-400" />
+                      {alert.latitude.toFixed(2)}°N, {alert.longitude.toFixed(2)}°E
+                    </span>
+                    <span>
+                      Observed: <strong className="text-white">{alert.value}</strong> vs Threshold{' '}
+                      <strong className="text-slate-300">{alert.threshold}</strong>
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1 text-cyan-400 group-hover:translate-x-0.5 transition-transform">
+                    <span>Focus Map</span>
+                    <ArrowUpRight className="w-3 h-3" />
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 

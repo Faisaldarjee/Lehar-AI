@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Bot, 
   User, 
@@ -20,8 +20,7 @@ import {
   Download,
   Volume2,
   Box,
-  ChevronDown,
-  ChevronUp
+  MoreHorizontal
 } from 'lucide-react';
 import type { ChatMessage as ChatMessageType, StatItem } from '../../types';
 import { speakText } from '../../services/voiceSynthesis';
@@ -48,24 +47,23 @@ function renderStatIcon(iconName: string) {
     case 'time':
       return <Calendar className={iconClass} />;
     case 'thermometer':
-    case 'temp':
+    case 'temperature':
+    case 'sst':
       return <Thermometer className={iconClass} />;
     case 'waves':
     case 'salinity':
       return <Waves className={iconClass} />;
     case 'compass':
-    case 'sector':
-    case 'region':
+    case 'harbour':
+    case 'bearing':
       return <Compass className={iconClass} />;
     case 'fish':
+    case 'species':
+    case 'pfz':
       return <Fish className={iconClass} />;
     case 'activity':
-    case 'float':
+    case 'mld':
       return <Activity className={iconClass} />;
-    case 'database':
-    case 'readings':
-      return <Database className={iconClass} />;
-    case 'alert-triangle':
     case 'alert':
       return <AlertTriangle className={iconClass} />;
     default:
@@ -73,20 +71,29 @@ function renderStatIcon(iconName: string) {
   }
 }
 
-// Defensive number formatter for frontend safety
-function formatSafeValue(val: string | number): string {
-  if (typeof val === 'number') {
-    return Number.isInteger(val) ? val.toString() : val.toFixed(2);
-  }
-  return val;
-}
-
-export const ChatMessage: React.FC<ChatMessageProps> = ({ message, onFocusMap, onView3D }) => {
-  const [showSql, setShowSql] = useState(false);
+export const ChatMessage: React.FC<ChatMessageProps> = ({
+  message,
+  onFocusMap,
+  onView3D,
+}) => {
   const [copied, setCopied] = useState(false);
+  const [showSql, setShowSql] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const isUser = message.role === 'user';
+
+  // Close menu on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleCopySql = () => {
     if (message.sql) {
@@ -96,112 +103,167 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, onFocusMap, o
     }
   };
 
-  const handleSpeak = async () => {
-    if (isPlayingAudio) {
-      window.speechSynthesis.cancel();
-      setIsPlayingAudio(false);
-      return;
-    }
-
-    setIsPlayingAudio(true);
-    // Speak the summary or full answer
-    const textToSpeak = message.summary || message.content;
-    await speakText(textToSpeak, message.language || 'en-IN');
-    setIsPlayingAudio(false);
-  };
-
   const handleExportCSV = () => {
     if (!message.data || message.data.length === 0) return;
     const headers = Object.keys(message.data[0]);
     const csvRows = [
       headers.join(','),
-      ...message.data.map((row) => headers.map((h) => {
-        const val = row[h];
-        if (typeof val === 'number') {
-          return Number.isInteger(val) ? val : val.toFixed(2);
-        }
-        return JSON.stringify(val ?? '');
-      }).join(',')),
+      ...message.data.map(row =>
+        headers
+          .map(header => {
+            const val = row[header];
+            if (val === null || val === undefined) return '';
+            const strVal = String(val);
+            if (strVal.includes(',') || strVal.includes('"') || strVal.includes('\n')) {
+              return `"${strVal.replace(/"/g, '""')}"`;
+            }
+            return strVal;
+          })
+          .join(',')
+      ),
     ];
-    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `lehar_ai_export_${Date.now()}.csv`;
-    a.click();
+    const csvBlob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(csvBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `lehar_ai_export_${Date.now()}.csv`;
+    link.click();
     URL.revokeObjectURL(url);
+    setMenuOpen(false);
   };
 
-  // Reading count resolution
-  const readingCount = message.reading_count || (message.data ? message.data.length : 0);
+  // Text-to-speech reading using Web Speech API
+  const handlePlayVoice = () => {
+    if (isPlayingAudio) {
+      window.speechSynthesis?.cancel();
+      setIsPlayingAudio(false);
+      return;
+    }
+    const textToSpeak = message.summary || message.content;
+    setIsPlayingAudio(true);
+    speakText(textToSpeak, message.language || 'en-IN').finally(() => {
+      setIsPlayingAudio(false);
+    });
+  };
+
+  const summaryText = message.summary || message.content;
+  const readingCount = message.reading_count ?? (message.data ? message.data.length : 0);
 
   return (
-    <div className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'} my-2`}>
-      <div className={`flex items-start gap-3 max-w-2xl w-full ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+    <div className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'} py-2`}>
+      <div className={`flex max-w-[92%] sm:max-w-[85%] space-x-2.5 ${isUser ? 'flex-row-reverse space-x-reverse' : 'flex-row'}`}>
         
         {/* Avatar */}
         <div
-          className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-md ${
+          className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 border shadow-md ${
             isUser
-              ? 'bg-gradient-to-tr from-cyan-600 to-teal-600 text-slate-950 font-bold'
-              : 'bg-slate-900 border border-cyan-500/30 text-cyan-400 shadow-cyan-950/20'
+              ? 'bg-slate-800 border-slate-700 text-slate-200'
+              : 'bg-cyan-950/80 border-cyan-500/40 text-cyan-300 shadow-cyan-950/40'
           }`}
         >
-          {isUser ? <User className="w-4 h-4 text-white" /> : <Bot className="w-4 h-4" />}
+          {isUser ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
         </div>
 
-        {/* Bubble / Card Container */}
+        {/* Message Bubble / Card */}
         <div
-          className={`flex flex-col space-y-3 rounded-2xl p-4 sm:p-5 border transition-all ${
+          className={`relative rounded-2xl p-4 transition-all duration-200 ${
             isUser
-              ? 'bg-cyan-950/40 border-cyan-500/30 text-cyan-50 rounded-tr-none shadow-lg shadow-cyan-950/20 max-w-lg'
-              : 'bg-slate-900/95 border-slate-800/90 text-slate-100 rounded-tl-none shadow-xl w-full'
+              ? 'bg-cyan-500 text-slate-950 font-medium rounded-tr-sm shadow-lg shadow-cyan-500/20'
+              : 'bg-slate-900/90 border border-slate-800/90 text-slate-100 rounded-tl-sm shadow-xl shadow-slate-950/50 backdrop-blur-md w-full'
           }`}
         >
-          {/* 1. Header Row */}
-          <div className="flex items-center justify-between text-xs pb-1">
-            <div className="flex items-center space-x-2">
-              <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
-              <span className="font-semibold text-slate-400">
-                {isUser ? 'You' : 'Lehar AI Ocean Intelligence'}
-              </span>
-            </div>
-            <span className="font-mono text-[10px] text-slate-500">
-              {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </span>
-          </div>
-
-          {/* Loading State */}
-          {message.isLoading ? (
-            <div className="flex items-center space-x-2.5 py-3 text-cyan-400 font-mono text-xs">
-              <Sparkles className="w-4 h-4 animate-spin text-cyan-400" />
-              <span>Analyzing Indian Ocean ARGO profiles and compiling metrics...</span>
-            </div>
-          ) : isUser ? (
-            /* User Message Content */
-            <div className="text-slate-100 text-sm whitespace-pre-wrap leading-relaxed font-normal">
+          {/* USER MESSAGE VIEW */}
+          {isUser ? (
+            <p className="text-xs sm:text-sm leading-relaxed whitespace-pre-wrap font-medium">
               {message.content}
-            </div>
+            </p>
           ) : (
-            /* Assistant Structured Ocean Intelligence Card */
+            /* ASSISTANT STRUCTURED CARD VIEW */
             <>
-              {/* 2. Summary Line */}
-              <p className="text-[15px] font-normal leading-[1.6] text-slate-200">
-                {message.summary || message.content}
-              </p>
-
-              {/* 3. Hero Stat Block */}
-              {message.hero_stat && (
-                <div className="bg-cyan-950/30 border border-cyan-500/15 rounded-xl p-3.5 flex flex-col justify-center">
-                  <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400 mb-1">
-                    {message.hero_stat.label}
+              {/* 1. Header with Metadata & Progressive Disclosure Meatball Menu */}
+              <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-slate-800/80 text-[10px] text-slate-400">
+                <div className="flex items-center space-x-1.5">
+                  <Sparkles className="w-3 h-3 text-cyan-400" />
+                  <span className="font-bold tracking-wider uppercase text-cyan-300 font-mono">
+                    Lehar AI Ocean Intelligence
                   </span>
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-2xl sm:text-3xl font-bold tracking-tight text-cyan-400">
-                      {formatSafeValue(message.hero_stat.value)}
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <span className="font-mono text-slate-500">
+                    {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+
+                  {/* Meatball More Actions Menu (SQL, CSV Export) */}
+                  <div className="relative" ref={menuRef}>
+                    <button
+                      onClick={() => setMenuOpen(!menuOpen)}
+                      title="More data actions"
+                      className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                    >
+                      <MoreHorizontal className="w-3.5 h-3.5" />
+                    </button>
+
+                    {menuOpen && (
+                      <div className="absolute right-0 mt-1 w-44 bg-slate-950 border border-slate-800 rounded-xl shadow-2xl p-1 z-30 space-y-0.5 animate-in fade-in zoom-in-95 duration-100">
+                        {message.sql && (
+                          <button
+                            onClick={() => {
+                              setShowSql(!showSql);
+                              setMenuOpen(false);
+                            }}
+                            className="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-xs text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer font-mono"
+                          >
+                            <Code2 className="w-3.5 h-3.5 text-cyan-400" />
+                            <span>{showSql ? 'Hide SQL' : 'View SQL Query'}</span>
+                          </button>
+                        )}
+                        {message.data && message.data.length > 0 && (
+                          <button
+                            onClick={handleExportCSV}
+                            className="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-xs text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                          >
+                            <Download className="w-3.5 h-3.5 text-slate-400" />
+                            <span>Export as CSV</span>
+                          </button>
+                        )}
+                        {message.sql && (
+                          <button
+                            onClick={() => {
+                              handleCopySql();
+                              setMenuOpen(false);
+                            }}
+                            className="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-xs text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                          >
+                            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
+                            <span>{copied ? 'Copied' : 'Copy SQL Text'}</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. Hero Summary Line */}
+              <div className="mb-3">
+                <p className="text-xs sm:text-sm text-slate-100 font-semibold leading-snug tracking-wide">
+                  {summaryText}
+                </p>
+              </div>
+
+              {/* 3. Hero Metric Block (Big Focus Value) */}
+              {message.hero_stat && (
+                <div className="mb-3 p-3 rounded-xl bg-gradient-to-r from-slate-950 via-cyan-950/40 to-slate-950 border border-cyan-500/30 shadow-inner">
+                  <div className="text-[10px] uppercase font-bold tracking-widest text-cyan-400/90 font-mono">
+                    {message.hero_stat.label}
+                  </div>
+                  <div className="flex items-baseline space-x-2 mt-0.5">
+                    <span className="text-xl sm:text-2xl font-black text-white tracking-tight font-heading">
+                      {message.hero_stat.value}
                     </span>
                     {message.hero_stat.unit && (
-                      <span className="text-xs font-semibold text-slate-400">
+                      <span className="text-xs font-semibold text-cyan-300/80">
                         {message.hero_stat.unit}
                       </span>
                     )}
@@ -209,34 +271,34 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, onFocusMap, o
                 </div>
               )}
 
-              {/* 4. Stat Chips Row (3-Column Grid) */}
+              {/* 4. Three-Column Stat Chips */}
               {message.stats && message.stats.length > 0 && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-0.5">
-                  {message.stats.map((st: StatItem, idx: number) => (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+                  {message.stats.map((stat: StatItem, idx: number) => (
                     <div
                       key={idx}
-                      className="bg-slate-950/80 rounded-lg p-2.5 flex flex-col justify-between border border-slate-800/60"
+                      className="p-2 rounded-xl bg-slate-950/70 border border-slate-800/90 flex flex-col justify-center text-left hover:border-slate-700/80 transition-colors"
                     >
-                      <div className="flex items-center justify-between">
-                        {renderStatIcon(st.icon)}
+                      <div className="flex items-center space-x-1.5">
+                        {renderStatIcon(stat.icon)}
+                        <span className="text-[10px] uppercase font-semibold text-slate-400 font-mono tracking-wider truncate">
+                          {stat.label}
+                        </span>
                       </div>
-                      <span className="text-[13px] font-medium text-slate-100 truncate leading-snug">
-                        {formatSafeValue(st.value)}
-                      </span>
-                      <span className="text-[11px] text-slate-400 mt-0.5">
-                        {st.label}
-                      </span>
+                      <div className="text-xs font-bold text-slate-200 mt-0.5 truncate" title={stat.value}>
+                        {stat.value}
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
 
-              {/* 5. Primary Actions Row (Max 2 Buttons) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                {/* Action 1: Voice Listen */}
+              {/* 5. Primary Action Row: Listen Voice + Contextual View Action */}
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                {/* Action 1: Listen Voice */}
                 <button
-                  onClick={handleSpeak}
-                  className={`flex items-center justify-center space-x-2 py-2 px-3 rounded-xl text-xs font-semibold border transition active:scale-[0.98] cursor-pointer ${
+                  onClick={handlePlayVoice}
+                  className={`flex items-center justify-center space-x-2 py-2 px-3 rounded-xl border text-xs font-semibold transition active:scale-[0.98] cursor-pointer ${
                     isPlayingAudio
                       ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse'
                       : 'bg-slate-950/70 hover:bg-slate-800 border-slate-800 text-slate-200 hover:text-cyan-300 hover:border-cyan-500/30'
@@ -246,8 +308,16 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, onFocusMap, o
                   <span>{isPlayingAudio ? 'Stop Audio' : 'Listen Voice'}</span>
                 </button>
 
-                {/* Action 2: Show on Map (if markers exist) */}
-                {message.map_markers && message.map_markers.length > 0 && onFocusMap ? (
+                {/* Action 2: Contextual View (Show on Map OR 3D Profile) */}
+                {message.chart?.chart_type === 'depth_profile' && onView3D ? (
+                  <button
+                    onClick={onView3D}
+                    className="flex items-center justify-center space-x-2 py-2 px-3 rounded-xl bg-cyan-950/40 hover:bg-cyan-900/50 border border-cyan-500/30 hover:border-cyan-500/50 text-cyan-300 text-xs font-semibold transition active:scale-[0.98] cursor-pointer"
+                  >
+                    <Box className="w-4 h-4 text-cyan-400" />
+                    <span>Open 3D Lens</span>
+                  </button>
+                ) : message.map_markers && message.map_markers.length > 0 && onFocusMap ? (
                   <button
                     onClick={() => onFocusMap(message.map_markers!)}
                     className="flex items-center justify-center space-x-2 py-2 px-3 rounded-xl bg-cyan-950/40 hover:bg-cyan-900/50 border border-cyan-500/30 hover:border-cyan-500/50 text-cyan-300 text-xs font-semibold transition active:scale-[0.98] cursor-pointer"
@@ -256,64 +326,11 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, onFocusMap, o
                     <span>Show on map ({message.map_markers.length})</span>
                   </button>
                 ) : (
-                  /* Fallback button if no map markers (e.g. general info) */
-                  <button
-                    onClick={handleCopySql}
-                    disabled={!message.sql}
-                    className="flex items-center justify-center space-x-2 py-2 px-3 rounded-xl bg-slate-950/70 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 text-xs font-medium transition active:scale-[0.98] cursor-pointer disabled:opacity-40"
-                  >
-                    <Code2 className="w-4 h-4 text-cyan-400" />
-                    <span>View SQL Source</span>
-                  </button>
+                  <div className="flex items-center justify-center text-[10px] font-mono text-slate-500 bg-slate-950/40 rounded-xl border border-slate-800/50">
+                    <Database className="w-3 h-3 mr-1 text-cyan-400" />
+                    <span>{readingCount} readings</span>
+                  </div>
                 )}
-              </div>
-
-              {/* 6. Secondary Utility Row (Below Thin Divider) */}
-              <div className="pt-2.5 mt-1 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-                {/* Left: Reading count */}
-                <div className="flex items-center space-x-1.5 text-[11px] font-mono text-slate-400">
-                  <Database className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>{readingCount} readings retrieved</span>
-                </div>
-
-                {/* Right: Ghost utility buttons */}
-                <div className="flex items-center space-x-2">
-                  {/* 3D OceanLens View */}
-                  {message.chart?.chart_type === 'depth_profile' && onView3D && (
-                    <button
-                      onClick={onView3D}
-                      title="Inspect in 3D WebGL Cylinder"
-                      className="flex items-center space-x-1 text-slate-400 hover:text-cyan-300 text-xs font-medium transition cursor-pointer px-1.5 py-0.5 rounded hover:bg-slate-800/60"
-                    >
-                      <Box className="w-3.5 h-3.5 text-cyan-400" />
-                      <span>3D View</span>
-                    </button>
-                  )}
-
-                  {/* SQL Toggle */}
-                  {message.sql && (
-                    <button
-                      onClick={() => setShowSql(!showSql)}
-                      className="flex items-center space-x-1 text-slate-400 hover:text-slate-200 text-xs font-mono transition cursor-pointer px-1.5 py-0.5 rounded hover:bg-slate-800/60"
-                    >
-                      <Code2 className="w-3.5 h-3.5 text-cyan-400" />
-                      <span>SQL</span>
-                      {showSql ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                    </button>
-                  )}
-
-                  {/* CSV Export */}
-                  {message.data && message.data.length > 0 && (
-                    <button
-                      onClick={handleExportCSV}
-                      title="Download query results as CSV"
-                      className="flex items-center space-x-1 text-slate-400 hover:text-slate-200 text-xs font-medium transition cursor-pointer px-1.5 py-0.5 rounded hover:bg-slate-800/60"
-                    >
-                      <Download className="w-3.5 h-3.5 text-slate-400" />
-                      <span>CSV</span>
-                    </button>
-                  )}
-                </div>
               </div>
 
               {/* Collapsible SQL Block */}

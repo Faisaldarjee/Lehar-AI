@@ -8,6 +8,7 @@ import { AnomalyRadar } from './components/anomaly/AnomalyRadar';
 import { AdoptFloat } from './components/education/AdoptFloat';
 import { WhatsAppSimulator } from './components/whatsapp/WhatsAppSimulator';
 import { ArchitecturePipeline } from './components/pipeline/ArchitecturePipeline';
+import { MapPin, LineChart, Box, Compass } from 'lucide-react';
 
 import {
   sendChatQuery,
@@ -29,7 +30,7 @@ import type {
   MapMarker,
 } from './types';
 
-export function App() {
+export default function App() {
   const [currentMode, setCurrentMode] = useState<AppMode>('chat');
   const [selectedLanguage, setSelectedLanguage] = useState<string>('en-IN');
   const [backendOnline, setBackendOnline] = useState<boolean>(true);
@@ -43,6 +44,12 @@ export function App() {
   // Chat Conversation State
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isChatLoading, setIsChatLoading] = useState<boolean>(false);
+
+  // Smart Stage Visualization State (Chat View)
+  const [stageView, setStageView] = useState<'map' | 'chart' | '3d'>('map');
+
+  // Ocean Explorer View Toggle State (Map View)
+  const [explorerView, setExplorerView] = useState<'map' | '3d'>('map');
 
   // Visualization Selection State
   const [activeChart, setActiveChart] = useState<ChartData | null>(null);
@@ -69,7 +76,6 @@ export function App() {
 
         if (floatsData.floats.length > 0) {
           setFloats(floatsData.floats);
-          // Set initial default float
           setSelectedFloatId(floatsData.floats[0].float_id);
         }
 
@@ -77,7 +83,7 @@ export function App() {
           setAnomalies(anomaliesData.anomalies);
         }
 
-        // Pre-fetch initial sample depth profile for initial view
+        // Pre-fetch initial sample depth profile
         try {
           const depthRes = await getDepthProfile(1);
           if (depthRes && depthRes.measurements.length > 0) {
@@ -101,7 +107,7 @@ export function App() {
     initData();
   }, []);
 
-  // Handle user chat submission
+  // Handle user chat submission with context-aware auto-switching
   const handleSendMessage = async (queryText: string, mode: 'text' | 'voice' = 'text') => {
     const userMsgId = `user-${Date.now()}`;
     const userMessage: ChatMessage = {
@@ -145,14 +151,13 @@ export function App() {
 
       setMessages((prev) => prev.map((m) => (m.id === botMsgId ? finalBotMessage : m)));
 
-      // If backend returned map markers, highlight them
-      if (response.map_markers && response.map_markers.length > 0) {
-        setHighlightMarkers(response.map_markers);
-      }
-
-      // If backend returned chart data, update right pane
-      if (response.chart) {
+      // Context-aware Smart Stage Auto-Switching:
+      if (response.chart && response.chart.data && response.chart.data.length > 0) {
         setActiveChart(response.chart);
+        setStageView('chart'); // Auto-switch to CTD chart for depth/profile queries
+      } else if (response.map_markers && response.map_markers.length > 0) {
+        setHighlightMarkers(response.map_markers);
+        setStageView('map'); // Auto-switch to Map for location/harbour queries
       }
     } catch (err: any) {
       console.error('Chat error:', err);
@@ -191,7 +196,7 @@ export function App() {
               data: depthRes.measurements,
               x_key: 'depth',
               y_keys: ['temperature', 'salinity'],
-              title: `Observed CTD Profile — Float #${matchingFloat.float_id}`,
+              title: `Argo Float #${floatId} (Profile #${matchingFloat.profile_id})`,
             });
           }
         }
@@ -209,7 +214,7 @@ export function App() {
     }
   };
 
-  // Handle anomaly selection
+  // Handle anomaly selection and sync-highlight
   const handleSelectAnomaly = (anomaly: AnomalyAlert) => {
     setHighlightMarkers([
       {
@@ -217,10 +222,9 @@ export function App() {
         lon: anomaly.longitude,
         float_id: anomaly.float_id || 'Alert-Location',
         date: anomaly.date,
-        label: `${anomaly.parameter.toUpperCase()} Spike: ${anomaly.value}`,
+        label: `${anomaly.parameter.toUpperCase()} Deviation: ${anomaly.value}`,
       },
     ]);
-    setCurrentMode('map');
   };
 
   // Trigger manual anomaly scan
@@ -243,19 +247,23 @@ export function App() {
       {/* Top Main Navigation */}
       <Navbar
         currentMode={currentMode}
-        onSelectMode={setCurrentMode}
-        stats={stats}
-        selectedLanguage={selectedLanguage}
-        onSelectLanguage={setSelectedLanguage}
+        onSelectMode={(mode) => {
+          if (mode === '3d') {
+            setCurrentMode('map');
+            setExplorerView('3d');
+          } else {
+            setCurrentMode(mode);
+          }
+        }}
         backendOnline={backendOnline}
       />
 
-      {/* Main Interactive Stage */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-3 md:p-6 flex flex-col gap-4">
+      {/* Main Interactive Workspace */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-3 md:p-5 flex flex-col">
         
-        {/* VIEW 1: DUAL-PANE CHAT & REALTIME DISCOVERY (DEFAULT) */}
+        {/* VIEW 1: AI CONSOLE + SMART STAGE (DEFAULT CHAT) */}
         {currentMode === 'chat' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 h-[calc(100vh-110px)] min-h-[600px]">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-[580px] h-[calc(100vh-80px)]">
             
             {/* Left Console: Chat Panel (5 Cols) */}
             <div className="lg:col-span-5 h-full">
@@ -265,19 +273,121 @@ export function App() {
                 onSendMessage={handleSendMessage}
                 onFocusMap={(markers) => {
                   setHighlightMarkers(markers);
-                  setCurrentMode('map');
+                  setStageView('map');
                 }}
-                onView3D={() => setCurrentMode('3d')}
+                onView3D={() => setStageView('3d')}
                 selectedLanguage={selectedLanguage}
+                onSelectLanguage={setSelectedLanguage}
                 stats={stats}
               />
             </div>
 
-            {/* Right Stage: Interactive Visualization Hub (7 Cols) */}
-            <div className="lg:col-span-7 flex flex-col gap-4 h-full">
+            {/* Right Smart Stage: Single Context-Aware Panel (7 Cols) */}
+            <div className="lg:col-span-7 flex flex-col h-full bg-slate-950/80 border border-slate-800/80 rounded-2xl overflow-hidden shadow-2xl relative">
               
-              {/* Top Half: Interactive Ocean Map */}
-              <div className="flex-1 min-h-[280px] rounded-2xl overflow-hidden shadow-xl">
+              {/* Stage Top Floating Segmented Switch */}
+              <div className="absolute top-3 right-3 z-30 flex items-center gap-1 bg-slate-950/95 backdrop-blur-md p-1 rounded-xl border border-slate-800/90 shadow-xl">
+                <button
+                  onClick={() => setStageView('map')}
+                  className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                    stageView === 'map'
+                      ? 'bg-cyan-500 text-slate-950 font-bold shadow'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <MapPin className="w-3.5 h-3.5" />
+                  <span>Ocean Map</span>
+                </button>
+
+                <button
+                  onClick={() => setStageView('chart')}
+                  className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                    stageView === 'chart'
+                      ? 'bg-cyan-500 text-slate-950 font-bold shadow'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <LineChart className="w-3.5 h-3.5" />
+                  <span>CTD Profile</span>
+                </button>
+
+                <button
+                  onClick={() => setStageView('3d')}
+                  className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                    stageView === '3d'
+                      ? 'bg-cyan-500 text-slate-950 font-bold shadow'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Box className="w-3.5 h-3.5" />
+                  <span>3D Lens</span>
+                </button>
+              </div>
+
+              {/* Stage Active Component */}
+              <div className="flex-1 w-full h-full relative">
+                {stageView === 'map' && (
+                  <OceanMap
+                    floats={floats}
+                    highlightMarkers={highlightMarkers}
+                    onSelectFloat={handleSelectFloat}
+                    selectedFloatId={selectedFloatId}
+                    trajectory={floatTrajectory}
+                  />
+                )}
+
+                {stageView === 'chart' && (
+                  <div className="w-full h-full p-2">
+                    <DepthChart chart={activeChart} />
+                  </div>
+                )}
+
+                {stageView === '3d' && (
+                  <OceanLens3D
+                    selectedFloatId={selectedFloatId}
+                    profileData={activeChart?.chart_type === 'depth_profile' ? activeChart.data : []}
+                  />
+                )}
+              </div>
+
+            </div>
+
+          </div>
+        )}
+
+        {/* VIEW 2: OCEAN EXPLORER (MERGED MAP & 3D WITH INTERNAL TOGGLE) */}
+        {(currentMode === 'map' || currentMode === '3d') && (
+          <div className="flex-1 min-h-[580px] h-[calc(100vh-80px)] flex flex-col relative rounded-2xl overflow-hidden shadow-2xl border border-slate-800/80">
+            
+            {/* Top Explorer View Selector */}
+            <div className="absolute top-3 left-16 z-30 flex items-center gap-1 bg-slate-950/95 backdrop-blur-md p-1 rounded-xl border border-slate-800 shadow-xl">
+              <button
+                onClick={() => setExplorerView('map')}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                  explorerView === 'map'
+                    ? 'bg-cyan-500 text-slate-950 font-bold shadow'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Compass className="w-3.5 h-3.5" />
+                <span>2D Fleet Map</span>
+              </button>
+
+              <button
+                onClick={() => setExplorerView('3d')}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                  explorerView === '3d'
+                    ? 'bg-cyan-500 text-slate-950 font-bold shadow'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Box className="w-3.5 h-3.5" />
+                <span>3D OceanLens WebGL</span>
+              </button>
+            </div>
+
+            <div className="flex-1 w-full h-full">
+              {explorerView === 'map' ? (
                 <OceanMap
                   floats={floats}
                   highlightMarkers={highlightMarkers}
@@ -285,50 +395,36 @@ export function App() {
                   selectedFloatId={selectedFloatId}
                   trajectory={floatTrajectory}
                 />
-              </div>
-
-              {/* Bottom Half: CTD Depth Curve Chart */}
-              <div className="h-[280px] shrink-0">
-                <DepthChart chart={activeChart} />
-              </div>
-
-            </div>
-
-          </div>
-        )}
-
-        {/* VIEW 2: FULL FLEET MAP EXPLORER */}
-        {currentMode === 'map' && (
-          <div className="flex-1 h-[calc(100vh-110px)] min-h-[600px] flex flex-col gap-4">
-            <div className="flex-1 rounded-2xl overflow-hidden shadow-2xl">
-              <OceanMap
-                floats={floats}
-                highlightMarkers={highlightMarkers}
-                onSelectFloat={handleSelectFloat}
-                selectedFloatId={selectedFloatId}
-                trajectory={floatTrajectory}
-              />
+              ) : (
+                <OceanLens3D
+                  selectedFloatId={selectedFloatId}
+                  profileData={activeChart?.chart_type === 'depth_profile' ? activeChart.data : []}
+                />
+              )}
             </div>
           </div>
         )}
 
-        {/* VIEW 3: 3D OCEANLENS CROSS-SECTION */}
-        {currentMode === '3d' && (
-          <div className="flex-1 h-[calc(100vh-110px)] min-h-[600px] flex flex-col gap-4">
-            <OceanLens3D
-              selectedFloatId={selectedFloatId}
-              profileData={activeChart?.chart_type === 'depth_profile' ? activeChart.data : []}
-            />
-          </div>
-        )}
-
-        {/* VIEW 4: PROACTIVE ANOMALY RADAR WATCHDOG */}
+        {/* VIEW 3: PROACTIVE ANOMALY RADAR WATCHDOG */}
         {currentMode === 'anomaly' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 h-[calc(100vh-110px)] min-h-[600px]">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-[580px] h-[calc(100vh-80px)]">
             <div className="lg:col-span-6 h-full">
               <AnomalyRadar
                 anomalies={anomalies}
                 onSelectAnomaly={handleSelectAnomaly}
+                onHoverAnomaly={(anomaly) => {
+                  if (anomaly) {
+                    setHighlightMarkers([
+                      {
+                        lat: anomaly.latitude,
+                        lon: anomaly.longitude,
+                        float_id: anomaly.float_id || 'Alert',
+                        date: anomaly.date,
+                        label: `${anomaly.parameter.toUpperCase()}: ${anomaly.value}`,
+                      },
+                    ]);
+                  }
+                }}
                 onTriggerScan={handleTriggerAnomalyScan}
                 isScanning={isScanningAnomalies}
               />
@@ -344,61 +440,41 @@ export function App() {
           </div>
         )}
 
-        {/* VIEW 5: WHATSAPP BOT SIMULATOR */}
+        {/* VIEW 4: WHATSAPP COASTAL BOT SIMULATOR */}
         {currentMode === 'whatsapp' && (
-          <div className="flex-1 h-[calc(100vh-110px)] min-h-[600px] flex flex-col">
+          <div className="flex-1 min-h-[580px] h-[calc(100vh-80px)] flex flex-col">
             <WhatsAppSimulator selectedLanguage={selectedLanguage} />
           </div>
         )}
 
-        {/* VIEW 6: CLASSROOM / ADOPT A FLOAT */}
+        {/* VIEW 5: CLASSROOM / ADOPT A FLOAT */}
         {currentMode === 'classroom' && (
-          <div className="flex-1 h-[calc(100vh-110px)] min-h-[600px] flex flex-col gap-4">
+          <div className="flex-1 min-h-[580px] h-[calc(100vh-80px)] flex flex-col">
             <AdoptFloat
               floats={floats}
               onSelectFloatForMap={(fId) => {
                 handleSelectFloat(fId);
                 setCurrentMode('map');
+                setExplorerView('map');
               }}
             />
           </div>
         )}
 
-        {/* VIEW 7: SYSTEM ARCHITECTURE PIPELINE */}
+        {/* VIEW 6: SYSTEM ARCHITECTURE PIPELINE */}
         {currentMode === 'pipeline' && (
-          <div className="flex-1 h-[calc(100vh-110px)] min-h-[600px] flex flex-col">
+          <div className="flex-1 min-h-[580px] h-[calc(100vh-80px)] flex flex-col">
             <ArchitecturePipeline />
           </div>
         )}
 
       </main>
 
-      {/* Persistent Status Bar Footer */}
-      <footer className="border-t border-slate-800/80 py-2 px-6 text-xs text-slate-500 bg-slate-950/95 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-          <div className="flex items-center space-x-2">
-            <span className="font-bold text-slate-200 font-heading">Lehar AI 1.0</span>
-            <span>•</span>
-            <span className="text-cyan-400 font-medium">Know the Sea. Know the Way.</span>
-            <span>•</span>
-            <span className="text-slate-400 font-mono">Team: Ctrl Alt Elites</span>
-          </div>
-
-          <div className="flex items-center space-x-4 font-mono text-[11px]">
-            <span className="flex items-center gap-1.5 text-emerald-400">
-              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-              <span>FastAPI Backend Active (646 Profiles / 97 Floats)</span>
-            </span>
-            <span className="hidden md:inline text-slate-600">|</span>
-            <span className="hidden md:inline text-slate-400">
-              INCOIS Indian Ocean Sector (30°E-120°E)
-            </span>
-          </div>
-        </div>
+      {/* Clean Footer Bar (No duplicated telemetry numbers) */}
+      <footer className="border-t border-slate-900 bg-slate-950/80 px-4 py-2 text-center text-[10px] text-slate-500">
+        <p>Lehar AI 1.0 • Know the Sea. Know the Way. • Developed for INCOIS & Ministry of Earth Sciences (SIH26040)</p>
       </footer>
 
     </div>
   );
 }
-
-export default App;
