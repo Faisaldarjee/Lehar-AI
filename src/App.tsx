@@ -8,7 +8,15 @@ import { AnomalyRadar } from './components/anomaly/AnomalyRadar';
 import { AdoptFloat } from './components/education/AdoptFloat';
 import { WhatsAppSimulator } from './components/whatsapp/WhatsAppSimulator';
 import { ArchitecturePipeline } from './components/pipeline/ArchitecturePipeline';
-import { MapPin, LineChart, Box, Compass } from 'lucide-react';
+import { 
+  MapPin, 
+  LineChart, 
+  Box, 
+  Compass, 
+  Waves, 
+  ArrowRight,
+  Database
+} from 'lucide-react';
 
 import {
   sendChatQuery,
@@ -47,6 +55,7 @@ export default function App() {
 
   // Smart Stage Visualization State (Chat View)
   const [stageView, setStageView] = useState<'map' | 'chart' | '3d'>('map');
+  const [hasEverQueried, setHasEverQueried] = useState<boolean>(false);
 
   // Ocean Explorer View Toggle State (Map View)
   const [explorerView, setExplorerView] = useState<'map' | '3d'>('map');
@@ -83,7 +92,7 @@ export default function App() {
           setAnomalies(anomaliesData.anomalies);
         }
 
-        // Pre-fetch initial sample depth profile
+        // Pre-fetch initial sample depth profile for when charts are opened
         try {
           const depthRes = await getDepthProfile(1);
           if (depthRes && depthRes.measurements.length > 0) {
@@ -109,6 +118,8 @@ export default function App() {
 
   // Handle user chat submission with context-aware auto-switching
   const handleSendMessage = async (queryText: string, mode: 'text' | 'voice' = 'text') => {
+    setHasEverQueried(true);
+
     const userMsgId = `user-${Date.now()}`;
     const userMessage: ChatMessage = {
       id: userMsgId,
@@ -185,7 +196,6 @@ export default function App() {
         setFloatTrajectory(trajectoryData.trajectory);
       }
 
-      // Also find a profile for this float to render depth chart
       const matchingFloat = floats.find((f) => f.float_id === floatId);
       if (matchingFloat) {
         if (matchingFloat.profile_id) {
@@ -241,6 +251,8 @@ export default function App() {
     }
   };
 
+  const isStageActive = hasEverQueried || messages.length > 0;
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-white">
       
@@ -272,10 +284,14 @@ export default function App() {
                 isLoading={isChatLoading}
                 onSendMessage={handleSendMessage}
                 onFocusMap={(markers) => {
+                  setHasEverQueried(true);
                   setHighlightMarkers(markers);
                   setStageView('map');
                 }}
-                onView3D={() => setStageView('3d')}
+                onView3D={() => {
+                  setHasEverQueried(true);
+                  setStageView('3d');
+                }}
                 selectedLanguage={selectedLanguage}
                 onSelectLanguage={setSelectedLanguage}
                 stats={stats}
@@ -285,70 +301,152 @@ export default function App() {
             {/* Right Smart Stage: Single Context-Aware Panel (7 Cols) */}
             <div className="lg:col-span-7 flex flex-col h-full bg-slate-950/80 border border-slate-800/80 rounded-2xl overflow-hidden shadow-2xl relative">
               
-              {/* Stage Top Floating Segmented Switch */}
-              <div className="absolute top-3 right-3 z-30 flex items-center gap-1 bg-slate-950/95 backdrop-blur-md p-1 rounded-xl border border-slate-800/90 shadow-xl">
-                <button
-                  onClick={() => setStageView('map')}
-                  className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                    stageView === 'map'
-                      ? 'bg-cyan-500 text-slate-950 font-bold shadow'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <MapPin className="w-3.5 h-3.5" />
-                  <span>Ocean Map</span>
-                </button>
+              {/* Stage Top Floating Segmented Switch (Visible only after first query) */}
+              {isStageActive && (
+                <div className="absolute top-3 right-3 z-30 flex items-center gap-1 bg-slate-950/95 backdrop-blur-md p-1 rounded-xl border border-slate-800/90 shadow-xl animate-in fade-in zoom-in-95 duration-150">
+                  <button
+                    type="button"
+                    onClick={() => setStageView('map')}
+                    className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                      stageView === 'map'
+                        ? 'bg-cyan-500 text-slate-950 font-bold shadow'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <MapPin className="w-3.5 h-3.5" />
+                    <span>Ocean Map</span>
+                  </button>
 
-                <button
-                  onClick={() => setStageView('chart')}
-                  className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                    stageView === 'chart'
-                      ? 'bg-cyan-500 text-slate-950 font-bold shadow'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <LineChart className="w-3.5 h-3.5" />
-                  <span>CTD Profile</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setStageView('chart')}
+                    className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                      stageView === 'chart'
+                        ? 'bg-cyan-500 text-slate-950 font-bold shadow'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <LineChart className="w-3.5 h-3.5" />
+                    <span>CTD Profile</span>
+                  </button>
 
-                <button
-                  onClick={() => setStageView('3d')}
-                  className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                    stageView === '3d'
-                      ? 'bg-cyan-500 text-slate-950 font-bold shadow'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Box className="w-3.5 h-3.5" />
-                  <span>3D Lens</span>
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    onClick={() => setStageView('3d')}
+                    className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                      stageView === '3d'
+                        ? 'bg-cyan-500 text-slate-950 font-bold shadow'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Box className="w-3.5 h-3.5" />
+                    <span>3D Lens</span>
+                  </button>
+                </div>
+              )}
 
-              {/* Stage Active Component */}
-              <div className="flex-1 w-full h-full relative">
-                {stageView === 'map' && (
-                  <OceanMap
-                    floats={floats}
-                    highlightMarkers={highlightMarkers}
-                    onSelectFloat={handleSelectFloat}
-                    selectedFloatId={selectedFloatId}
-                    trajectory={floatTrajectory}
-                  />
-                )}
-
-                {stageView === 'chart' && (
-                  <div className="w-full h-full p-2">
-                    <DepthChart chart={activeChart} />
+              {/* Stage Content: Ambient Idle Placeholder vs Active Visual Stage */}
+              {!isStageActive ? (
+                /* AMBIENT IDLE STATE (Before First Query) */
+                <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-8 text-center space-y-6 bg-gradient-to-b from-slate-950 via-slate-900/60 to-slate-950">
+                  
+                  {/* Subtle Branded Pulse Emblem */}
+                  <div className="relative">
+                    <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-cyan-500/20 via-teal-500/10 to-slate-900 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-2xl shadow-cyan-500/10">
+                      <Waves className="w-10 h-10 animate-pulse" />
+                    </div>
+                    <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-4 w-4 bg-cyan-500"></span>
+                    </span>
                   </div>
-                )}
 
-                {stageView === '3d' && (
-                  <OceanLens3D
-                    selectedFloatId={selectedFloatId}
-                    profileData={activeChart?.chart_type === 'depth_profile' ? activeChart.data : []}
-                  />
-                )}
-              </div>
+                  {/* Heading & Subtitle */}
+                  <div className="space-y-1.5 max-w-md">
+                    <h3 className="text-lg sm:text-xl font-black text-white tracking-tight font-heading">
+                      Interactive Ocean Discovery Stage
+                    </h3>
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      Ask a query in the console or use your voice to activate live geospatial float trajectories, CTD depth curves, and 3D bathymetry.
+                    </p>
+                  </div>
+
+                  {/* 3 Capabilities Preview Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-lg text-left">
+                    <div className="p-3 rounded-xl bg-slate-900/70 border border-slate-800/80 space-y-1 hover:border-cyan-500/30 transition">
+                      <div className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 w-fit">
+                        <MapPin className="w-3.5 h-3.5" />
+                      </div>
+                      <h4 className="text-xs font-bold text-slate-200 font-heading">Fleet Map & PFZ</h4>
+                      <p className="text-[10px] text-slate-400 leading-tight">97 active floats with thermal front fishing advisories</p>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-slate-900/70 border border-slate-800/80 space-y-1 hover:border-teal-500/30 transition">
+                      <div className="p-1.5 rounded-lg bg-teal-500/10 text-teal-400 w-fit">
+                        <LineChart className="w-3.5 h-3.5" />
+                      </div>
+                      <h4 className="text-xs font-bold text-slate-200 font-heading">CTD Depth Curves</h4>
+                      <p className="text-[10px] text-slate-400 leading-tight">Temperature & salinity down to 2,000m depth</p>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-slate-900/70 border border-slate-800/80 space-y-1 hover:border-cyan-400/30 transition">
+                      <div className="p-1.5 rounded-lg bg-cyan-400/10 text-cyan-300 w-fit">
+                        <Box className="w-3.5 h-3.5" />
+                      </div>
+                      <h4 className="text-xs font-bold text-slate-200 font-heading">3D OceanLens</h4>
+                      <p className="text-[10px] text-slate-400 leading-tight">Interactive Three.js WebGL water columns</p>
+                    </div>
+                  </div>
+
+                  {/* Direct Browse Action */}
+                  <div className="pt-2 flex flex-col sm:flex-row items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHasEverQueried(true);
+                        setStageView('map');
+                      }}
+                      className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-cyan-950/60 hover:bg-cyan-900/70 border border-cyan-500/40 text-cyan-300 text-xs font-semibold transition cursor-pointer active:scale-98 shadow-md"
+                    >
+                      <Compass className="w-3.5 h-3.5" />
+                      <span>Browse Fleet Map Directly</span>
+                      <ArrowRight className="w-3.5 h-3.5 ml-0.5" />
+                    </button>
+
+                    <div className="flex items-center space-x-1.5 text-[10px] font-mono text-slate-400 bg-slate-900/80 px-3 py-2 rounded-xl border border-slate-800">
+                      <Database className="w-3 h-3 text-cyan-400" />
+                      <span>646 Profiles • 97 Floats Live</span>
+                    </div>
+                  </div>
+
+                </div>
+              ) : (
+                /* ACTIVE STAGE VIEW (After First Query) */
+                <div className="flex-1 w-full h-full relative">
+                  {stageView === 'map' && (
+                    <OceanMap
+                      floats={floats}
+                      highlightMarkers={highlightMarkers}
+                      onSelectFloat={handleSelectFloat}
+                      selectedFloatId={selectedFloatId}
+                      trajectory={floatTrajectory}
+                    />
+                  )}
+
+                  {stageView === 'chart' && (
+                    <div className="w-full h-full p-2">
+                      <DepthChart chart={activeChart} />
+                    </div>
+                  )}
+
+                  {stageView === '3d' && (
+                    <OceanLens3D
+                      selectedFloatId={selectedFloatId}
+                      profileData={activeChart?.chart_type === 'depth_profile' ? activeChart.data : []}
+                    />
+                  )}
+                </div>
+              )}
 
             </div>
 
@@ -362,6 +460,7 @@ export default function App() {
             {/* Top Explorer View Selector */}
             <div className="absolute top-3 left-16 z-30 flex items-center gap-1 bg-slate-950/95 backdrop-blur-md p-1 rounded-xl border border-slate-800 shadow-xl">
               <button
+                type="button"
                 onClick={() => setExplorerView('map')}
                 className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
                   explorerView === 'map'
@@ -374,6 +473,7 @@ export default function App() {
               </button>
 
               <button
+                type="button"
                 onClick={() => setExplorerView('3d')}
                 className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
                   explorerView === '3d'

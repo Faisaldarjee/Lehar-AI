@@ -6,7 +6,8 @@ import {
   GraduationCap, 
   ChevronDown,
   Smartphone,
-  GitBranch
+  GitBranch,
+  Sparkles
 } from 'lucide-react';
 import type { AppMode } from '../../types';
 
@@ -65,15 +66,16 @@ export const Navbar: React.FC<NavbarProps> = ({
     },
   ];
 
-  const isDemoActive = ['whatsapp', 'classroom', 'pipeline'].includes(currentMode);
+  const activeDemo = demoItems.find((d) => d.id === currentMode);
+  const isDemoActive = Boolean(activeDemo);
 
   return (
-    <header className="sticky top-0 z-40 bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80 px-4 lg:px-8 py-2.5">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+    <header className="sticky top-0 z-50 bg-slate-950/95 backdrop-blur-xl border-b border-slate-800/80 px-4 lg:px-8 py-2.5">
+      <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
         
         {/* Left: Brand Identity & Tagline */}
         <div 
-          className="flex items-center space-x-3 cursor-pointer group"
+          className="flex items-center space-x-3 cursor-pointer group shrink-0"
           onClick={() => onSelectMode('chat')}
           title="Lehar AI — SIH26040 | Team: Ctrl Alt Elites | INCOIS ARGO Intelligence"
         >
@@ -105,13 +107,14 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Center: 3 Top-Level Navigation Tabs */}
-        <nav className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-2xl border border-slate-800/90">
+        <nav className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-2xl border border-slate-800/90 overflow-x-auto no-scrollbar">
           {topTabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = currentMode === tab.id || (tab.id === 'map' && currentMode === '3d');
             return (
               <button
                 key={tab.id}
+                type="button"
                 onClick={() => onSelectMode(tab.id)}
                 className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150 whitespace-nowrap active:scale-98 cursor-pointer ${
                   isActive
@@ -140,24 +143,26 @@ export const Navbar: React.FC<NavbarProps> = ({
         </nav>
 
         {/* Right: Demonstrators Dropdown Menu */}
-        <div className="relative" ref={dropdownRef}>
+        <div className="relative shrink-0" ref={dropdownRef}>
           <button
+            type="button"
             onClick={() => setDemoOpen(!demoOpen)}
             className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all duration-150 cursor-pointer ${
               isDemoActive
-                ? 'bg-slate-850 border-cyan-500/50 text-cyan-300 shadow-md shadow-cyan-950/30'
+                ? 'bg-cyan-950/60 border-cyan-500/60 text-cyan-300 shadow-md shadow-cyan-950/40 ring-1 ring-cyan-500/30'
                 : 'bg-slate-900/80 hover:bg-slate-850 border-slate-800 text-slate-300 hover:text-white'
             }`}
           >
-            <span>Demonstrators</span>
+            <Sparkles className={`w-3.5 h-3.5 ${isDemoActive ? 'text-cyan-400' : 'text-slate-400'}`} />
+            <span>{isDemoActive ? activeDemo?.label : 'Demonstrators'}</span>
             <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${demoOpen ? 'rotate-180 text-cyan-400' : 'text-slate-400'}`} />
           </button>
 
           {/* Dropdown Popover */}
           {demoOpen && (
-            <div className="absolute right-0 mt-2 w-72 bg-slate-900/95 backdrop-blur-xl border border-slate-800 rounded-2xl shadow-2xl p-2 z-50 space-y-1 animate-in fade-in slide-in-from-top-2 duration-150">
+            <div className="absolute right-0 mt-2 w-72 bg-slate-900/98 backdrop-blur-2xl border border-slate-800 rounded-2xl shadow-2xl p-2 z-[100] space-y-1 animate-in fade-in slide-in-from-top-2 duration-150">
               <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">
-                Specific Target Demonstrators
+                Target Demonstrator Modes
               </div>
               {demoItems.map((item) => {
                 const Icon = item.icon;
@@ -165,17 +170,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                 return (
                   <button
                     key={item.id}
+                    type="button"
                     onClick={() => {
                       onSelectMode(item.id);
                       setDemoOpen(false);
                     }}
                     className={`w-full flex items-start space-x-2.5 p-2 rounded-xl text-left transition cursor-pointer ${
                       isSelected
-                        ? 'bg-cyan-500/15 border border-cyan-500/30 text-white'
+                        ? 'bg-cyan-500/15 border border-cyan-500/30 text-white shadow-inner'
                         : 'hover:bg-slate-800/80 text-slate-300 hover:text-white'
                     }`}
                   >
-                    <div className="p-1.5 rounded-lg bg-slate-800 text-cyan-400 shrink-0 mt-0.5">
+                    <div className={`p-1.5 rounded-lg shrink-0 mt-0.5 ${isSelected ? 'bg-cyan-500/20 text-cyan-300' : 'bg-slate-800 text-cyan-400'}`}>
                       <Icon className="w-3.5 h-3.5" />
                     </div>
                     <div className="flex-1 min-w-0">
