@@ -13,9 +13,9 @@ from groq import Groq
 from dotenv import load_dotenv
 from .db import get_db_schema_text, execute_readonly_sql
 
-# Load from both backend/.env and root .env
-root_env = Path(__file__).resolve().parent.parent.parent / '.env'
-load_dotenv(dotenv_path=root_env)
+# Load from backend/.env
+backend_env = Path(__file__).resolve().parent.parent / '.env'
+load_dotenv(dotenv_path=backend_env)
 load_dotenv()
 
 
