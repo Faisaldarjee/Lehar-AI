@@ -19,10 +19,13 @@ function MapBoundsController({
 
   useEffect(() => {
     if (highlightMarkers && highlightMarkers.length > 1) {
-      const validPoints = highlightMarkers.filter((m) => !isNaN(m.lat) && !isNaN(m.lon));
+      // Filter points in the active Indian Ocean domain
+      const validPoints = highlightMarkers.filter(
+        (m) => !isNaN(m.lat) && !isNaN(m.lon) && m.lat >= -10 && m.lat <= 28 && m.lon >= 55 && m.lon <= 98
+      );
       if (validPoints.length > 1) {
         const bounds = L.latLngBounds(validPoints.map((m) => [m.lat, m.lon]));
-        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 8, animate: true, duration: 1.2 });
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 6, animate: true, duration: 1.0 });
         return;
       }
     }
@@ -30,12 +33,12 @@ function MapBoundsController({
     if (highlightMarkers && highlightMarkers.length === 1) {
       const p = highlightMarkers[0];
       if (!isNaN(p.lat) && !isNaN(p.lon)) {
-        map.flyTo([p.lat, p.lon], 7, { duration: 1.2 });
+        map.flyTo([p.lat, p.lon], 6.5, { duration: 1.0 });
         return;
       }
     }
 
-    map.flyTo(center, zoom, { duration: 1.2 });
+    map.flyTo(center, zoom, { duration: 1.0 });
   }, [center, zoom, highlightMarkers, map]);
 
   return null;
@@ -195,7 +198,7 @@ export const OceanMap: React.FC<OceanMapProps> = ({
       <div className="absolute top-3 left-3 right-3 z-[1000] flex flex-wrap items-center justify-between gap-2 pointer-events-none">
         
         {/* Left: Sector Selector Dropdown */}
-        <div className="relative pointer-events-auto">
+        <div className="relative pointer-events-auto ml-11 sm:ml-12">
           <button
             type="button"
             onClick={() => {

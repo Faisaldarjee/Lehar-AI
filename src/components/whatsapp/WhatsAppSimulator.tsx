@@ -233,7 +233,7 @@ export const WhatsAppSimulator: React.FC<WhatsAppSimulatorProps> = ({ selectedLa
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 overflow-hidden">
         
         {/* Left: Value Proposition & Guardian MOAT Cards */}
-        <div className="lg:col-span-5 space-y-3.5 overflow-y-auto pr-1">
+        <div className="lg:col-span-5 space-y-3.5 overflow-y-auto pr-1 pt-1 pb-3">
           
           {/* THE MOAT: Lehar Guardian Highlight */}
           <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-950/40 via-abyssal-900 to-abyssal-900 border border-amber-500/30 space-y-2 relative overflow-hidden">
