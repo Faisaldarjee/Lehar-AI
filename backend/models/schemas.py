@@ -1,6 +1,6 @@
 """
 Lehar AI Backend — Pydantic Models
-Request/Response schemas for API endpoints.
+Request/Response schemas for API endpoints including Guardian proactive alerts.
 """
 
 from pydantic import BaseModel, Field
@@ -36,7 +36,7 @@ class HeroStat(BaseModel):
 
 
 class StatItem(BaseModel):
-    icon: str = Field(..., description="Icon identifier: map-pin, ruler, calendar, thermometer, waves, compass, fish, activity, database, alert-triangle, leaf, satellite")
+    icon: str = Field(..., description="Icon identifier: map-pin, ruler, calendar, thermometer, waves, compass, fish, activity, database, alert-triangle, leaf, satellite, shield")
     label: str
     value: str
 
@@ -134,6 +134,46 @@ class SatelliteGridPoint(BaseModel):
 class SatelliteGridResponse(BaseModel):
     metadata: dict
     points: list[SatelliteGridPoint]
+
+
+class GuardianRecipient(BaseModel):
+    id: int
+    name: str
+    phone_last4: str
+    home_sector: str
+    harbour: str
+
+
+class GuardianLocation(BaseModel):
+    latitude: float
+    longitude: float
+    distance_km: float
+    home_harbour: str
+
+
+class GuardianAlert(BaseModel):
+    id: str
+    type: str  # 'safety' | 'opportunity'
+    severity: str
+    title: str
+    message: str
+    recipient: GuardianRecipient
+    location: GuardianLocation
+    metrics: dict
+    data_sources: list[str]
+    timestamp: str
+
+
+class GuardianStatusResponse(BaseModel):
+    status: str
+    monitored_pfz_zones: int
+    monitored_anomaly_signals: int
+    registered_fishermen_count: int
+    active_safety_alerts: int
+    active_opportunity_alerts: int
+    total_active_alerts: int
+    last_scan_utc: str
+    alerts: list[GuardianAlert]
 
 
 class StatsResponse(BaseModel):

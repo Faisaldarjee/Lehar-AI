@@ -1,6 +1,6 @@
 /**
  * Lehar AI — TypeScript Types
- * Shared interfaces for frontend components and multi-sensor satellite fusion.
+ * Shared interfaces for frontend components and multi-sensor satellite fusion & Lehar Guardian.
  */
 
 export interface MapMarker {
@@ -143,6 +143,46 @@ export interface SatelliteGridResponse {
     datasets: string[];
   };
   points: SatelliteGridPoint[];
+}
+
+export interface GuardianRecipient {
+  id: number;
+  name: string;
+  phone_last4: string;
+  home_sector: string;
+  harbour: string;
+}
+
+export interface GuardianLocation {
+  latitude: number;
+  longitude: number;
+  distance_km: number;
+  home_harbour: string;
+}
+
+export interface GuardianAlert {
+  id: string;
+  type: 'safety' | 'opportunity';
+  severity: 'critical' | 'high' | 'moderate' | 'low';
+  title: string;
+  message: string;
+  recipient: GuardianRecipient;
+  location: GuardianLocation;
+  metrics: Record<string, any>;
+  data_sources: string[];
+  timestamp: string;
+}
+
+export interface GuardianStatusResponse {
+  status: string;
+  monitored_pfz_zones: number;
+  monitored_anomaly_signals: number;
+  registered_fishermen_count: number;
+  active_safety_alerts: number;
+  active_opportunity_alerts: number;
+  total_active_alerts: number;
+  last_scan_utc: string;
+  alerts: GuardianAlert[];
 }
 
 export interface DashboardStats {

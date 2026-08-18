@@ -11,7 +11,8 @@ import type {
   DashboardStats, 
   DepthMeasurement, 
   PFZAdvisory,
-  SatelliteGridResponse
+  SatelliteGridResponse,
+  GuardianStatusResponse
 } from '../types';
 
 const api = axios.create({
@@ -93,6 +94,18 @@ export async function getPFZAdvisories(region = 'arabian_sea', limit = 30): Prom
 /** Get continuous satellite SST & Chlorophyll-a grid for Leaflet map overlay */
 export async function getSatelliteGrid(downsample = 2): Promise<SatelliteGridResponse> {
   const { data } = await api.get<SatelliteGridResponse>('/api/satellite/grid', { params: { downsample } });
+  return data;
+}
+
+/** Get proactive Guardian ocean alerts & watchdog metrics */
+export async function getGuardianAlerts(): Promise<GuardianStatusResponse> {
+  const { data } = await api.get<GuardianStatusResponse>('/api/guardian/alerts');
+  return data;
+}
+
+/** Manually trigger a fresh proactive Guardian scan */
+export async function triggerGuardianScan(): Promise<GuardianStatusResponse> {
+  const { data } = await api.post<GuardianStatusResponse>('/api/guardian/scan');
   return data;
 }
 

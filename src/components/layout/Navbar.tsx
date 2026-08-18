@@ -8,7 +8,8 @@ import {
   Smartphone,
   GitBranch,
   Sparkles,
-  Activity
+  Activity,
+  ShieldCheck
 } from 'lucide-react';
 import type { AppMode } from '../../types';
 
@@ -138,21 +139,40 @@ export const Navbar: React.FC<NavbarProps> = ({
           })}
         </nav>
 
-        {/* Right: Demonstrators Dropdown Menu */}
-        <div className="relative shrink-0" ref={dropdownRef}>
+        {/* Right Section: Guardian Status Pill + Demonstrators Dropdown Menu */}
+        <div className="flex items-center gap-2 shrink-0">
+          
+          {/* Global Guardian Watchdog Pill */}
           <button
             type="button"
-            onClick={() => setDemoOpen(!demoOpen)}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all duration-200 cursor-pointer active:scale-95 ${
-              isDemoActive
-                ? 'bg-ocean-cyan/15 border-ocean-cyan/50 text-ocean-cyan shadow-glow-cyan-sm'
-                : 'bg-abyssal-900/80 hover:bg-abyssal-850 border-abyssal-800 text-slate-300 hover:text-white'
-            }`}
+            onClick={() => onSelectMode('whatsapp')}
+            title="Lehar Guardian: Proactive 24/7 Ocean Watchdog pushing live Safety & PFZ alerts to fishermen"
+            className="hidden md:flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-mono font-semibold bg-emerald-950/70 hover:bg-emerald-900/80 border border-emerald-500/40 text-emerald-300 shadow-sm transition active:scale-95 cursor-pointer"
           >
-            <Sparkles className={`w-3.5 h-3.5 ${isDemoActive ? 'text-ocean-cyan' : 'text-slate-400'}`} />
-            <span>{isDemoActive ? activeDemo?.label : 'Demonstrators'}</span>
-            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${demoOpen ? 'rotate-180 text-ocean-cyan' : 'text-slate-400'}`} />
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="font-bold">Guardian Active</span>
+            <span className="text-emerald-400/80 text-[10px] hidden lg:inline">| 47 Zones Monitored</span>
           </button>
+
+          {/* Demonstrators Dropdown Menu */}
+          <div className="relative shrink-0" ref={dropdownRef}>
+            <button
+              type="button"
+              onClick={() => setDemoOpen(!demoOpen)}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all duration-200 cursor-pointer active:scale-95 ${
+                isDemoActive
+                  ? 'bg-ocean-cyan/15 border-ocean-cyan/50 text-ocean-cyan shadow-glow-cyan-sm'
+                  : 'bg-abyssal-900/80 hover:bg-abyssal-850 border-abyssal-800 text-slate-300 hover:text-white'
+              }`}
+            >
+              <Sparkles className={`w-3.5 h-3.5 ${isDemoActive ? 'text-ocean-cyan' : 'text-slate-400'}`} />
+              <span>{isDemoActive ? activeDemo?.label : 'Demonstrators'}</span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${demoOpen ? 'rotate-180 text-ocean-cyan' : 'text-slate-400'}`} />
+            </button>
 
           {/* Dropdown Popover */}
           {demoOpen && (
@@ -195,6 +215,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               })}
             </div>
           )}
+          </div>
         </div>
 
       </div>

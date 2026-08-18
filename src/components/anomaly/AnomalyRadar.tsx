@@ -6,7 +6,8 @@ import {
   MapPin, 
   RefreshCw, 
   CheckCircle2, 
-  ArrowUpRight
+  ArrowUpRight,
+  ShieldAlert
 } from 'lucide-react';
 import type { AnomalyAlert } from '../../types';
 
@@ -175,6 +176,14 @@ export const AnomalyRadar: React.FC<AnomalyRadarProps> = ({
                     </span>
                   </div>
                 </div>
+
+                {/* Guardian Watchdog Push Badge */}
+                {(alert.severity === 'critical' || alert.severity === 'high') && (
+                  <div className="mt-2 flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-red-950/60 border border-red-500/30 text-[9px] font-mono text-red-300">
+                    <ShieldAlert className="w-3 h-3 text-red-400 shrink-0" />
+                    <span>🛡️ Pushed to Coastal Fishermen via Lehar Guardian</span>
+                  </div>
+                )}
 
                 {/* Bottom Footer Info */}
                 <div className="mt-2.5 pt-2 border-t border-abyssal-800/80 flex items-center justify-between text-[10px] font-mono text-slate-400">
