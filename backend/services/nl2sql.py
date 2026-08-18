@@ -159,25 +159,26 @@ def generate_sql(user_query: str) -> str:
     raise ValueError("Could not generate safe SQL from query.")
 
 
-def generate_summary(user_query: str, sql: str, results: list[dict], language: str) -> str:
-    """Generate a clean, single-sentence natural language descriptive summary matching user language."""
-    is_hindi = any(w in user_query.lower() for w in [
-        "machhli", "machhali", "kaisa", "taapman", "batao", "kahan", "kitna", "samundar", "hal", "paas", "hai", "me", "mein", "namaste", "aaj", "sakte"
-    ]) or "hi" in language.lower()
+from .lang_detect import detect_script_language
+
+
+def generate_summary(user_query: str, sql: str, results: list[dict], language: str) -> tuple[str, dict]:
+    """Generate a clean, single-sentence natural language descriptive summary matching user language and script."""
+    lang_info = detect_script_language(user_query)
 
     if not results:
-        if is_hindi:
-            return "Is kshetra ke liye naye ARGO profiles khoje gaye hain aur taja ocean parameters neeche darshaye gaye hain."
-        return "Recent ARGO ocean profile observations retrieved for this sector."
+        if lang_info["code"] in ("hi", "hi-latin"):
+            return "Is kshetra ke liye naye ARGO profiles khoje gaye hain aur taja ocean parameters neeche darshaye gaye hain.", lang_info
+        elif lang_info["code"] == "ta":
+            return "இந்த பகுதிக்கான புதிய ஏஆர்கோ (ARGO) விவரங்கள் பெறப்பட்டு கீழே காட்டப்பட்டுள்ளன.", lang_info
+        elif lang_info["code"] == "te":
+            return "ఈ ప్రాంతానికి సంబంధించిన తాజా ఆర్గో ప్రొఫైల్ వివరాలు పొందబడ్డాయి.", lang_info
+        return "Recent ARGO ocean profile observations retrieved for this sector.", lang_info
 
     results_preview = json.dumps(results[:5], indent=2, default=str)
     client = get_groq_client()
 
-    lang_instruction = (
-        "USER ASKED IN HINDI/HINGLISH: Respond in natural, polite Hindi/Hinglish (e.g. 'Mumbai ke paas samundar ka taapman 28.5°C hai aur machhli pakadne ke liye sthiti anukool hai')."
-        if is_hindi
-        else "USER ASKED IN ENGLISH: Respond in clear, professional English."
-    )
+    lang_instruction = lang_info["system_instruction"]
 
     for model_name in PREFERRED_MODELS:
         try:
@@ -204,14 +205,18 @@ CRITICAL RULES:
             raw = chat_completion.choices[0].message.content or ""
             summary = clean_llm_response(raw)
             if summary:
-                return summary
+                return summary, lang_info
         except Exception:
             continue
 
     # Deterministic fallback if LLM summary failed
-    if is_hindi:
-        return "INCOIS ARGO data safaltapoorvak prapt ho gaya hai aur naye ocean metrics neeche darshaye gaye hain."
-    return "ARGO ocean profile observations retrieved successfully from the live INCOIS database."
+    if lang_info["code"] in ("hi", "hi-latin"):
+        return "INCOIS ARGO data safaltapoorvak prapt ho gaya hai aur naye ocean metrics neeche darshaye gaye hain.", lang_info
+    elif lang_info["code"] == "ta":
+        return "ஏஆர்கோ கடல் தரவு வெற்றிகரமாக பெறப்பட்டு கீழே கொடுக்கப்பட்டுள்ளது.", lang_info
+    elif lang_info["code"] == "te":
+        return "ఆర్గో సముద్ర డేటా విజయవంతంగా పొందబడింది.", lang_info
+    return "ARGO ocean profile observations retrieved successfully from the live INCOIS database.", lang_info
 
 
 def compute_structured_stats(results: list[dict], user_query: str) -> tuple[dict | None, list[dict], int]:
@@ -478,7 +483,7 @@ async def process_chat_query(user_query: str, language: str = "en-IN") -> dict:
                 sql = fallback_sql
 
         # Step 3: Generate clean natural language summary in user's language
-        summary = generate_summary(user_query, sql, results, language)
+        summary, lang_info = generate_summary(user_query, sql, results, language)
 
         # Step 4: Deterministically compute hero_stat and 3-column stats list
         hero_stat, stats, reading_count = compute_structured_stats(results, user_query)
@@ -502,6 +507,7 @@ async def process_chat_query(user_query: str, language: str = "en-IN") -> dict:
             "data": cleaned_data,
             "chart": chart_info,
             "map_markers": map_markers,
+            "detected_language": lang_info,
             "data_sources": [
                 "INCOIS ARGO Subsurface Profiler (0-2000m)",
                 "NOAA JPL MUR Satellite SST (1km)",

@@ -22,7 +22,8 @@ import {
   Box,
   MoreHorizontal,
   Leaf,
-  Satellite
+  Satellite,
+  Globe
 } from 'lucide-react';
 import type { ChatMessage as ChatMessageType, StatItem } from '../../types';
 import { speakText } from '../../services/voiceSynthesis';
@@ -147,8 +148,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       return;
     }
     const textToSpeak = message.summary || message.content;
+    const localeToSpeak = message.detected_language?.tts_locale || message.language || 'en-IN';
     setIsPlayingAudio(true);
-    speakText(textToSpeak, message.language || 'en-IN').finally(() => {
+    speakText(textToSpeak, localeToSpeak).finally(() => {
       setIsPlayingAudio(false);
     });
   };
@@ -194,6 +196,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                   <span className="font-bold tracking-wider uppercase text-ocean-cyan font-mono">
                     Lehar AI Ocean Intelligence
                   </span>
+                  {message.detected_language && (
+                    <span className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-cyan-950/80 border border-cyan-800/50 text-[9px] font-mono text-cyan-300">
+                      <Globe className="w-2.5 h-2.5 text-cyan-400" />
+                      <span>{message.detected_language.label}</span>
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex items-center space-x-2">

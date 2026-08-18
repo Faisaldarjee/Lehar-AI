@@ -51,6 +51,7 @@ class ChatResponse(BaseModel):
     data: Optional[list[dict]] = Field(None, description="Raw query results")
     chart: Optional[ChartData] = Field(None, description="Chart rendering data")
     map_markers: Optional[list[MapMarker]] = Field(None, description="Map markers to render")
+    detected_language: Optional[dict] = Field(None, description="Detected script and language metadata")
     data_sources: Optional[list[str]] = Field(default_factory=list, description="Contributing sensors (Argo, Satellite SST, Chlorophyll)")
     error: Optional[str] = None
 

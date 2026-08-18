@@ -156,7 +156,9 @@ export default function App() {
         data: response.data,
         chart: response.chart,
         map_markers: response.map_markers,
-        language: selectedLanguage,
+        detected_language: response.detected_language,
+        data_sources: response.data_sources,
+        language: response.detected_language?.tts_locale || selectedLanguage,
         isLoading: false,
       };
 

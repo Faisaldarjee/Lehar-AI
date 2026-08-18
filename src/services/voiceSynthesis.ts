@@ -1,10 +1,15 @@
 /**
- * Lehar AI — High Quality Natural Voice Synthesis (Text-to-Speech)
- * Automatically detects language and selects the softest, most natural
- * Indian/English female voice available in the user's browser.
+ * Lehar AI — Multi-Language Natural Voice Synthesis (Text-to-Speech)
+ * Automatically matches speech synthesis voices to detected Indic & English locales:
+ * - Hindi / Hinglish (hi-IN)
+ * - Tamil (ta-IN)
+ * - Telugu (te-IN)
+ * - Kannada (kn-IN)
+ * - Bengali (bn-IN)
+ * - Malayalam (ml-IN)
+ * - Indian English (en-IN)
  */
 
-// Voice cache
 let cachedVoices: SpeechSynthesisVoice[] = [];
 
 function loadVoices(): SpeechSynthesisVoice[] {
@@ -24,15 +29,13 @@ if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
 }
 
 export function detectLanguageFromText(text: string): string {
-  if (/[\u0900-\u097F]/.test(text)) {
-    return 'hi-IN';
-  }
-  if (/[\u0B80-\u0BFF]/.test(text)) {
-    return 'ta-IN';
-  }
-  if (/[\u0C00-\u0C7F]/.test(text)) {
-    return 'te-IN';
-  }
+  if (/[\u0900-\u097F]/.test(text)) return 'hi-IN';
+  if (/[\u0B80-\u0BFF]/.test(text)) return 'ta-IN';
+  if (/[\u0C00-\u0C7F]/.test(text)) return 'te-IN';
+  if (/[\u0C80-\u0CFF]/.test(text)) return 'kn-IN';
+  if (/[\u0980-\u09FF]/.test(text)) return 'bn-IN';
+  if (/[\u0D00-\u0D7F]/.test(text)) return 'ml-IN';
+
   const hinglishWords = [
     'machhli', 'machhali', 'samundar', 'taapman', 'kaisa', 'paas', 'batao', 
     'kahan', 'namaste', 'hai', 'anukool', 'leharon', 'shaant', 'surakshit', 'gehrai', 'sthiti'
@@ -45,51 +48,45 @@ export function detectLanguageFromText(text: string): string {
 }
 
 /**
- * Select the best natural soft female voice for the given language.
+ * Select the best natural soft female voice for the given language locale.
  */
 function getSoftFemaleVoice(lang: string): SpeechSynthesisVoice | null {
   const voices = cachedVoices.length > 0 ? cachedVoices : loadVoices();
   if (!voices || voices.length === 0) return null;
 
-  const isHindi = lang.startsWith('hi');
+  const targetLang = lang.toLowerCase();
+  const prefix = targetLang.slice(0, 2);
 
-  if (isHindi) {
-    // 1. Check for Natural Hindi Female voices (Edge/Chrome/Google/Apple)
-    const hindiFemale = voices.find((v) =>
-      v.lang.startsWith('hi') &&
-      /swara|heera|lekh|veena|kalpana|female|google/i.test(v.name)
+  // 1. Check exact or prefix match for regional language (Tamil, Telugu, Kannada, Bengali, Hindi)
+  if (prefix !== 'en') {
+    const regionalFemale = voices.find((v) =>
+      v.lang.toLowerCase().startsWith(prefix) &&
+      /swara|heera|lekh|veena|kalpana|valluvar|vani|chitra|female|google|natural/i.test(v.name)
     );
-    if (hindiFemale) return hindiFemale;
+    if (regionalFemale) return regionalFemale;
 
-    // 2. Any Hindi voice
-    const anyHindi = voices.find((v) => v.lang.startsWith('hi'));
-    if (anyHindi) return anyHindi;
-
-    // 3. Fallback to soft Indian English Female voice if Hindi not installed
-    const indianEnglishFemale = voices.find((v) =>
-      v.lang === 'en-IN' && /neerja|heera|veena|female|google/i.test(v.name)
-    );
-    if (indianEnglishFemale) return indianEnglishFemale;
+    const anyRegional = voices.find((v) => v.lang.toLowerCase().startsWith(prefix));
+    if (anyRegional) return anyRegional;
   }
 
-  // English & Regional selection: Prioritize soft, natural female voices
+  // 2. English & Indian English priority voices
   const preferredFemaleEnglish = voices.find((v) =>
-    (v.lang === 'en-IN' || v.lang === 'en-GB' || v.lang === 'en-US') &&
-    /neerja|swara|samantha|victoria|karen|serena|zira|female|natural|google uk english female/i.test(v.name)
+    (v.lang.toLowerCase().startsWith('en-in') || v.lang.toLowerCase().startsWith('en-gb') || v.lang.toLowerCase().startsWith('en-us')) &&
+    /neerja|swara|heera|samantha|victoria|karen|serena|zira|female|natural|google uk english female/i.test(v.name)
   );
   if (preferredFemaleEnglish) return preferredFemaleEnglish;
 
-  // Next: Google or Natural voices
+  // 3. Any Google / Natural voice
   const naturalVoice = voices.find((v) =>
-    v.lang.startsWith('en') && /google|natural/i.test(v.name)
+    v.lang.toLowerCase().startsWith('en') && /google|natural/i.test(v.name)
   );
   if (naturalVoice) return naturalVoice;
 
-  // Fallback to any female voice
+  // 4. Any female voice
   const anyFemale = voices.find((v) => /female|woman/i.test(v.name));
   if (anyFemale) return anyFemale;
 
-  return voices.find((v) => v.lang.startsWith(lang.slice(0, 2))) || voices[0] || null;
+  return voices.find((v) => v.lang.toLowerCase().startsWith(prefix)) || voices[0] || null;
 }
 
 export function speakText(text: string, preferredLanguage?: string): Promise<void> {
@@ -100,49 +97,51 @@ export function speakText(text: string, preferredLanguage?: string): Promise<voi
       return;
     }
 
-    // Stop any active speech before starting fresh
-    window.speechSynthesis.cancel();
+    try {
+      window.speechSynthesis.cancel();
 
-    // Clean text for natural speech pronunciation
-    const cleanText = text
-      .replace(/[*_#`]/g, '')
-      .replace(/https?:\/\/\S+/g, '')
-      .replace(/SELECT[\s\S]*?;/gi, '')
-      .replace(/°C/g, ' degree celsius')
-      .replace(/PSU/g, ' P S U')
-      .replace(/–/g, ' to ')
-      .trim();
+      // Clean markdown, symbols, and formatting for smooth pronunciation
+      const cleanText = text
+        .replace(/[*_#`~[\]()]/g, ' ')
+        .replace(/•/g, ' ')
+        .replace(/\s+/g, ' ')
+        .replace(/°C/g, ' degree celsius')
+        .replace(/PSU/g, ' P S U')
+        .replace(/–/g, ' to ')
+        .replace(/⚠️/g, ' Warning: ')
+        .replace(/🎣/g, ' Fishing Opportunity: ')
+        .replace(/🛡️/g, ' Safety Alert: ')
+        .trim();
 
-    if (!cleanText) {
+      if (!cleanText) {
+        resolve();
+        return;
+      }
+
+      const lang = preferredLanguage || detectLanguageFromText(cleanText);
+      const voice = getSoftFemaleVoice(lang);
+
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.lang = lang;
+      if (voice) {
+        utterance.voice = voice;
+      }
+
+      // Natural acoustic pacing
+      utterance.rate = 0.92;
+      utterance.pitch = 1.08;
+      utterance.volume = 1.0;
+
+      utterance.onend = () => resolve();
+      utterance.onerror = (e) => {
+        console.warn('Speech synthesis playback ended or error:', e);
+        resolve();
+      };
+
+      window.speechSynthesis.speak(utterance);
+    } catch (err) {
+      console.warn('Error during speakText execution:', err);
       resolve();
-      return;
     }
-
-    const detectedLang = preferredLanguage && preferredLanguage !== 'en-IN'
-      ? preferredLanguage
-      : detectLanguageFromText(cleanText);
-
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.lang = detectedLang;
-    
-    // Soft, pleasant female voice tuning
-    utterance.rate = 0.92;   // Gentle natural pace, not fast or rushed
-    utterance.pitch = 1.08;  // Soft, clear female tone
-
-    const bestVoice = getSoftFemaleVoice(detectedLang);
-    if (bestVoice) {
-      utterance.voice = bestVoice;
-    }
-
-    utterance.onend = () => resolve();
-    utterance.onerror = () => resolve();
-
-    window.speechSynthesis.speak(utterance);
   });
-}
-
-export function stopSpeaking() {
-  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
-  }
 }

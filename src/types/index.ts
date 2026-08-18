@@ -31,6 +31,13 @@ export interface StatItem {
   value: string;
 }
 
+export interface DetectedLanguage {
+  code: string;
+  label: string;
+  script?: string;
+  tts_locale: string;
+}
+
 export interface ChatResponse {
   summary?: string;
   answer: string;
@@ -41,6 +48,7 @@ export interface ChatResponse {
   data: Record<string, unknown>[] | null;
   chart: ChartData | null;
   map_markers: MapMarker[] | null;
+  detected_language?: DetectedLanguage | null;
   data_sources?: string[];
   error: string | null;
 }
@@ -55,6 +63,7 @@ export interface ChatMessage {
   reading_count?: number;
   timestamp: Date;
   language?: string;
+  detected_language?: DetectedLanguage | null;
   sql?: string | null;
   data?: Record<string, unknown>[] | null;
   chart?: ChartData | null;
