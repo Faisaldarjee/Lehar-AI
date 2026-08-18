@@ -89,10 +89,14 @@ def _describe_anomaly(parameter: str, value: float, baseline: float, robust_z: f
     unit = "°C" if parameter == "temperature" else "PSU"
     direction = "above" if value > baseline else "below"
     mhw_prefix = f"[{mhw_cat} Marine Heatwave] " if mhw_cat else ""
+    diff = round(abs(value - baseline), 2)
+    val_rounded = round(value, 2)
+    base_rounded = round(baseline, 2)
+    z_rounded = round(robust_z, 1)
     return (
-        f"{mhw_prefix}Observed surface {parameter} {value:.2f} {unit}, {abs(value - baseline):.2f} {unit} "
-        f"{direction} the regional baseline ({baseline:.2f} {unit}; n={sample_count}; "
-        f"Z-score {robust_z:.1f}). Monitored by ARGO CTD telemetry."
+        f"{mhw_prefix}Observed surface {parameter} {val_rounded:.2f} {unit}, {diff:.2f} {unit} "
+        f"{direction} the regional baseline ({base_rounded:.2f} {unit}; n={sample_count}; "
+        f"Z-score {z_rounded:.1f}). Monitored by ARGO CTD telemetry."
     )
 
 
@@ -130,18 +134,21 @@ def detect_anomalies_in_profile(profile_id: int, float_id: str, lat: float, lon:
             else:
                 mhw_cat = "Cat I (Moderate)"
 
+        val_2dec = round(value, 2)
+        ref_2dec = round(reference, 2)
+
         anomalies.append(
             {
                 "float_id": float_id,
-                "latitude": lat,
-                "longitude": lon,
+                "latitude": round(lat, 3),
+                "longitude": round(lon, 3),
                 "date": date,
                 "parameter": parameter,
-                "value": value,
-                "threshold": reference,
+                "value": val_2dec,
+                "threshold": ref_2dec,
                 "severity": severity,
                 "mhw_category": mhw_cat,
-                "description": _describe_anomaly(parameter, value, reference, robust_z, len(values), mhw_cat),
+                "description": _describe_anomaly(parameter, val_2dec, ref_2dec, robust_z, len(values), mhw_cat),
             }
         )
     return anomalies

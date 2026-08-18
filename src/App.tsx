@@ -534,7 +534,17 @@ export default function App() {
             <div className="lg:col-span-6 h-full rounded-2xl overflow-hidden shadow-2xl">
               <OceanMap
                 floats={floats}
-                highlightMarkers={highlightMarkers}
+                highlightMarkers={
+                  highlightMarkers && highlightMarkers.length > 0
+                    ? highlightMarkers
+                    : anomalies.map((a) => ({
+                        lat: a.latitude,
+                        lon: a.longitude,
+                        float_id: a.float_id || 'Alert',
+                        date: a.date,
+                        label: `${a.parameter.toUpperCase()}: ${a.value}`,
+                      }))
+                }
                 onSelectFloat={handleSelectFloat}
                 selectedFloatId={selectedFloatId}
               />

@@ -166,7 +166,7 @@ export const AnomalyRadar: React.FC<AnomalyRadarProps> = ({
 
                   <div className="text-right shrink-0">
                     <div className="text-xs font-bold text-white font-mono">
-                      {alert.value}
+                      {typeof alert.value === 'number' ? alert.value.toFixed(2) : alert.value}
                       <span className="text-[10px] text-slate-400 ml-0.5">
                         {isTemp ? '°C' : isSal ? 'PSU' : ''}
                       </span>
