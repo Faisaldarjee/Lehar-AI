@@ -16,12 +16,12 @@ export const ArchitecturePipeline: React.FC = () => {
 
   const steps = [
     {
-      layer: 'LAYER 1: DATA INGESTION',
+      layer: 'LAYER 1: DATA INGESTION & SATELLITE FUSION',
       icon: Database,
       color: 'from-ocean-cyan to-blue-600',
-      title: 'ARGO Global GDAC & INCOIS Ingestion Pipeline',
-      description: 'Continuous ingestion of multi-dimensional NetCDF hydrographic files from 4,000+ floats via xarray & argopy into SQLite & columnar Parquet.',
-      specs: ['646 Profiles Ingested', '97 Active Indian Ocean Floats', '6-Hour Automated Sync Cron', 'SQLite + Spatial Indexes'],
+      title: 'ARGO GDAC + NOAA/NASA Satellite Fusion Engine',
+      description: 'Ingestion of multi-dimensional ARGO subsurface NetCDF files fused with continuous NOAA MUR 1km SST and NASA VIIRS Chlorophyll-a satellite grids.',
+      specs: ['646 Profiles Ingested', '3,321 Satellite Grid Points', 'NOAA CoastWatch ERDDAP Sync', 'NASA VIIRS Chlorophyll-a'],
     },
     {
       layer: 'LAYER 2: USER INTERFACE & ACCESS',

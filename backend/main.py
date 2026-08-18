@@ -10,7 +10,7 @@ import os
 
 from .services.db import init_db
 from .services.anomaly_detector import run_anomaly_scan
-from .routers import chat, data, anomaly, pfz
+from .routers import chat, data, anomaly, pfz, satellite
 
 
 @asynccontextmanager
@@ -56,6 +56,7 @@ app.include_router(chat.router)
 app.include_router(data.router)
 app.include_router(anomaly.router)
 app.include_router(pfz.router)
+app.include_router(satellite.router)
 
 
 @app.get("/")

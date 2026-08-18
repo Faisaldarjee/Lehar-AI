@@ -1,6 +1,6 @@
 /**
  * Lehar AI — TypeScript Types
- * Shared interfaces for frontend components.
+ * Shared interfaces for frontend components and multi-sensor satellite fusion.
  */
 
 export interface MapMarker {
@@ -41,6 +41,7 @@ export interface ChatResponse {
   data: Record<string, unknown>[] | null;
   chart: ChartData | null;
   map_markers: MapMarker[] | null;
+  data_sources?: string[];
   error: string | null;
 }
 
@@ -58,6 +59,7 @@ export interface ChatMessage {
   data?: Record<string, unknown>[] | null;
   chart?: ChartData | null;
   map_markers?: MapMarker[] | null;
+  data_sources?: string[];
   isLoading?: boolean;
 }
 
@@ -106,17 +108,48 @@ export interface PFZAdvisory {
   longitude: number;
   date: string;
   sst_celsius: number;
+  satellite_sst?: number | null;
+  chlorophyll_mg_m3?: number | null;
+  chlorophyll_gradient?: number | null;
   mld_meters: number | null;
   pfz_rating: 'Excellent' | 'Good' | 'Fair' | 'Poor';
   pfz_score: number;
+  data_confidence?: string;
+  data_sources?: string[];
   target_species: string[];
   nearest_harbour: PFZHarbour;
   advisory: string;
 }
 
+export interface SatelliteGridPoint {
+  lat: number;
+  lon: number;
+  sst: number;
+  chlorophyll: number;
+  gradient: number;
+  thermal_front: boolean;
+  chlorophyll_front: boolean;
+  pfz_potential: 'Excellent' | 'Good' | 'Moderate' | 'Low';
+}
+
+export interface SatelliteGridResponse {
+  metadata: {
+    source: string;
+    coverage: string;
+    grid_resolution_deg: number;
+    total_points: number;
+    served_points?: number;
+    generated_at: string;
+    datasets: string[];
+  };
+  points: SatelliteGridPoint[];
+}
+
 export interface DashboardStats {
   total_profiles: number;
   total_floats: number;
+  total_anomalies?: number;
+  satellite_points?: number;
   coverage_area: string;
 }
 

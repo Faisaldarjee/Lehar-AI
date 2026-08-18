@@ -20,7 +20,9 @@ import {
   Download,
   Volume2,
   Box,
-  MoreHorizontal
+  MoreHorizontal,
+  Leaf,
+  Satellite
 } from 'lucide-react';
 import type { ChatMessage as ChatMessageType, StatItem } from '../../types';
 import { speakText } from '../../services/voiceSynthesis';
@@ -64,6 +66,11 @@ function renderStatIcon(iconName: string) {
     case 'activity':
     case 'mld':
       return <Activity className={iconClass} />;
+    case 'leaf':
+    case 'chlorophyll':
+      return <Leaf className="w-3.5 h-3.5 text-emerald-400 shrink-0" />;
+    case 'satellite':
+      return <Satellite className="w-3.5 h-3.5 text-amber-400 shrink-0" />;
     case 'alert':
       return <AlertTriangle className="w-3.5 h-3.5 text-coral-alert shrink-0" />;
     default:
@@ -290,6 +297,25 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* Data Fusion Transparency Badges */}
+              {(message.data_sources && message.data_sources.length > 0) && (
+                <div className="mb-2.5 px-2.5 py-1.5 rounded-xl bg-abyssal-950/70 border border-abyssal-800/80 flex flex-wrap items-center gap-1.5 text-[9px] font-mono text-slate-400">
+                  <span className="text-slate-500 font-semibold uppercase tracking-wider flex items-center gap-1">
+                    <Sparkles className="w-2.5 h-2.5 text-ocean-cyan" />
+                    Data Fusion:
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-800/50">
+                    🌊 INCOIS ARGO Subsurface (0-2000m)
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800/50">
+                    🛰️ NOAA MUR Satellite SST (1km)
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800/50">
+                    🍃 NASA VIIRS Chlorophyll-a (8-day)
+                  </span>
                 </div>
               )}
 

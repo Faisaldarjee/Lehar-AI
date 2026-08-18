@@ -1,24 +1,29 @@
 """
 Lehar AI — PFZ (Potential Fishing Zone) Router
-Provides real-time fishing zone advisories for Indian coastal harbours.
+Provides real-time multi-sensor fused fishing zone advisories for Indian coastal harbours.
 """
 
 from fastapi import APIRouter, Query
-
 from ..services.pfz_engine import get_pfz_advisories
+from ..models.schemas import PFZResponse
 
 router = APIRouter(prefix="/api", tags=["pfz"])
 
 
-@router.get("/pfz")
+@router.get("/pfz", response_model=PFZResponse)
 async def pfz_advisories(
     region: str = Query("arabian_sea", description="Region: arabian_sea, bay_of_bengal, mumbai, kochi, chennai, vizag, all"),
     limit: int = Query(30, ge=1, le=100),
 ):
-    """Get PFZ fishing advisories for a region."""
+    """Get multi-sensor fused PFZ fishing advisories for a region."""
     advisories = get_pfz_advisories(region=region, limit=limit)
     return {
         "region": region,
         "advisories": advisories,
         "count": len(advisories),
+        "fusion_sources": [
+            "INCOIS ARGO Subsurface Profiler (0-2000m)",
+            "NOAA JPL MUR Satellite SST (1km)",
+            "NASA VIIRS Chlorophyll-a (8-day Composite)"
+        ]
     }

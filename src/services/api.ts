@@ -4,7 +4,15 @@
  */
 
 import axios from 'axios';
-import type { ChatResponse, FloatSummary, AnomalyAlert, DashboardStats, DepthMeasurement, PFZAdvisory } from '../types';
+import type { 
+  ChatResponse, 
+  FloatSummary, 
+  AnomalyAlert, 
+  DashboardStats, 
+  DepthMeasurement, 
+  PFZAdvisory,
+  SatelliteGridResponse
+} from '../types';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000',
@@ -71,13 +79,20 @@ export async function triggerAnomalyScan(): Promise<{ message: string; new_count
   return data;
 }
 
-/** Get PFZ fishing advisories */
+/** Get PFZ fishing advisories with multi-sensor fusion */
 export async function getPFZAdvisories(region = 'arabian_sea', limit = 30): Promise<{
   region: string;
   advisories: PFZAdvisory[];
   count: number;
+  fusion_sources?: string[];
 }> {
   const { data } = await api.get('/api/pfz', { params: { region, limit } });
+  return data;
+}
+
+/** Get continuous satellite SST & Chlorophyll-a grid for Leaflet map overlay */
+export async function getSatelliteGrid(downsample = 2): Promise<SatelliteGridResponse> {
+  const { data } = await api.get<SatelliteGridResponse>('/api/satellite/grid', { params: { downsample } });
   return data;
 }
 

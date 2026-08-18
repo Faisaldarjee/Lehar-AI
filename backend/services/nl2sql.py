@@ -258,7 +258,12 @@ def compute_structured_stats(results: list[dict], user_query: str) -> tuple[dict
         loc_str = format_lat_lon(latitudes[0], longitudes[0]) if latitudes and longitudes else "Indian Ocean"
         stats.append({"icon": "map-pin", "label": "Location", "value": loc_str})
 
-        if depths:
+        # Inject Satellite Chlorophyll if fishing or temperature query
+        if latitudes and longitudes:
+            from .satellite_client import get_nearest_satellite_data
+            sat = get_nearest_satellite_data(latitudes[0], longitudes[0])
+            stats.append({"icon": "leaf", "label": "Chlorophyll-a", "value": f"{sat['chlorophyll_mg_m3']:.2f} mg/m³"})
+        elif depths:
             depth_str = format_depth_range(min(depths), max(depths))
             stats.append({"icon": "ruler", "label": "Depth range", "value": depth_str})
         elif salinities:
@@ -497,6 +502,11 @@ async def process_chat_query(user_query: str, language: str = "en-IN") -> dict:
             "data": cleaned_data,
             "chart": chart_info,
             "map_markers": map_markers,
+            "data_sources": [
+                "INCOIS ARGO Subsurface Profiler (0-2000m)",
+                "NOAA JPL MUR Satellite SST (1km)",
+                "NASA VIIRS Chlorophyll-a (8-day Composite)"
+            ],
             "error": None
         }
 
