@@ -79,7 +79,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           onClick={() => onSelectMode('chat')}
           title="Lehar AI — SIH26040 | Team: Ctrl Alt Elites | INCOIS ARGO Intelligence"
         >
-          <div className="relative">
+          <div className="relative ocean-breathing">
             <img 
               src="/logo.png" 
               alt="Lehar AI" 

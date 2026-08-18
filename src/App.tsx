@@ -8,6 +8,7 @@ import { AnomalyRadar } from './components/anomaly/AnomalyRadar';
 import { AdoptFloat } from './components/education/AdoptFloat';
 import { WhatsAppSimulator } from './components/whatsapp/WhatsAppSimulator';
 import { ArchitecturePipeline } from './components/pipeline/ArchitecturePipeline';
+import { OceanAtmosphere } from './components/common/OceanAtmosphere';
 import { 
   MapPin, 
   LineChart, 
@@ -252,8 +253,11 @@ export default function App() {
   const isStageActive = hasEverQueried || messages.length > 0;
 
   return (
-    <div className="min-h-screen bg-abyssal-950 text-slate-100 flex flex-col font-sans selection:bg-ocean-cyan selection:text-abyssal-950">
+    <div className="min-h-screen relative text-slate-100 flex flex-col font-sans selection:bg-ocean-cyan selection:text-abyssal-950">
       
+      {/* Ambient Ocean Atmospheric Layer (Caustics & Bioluminescent Drift) */}
+      <OceanAtmosphere />
+
       {/* Top Main Navigation */}
       <Navbar
         currentMode={currentMode}
@@ -348,7 +352,7 @@ export default function App() {
                 <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-8 text-center space-y-6 bg-gradient-to-b from-abyssal-950 via-abyssal-900/70 to-abyssal-950">
                   
                   {/* Subtle Branded Pulse Emblem */}
-                  <div className="relative">
+                  <div className="relative ocean-breathing">
                     <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-ocean-cyan/20 via-teal-500/10 to-abyssal-900 border border-ocean-cyan/30 flex items-center justify-center text-ocean-cyan shadow-glow-cyan">
                       <Waves className="w-10 h-10 animate-pulse" />
                     </div>

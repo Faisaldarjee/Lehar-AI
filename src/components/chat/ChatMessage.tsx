@@ -178,7 +178,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           className={`relative rounded-2xl p-4 transition-all duration-200 ${
             isUser
               ? 'bg-gradient-to-r from-ocean-cyan to-teal-400 text-abyssal-950 font-medium rounded-tr-sm shadow-lg shadow-ocean-cyan/20'
-              : 'bg-abyssal-900/90 border border-abyssal-800/90 text-slate-100 rounded-tl-sm shadow-2xl backdrop-blur-xl w-full'
+              : 'ocean-card text-slate-100 rounded-tl-sm shadow-2xl w-full'
           }`}
         >
           {/* USER MESSAGE VIEW */}

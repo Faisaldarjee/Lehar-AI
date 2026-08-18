@@ -2,7 +2,7 @@
 
 @layer base {
   :root {
-    --abyssal-bg: #030a14;
+    --abyssal-bg: #020509;
     --abyssal-surface: #071524;
     --abyssal-card: #0b1f33;
     --abyssal-border: rgba(32, 214, 199, 0.14);
@@ -14,16 +14,17 @@
   }
 
   body {
-    background-color: #030a14;
+    background-color: #020509;
     color: #f1f5f9;
     font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'tnum';
     overflow-x: hidden;
+    /* FIX 1: Realistic Ocean Depth Zones Gradient (Epipelagic 0-200m -> Mesopelagic -> Bathypelagic Abyssal) */
     background-image: 
-      radial-gradient(ellipse 90% 60% at 50% -25%, rgba(32, 214, 199, 0.08), transparent 70%),
-      radial-gradient(circle 800px at 95% 95%, rgba(56, 189, 248, 0.04), transparent 60%),
-      radial-gradient(circle 600px at 5% 75%, rgba(13, 148, 136, 0.04), transparent 50%);
+      linear-gradient(180deg, #0a1f2e 0%, #071220 28%, #040913 65%, #020509 100%),
+      radial-gradient(ellipse 90% 40% at 50% -10%, rgba(32, 214, 199, 0.09), transparent 70%);
     background-attachment: fixed;
+    background-size: 100% 100%, 100% 100%;
   }
 
   h1, h2, h3, h4, h5, h6, .font-heading {
@@ -37,30 +38,115 @@
   }
 }
 
-/* Operational Command Panels */
+/* FIX 2: Subtle Caustic Light Refraction Layer */
+.ocean-caustics {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.05;
+  background: 
+    radial-gradient(circle at 25% 20%, rgba(56, 189, 248, 0.5) 0%, transparent 45%),
+    radial-gradient(circle at 75% 55%, rgba(32, 214, 199, 0.4) 0%, transparent 50%),
+    radial-gradient(circle at 45% 85%, rgba(14, 165, 233, 0.35) 0%, transparent 45%),
+    radial-gradient(circle at 80% 20%, rgba(45, 212, 191, 0.45) 0%, transparent 40%);
+  background-size: 200% 200%;
+  animation: causticDrift 22s ease-in-out infinite alternate;
+  mix-blend-mode: screen;
+}
+
+@keyframes causticDrift {
+  0% {
+    background-position: 0% 0%, 100% 100%, 50% 0%, 0% 100%;
+    transform: scale(1);
+  }
+  50% {
+    background-position: 100% 50%, 0% 50%, 100% 100%, 50% 0%;
+    transform: scale(1.02);
+  }
+  100% {
+    background-position: 50% 100%, 50% 0%, 0% 50%, 100% 50%;
+    transform: scale(1);
+  }
+}
+
+/* FIX 3: Bioluminescent Particulate Drift */
+.ocean-particle {
+  position: absolute;
+  bottom: -20px;
+  border-radius: 9999px;
+  background: #20d6c7;
+  box-shadow: 0 0 10px 2px rgba(32, 214, 199, 0.5);
+  opacity: 0;
+  animation: planktonFloat linear infinite;
+  pointer-events: none;
+}
+
+@keyframes planktonFloat {
+  0% {
+    transform: translateY(0) translateX(0);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.18;
+  }
+  50% {
+    transform: translateY(-50vh) translateX(var(--drift-x, 15px));
+    opacity: 0.14;
+  }
+  85% {
+    opacity: 0.16;
+  }
+  100% {
+    transform: translateY(-105vh) translateX(calc(var(--drift-x, 15px) * -0.6));
+    opacity: 0;
+  }
+}
+
+/* FIX 4: Card Glass Surface Treatment */
 .ocean-panel {
-  background: rgba(7, 21, 36, 0.90);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(32, 214, 199, 0.14);
+  background: rgba(7, 21, 36, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(32, 214, 199, 0.16);
   border-radius: 1rem;
-  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .ocean-card {
-  background: rgba(11, 31, 51, 0.75);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(11, 31, 51, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(32, 214, 199, 0.15);
   border-radius: 0.875rem;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .ocean-card:hover {
-  background: rgba(14, 39, 64, 0.85);
-  border-color: rgba(32, 214, 199, 0.30);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 0 0 15px -3px rgba(32, 214, 199, 0.12);
+  background: rgba(14, 39, 64, 0.80);
+  border-color: rgba(32, 214, 199, 0.35);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 0 0 15px -3px rgba(32, 214, 199, 0.15), inset 0 0 20px rgba(32, 214, 199, 0.05);
   transform: translateY(-1px);
+}
+
+/* FIX 5: Ambient Motion & Breathing on Center Wave/Logo */
+.ocean-breathing {
+  animation: oceanBreath 5.5s ease-in-out infinite;
+}
+
+@keyframes oceanBreath {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.94;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 1;
+    filter: drop-shadow(0 0 14px rgba(32, 214, 199, 0.45));
+  }
 }
 
 /* Controlled Bioluminescent Accents */
@@ -144,7 +230,7 @@
 
 /* Leaflet Map Dark Ocean Theme Overrides */
 .leaflet-container {
-  background-color: #030a14 !important;
+  background-color: #020509 !important;
   font-family: 'Plus Jakarta Sans', sans-serif !important;
 }
 
@@ -173,11 +259,11 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #030a14;
+  background: #020509;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #11283d;
+  background: #0f2438;
   border-radius: 6px;
 }
 

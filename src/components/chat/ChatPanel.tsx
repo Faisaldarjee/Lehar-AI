@@ -52,7 +52,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3">
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center max-w-lg mx-auto py-8 space-y-4">
-            <div className="relative">
+            <div className="relative ocean-breathing">
               <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-ocean-cyan/20 via-teal-500/10 to-abyssal-900 border border-ocean-cyan/30 flex items-center justify-center text-ocean-cyan shadow-glow-cyan">
                 <Waves className="w-7 h-7 animate-pulse" />
               </div>
