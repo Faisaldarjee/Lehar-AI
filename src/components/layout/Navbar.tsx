@@ -8,8 +8,7 @@ import {
   Smartphone,
   GitBranch,
   Sparkles,
-  Activity,
-  ShieldCheck
+  Activity
 } from 'lucide-react';
 import type { AppMode } from '../../types';
 
@@ -93,9 +92,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               <h1 className="text-lg font-black tracking-tight text-white flex items-center gap-1 font-heading">
                 Lehar <span className="bg-gradient-to-r from-ocean-cyan via-teal-300 to-cyan-400 bg-clip-text text-transparent">AI</span>
               </h1>
-              <span className="hidden sm:inline-block px-1.5 py-0.2 text-[10px] font-bold tracking-wider uppercase bg-ocean-cyan/10 text-ocean-cyan border border-ocean-cyan/30 rounded font-mono">
-                SIH26040
-              </span>
             </div>
             <p className="text-[10px] text-cyan-300/80 font-medium tracking-wide">
               Know the Sea. Know the Way.
@@ -139,25 +135,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           })}
         </nav>
 
-        {/* Right Section: Guardian Status Pill + Demonstrators Dropdown Menu */}
+        {/* Right Section: Demonstrators Dropdown Menu */}
         <div className="flex items-center gap-2 shrink-0">
-          
-          {/* Global Guardian Watchdog Pill */}
-          <button
-            type="button"
-            onClick={() => onSelectMode('whatsapp')}
-            title="Lehar Guardian: Proactive 24/7 Ocean Watchdog pushing live Safety & PFZ alerts to fishermen"
-            className="hidden md:flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-mono font-semibold bg-emerald-950/70 hover:bg-emerald-900/80 border border-emerald-500/40 text-emerald-300 shadow-sm transition active:scale-95 cursor-pointer"
-          >
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="font-bold">Guardian Active</span>
-            <span className="text-emerald-400/80 text-[10px] hidden lg:inline">| 47 Zones Monitored</span>
-          </button>
-
           {/* Demonstrators Dropdown Menu */}
           <div className="relative shrink-0" ref={dropdownRef}>
             <button

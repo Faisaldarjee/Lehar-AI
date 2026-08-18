@@ -14,8 +14,7 @@ import {
   Box, 
   Compass, 
   Waves, 
-  ArrowRight,
-  Database
+  ArrowRight
 } from 'lucide-react';
 
 import {
@@ -33,7 +32,6 @@ import type {
   ChatMessage,
   FloatSummary,
   AnomalyAlert,
-  DashboardStats,
   ChartData,
   MapMarker,
 } from './types';
@@ -44,7 +42,6 @@ export default function App() {
   const [backendOnline, setBackendOnline] = useState<boolean>(true);
 
   // Core Application Data State
-  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [floats, setFloats] = useState<FloatSummary[]>([]);
   const [anomalies, setAnomalies] = useState<AnomalyAlert[]>([]);
   const [isScanningAnomalies, setIsScanningAnomalies] = useState<boolean>(false);
@@ -77,7 +74,6 @@ export default function App() {
         ]);
 
         if (statsData) {
-          setStats(statsData);
           setBackendOnline(true);
         } else {
           setBackendOnline(false);
@@ -296,7 +292,6 @@ export default function App() {
                 }}
                 selectedLanguage={selectedLanguage}
                 onSelectLanguage={setSelectedLanguage}
-                stats={stats}
               />
             </div>
 
@@ -401,24 +396,19 @@ export default function App() {
                   </div>
 
                   {/* Direct Browse Action */}
-                  <div className="pt-2 flex flex-col sm:flex-row items-center gap-3">
+                  <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
                     <button
                       type="button"
                       onClick={() => {
                         setHasEverQueried(true);
                         setStageView('map');
                       }}
-                      className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-ocean-cyan/15 hover:bg-ocean-cyan/25 border border-ocean-cyan/40 text-ocean-cyan text-xs font-semibold transition cursor-pointer active:scale-95 shadow-glow-cyan-sm"
+                      className="flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-ocean-cyan to-teal-400 text-abyssal-950 font-bold text-xs shadow-lg shadow-ocean-cyan/20 transition cursor-pointer active:scale-95 hover:brightness-110"
                     >
-                      <Compass className="w-3.5 h-3.5" />
+                      <Compass className="w-4 h-4 text-abyssal-950" />
                       <span>Browse Fleet Map Directly</span>
-                      <ArrowRight className="w-3.5 h-3.5 ml-0.5" />
+                      <ArrowRight className="w-4 h-4 ml-0.5 text-abyssal-950" />
                     </button>
-
-                    <div className="flex items-center space-x-1.5 text-[10px] font-mono text-slate-400 bg-abyssal-900/90 px-3 py-2 rounded-xl border border-abyssal-800 shadow-sm">
-                      <Database className="w-3 h-3 text-ocean-cyan" />
-                      <span>646 Profiles • 97 Floats Live</span>
-                    </div>
                   </div>
 
                 </div>

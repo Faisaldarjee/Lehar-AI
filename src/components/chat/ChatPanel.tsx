@@ -2,8 +2,8 @@ import React, { useRef, useEffect } from 'react';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { QueryChips } from './QueryChips';
-import { Waves, Database, Sparkles } from 'lucide-react';
-import type { ChatMessage as ChatMessageType, DashboardStats } from '../../types';
+import { Waves, Sparkles } from 'lucide-react';
+import type { ChatMessage as ChatMessageType } from '../../types';
 
 interface ChatPanelProps {
   messages: ChatMessageType[];
@@ -13,7 +13,6 @@ interface ChatPanelProps {
   onView3D?: () => void;
   selectedLanguage?: string;
   onSelectLanguage?: (lang: string) => void;
-  stats?: DashboardStats | null;
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
@@ -22,7 +21,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   onSendMessage,
   onFocusMap,
   onView3D,
-  stats,
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -46,14 +44,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               Ocean Intelligence Console
             </h2>
             <p className="text-[10px] text-slate-400">Natural Language to Read-Only SQL Engine</p>
-          </div>
-        </div>
-
-        {/* Single Clean Live Ocean Telemetry Badge */}
-        <div className="flex items-center text-[10px] font-mono">
-          <div className="flex items-center space-x-1.5 bg-abyssal-900/90 px-3 py-1 rounded-xl border border-abyssal-800 text-slate-300 shadow-sm">
-            <Database className="w-3 h-3 text-ocean-cyan" /> 
-            <span>{stats ? `${stats.total_profiles} Profiles • ${stats.total_floats} Floats Live` : '646 Profiles • 97 Floats Live'}</span>
           </div>
         </div>
       </div>

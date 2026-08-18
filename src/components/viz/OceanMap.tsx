@@ -357,12 +357,12 @@ export const OceanMap: React.FC<OceanMapProps> = ({
         zoom={mapZoom}
         style={{ width: '100%', height: '100%', minHeight: '350px' }}
         scrollWheelZoom={true}
+        attributionControl={false}
       >
         <MapBoundsController center={mapCenter} zoom={mapZoom} highlightMarkers={highlightMarkers} />
 
         {/* CartoDB Dark Matter Basemap */}
         <TileLayer
-          attribution='&copy; <a href="https://carto.com/">CartoDB</a> | <a href="https://incois.gov.in">INCOIS ARGO</a> | NOAA CoastWatch | NASA OceanColor'
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
           maxZoom={19}
         />
