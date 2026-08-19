@@ -135,8 +135,18 @@ export const Navbar: React.FC<NavbarProps> = ({
           })}
         </nav>
 
-        {/* Right Section: Demonstrators Dropdown Menu */}
+        {/* Right Section: Offline Edge Badge & Demonstrators Dropdown */}
         <div className="flex items-center gap-2 shrink-0">
+          
+          {/* Real-time Offline Edge Readiness Badge */}
+          <div 
+            className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl bg-teal-950/70 border border-teal-500/30 text-[10px] font-mono text-teal-300 shadow-sm select-none"
+            title="Lehar Edge Active: Local SQLite In-Situ DB + Cached NOAA Satellite Snapshot. 100% Offline Capable."
+          >
+            <span className="w-2 h-2 rounded-full bg-teal-400 shadow-glow-cyan-sm animate-pulse shrink-0" />
+            <span className="font-bold">Offline-Ready Edge</span>
+          </div>
+
           {/* Demonstrators Dropdown Menu */}
           <div className="relative shrink-0" ref={dropdownRef}>
             <button

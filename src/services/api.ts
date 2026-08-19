@@ -62,11 +62,16 @@ export async function getProfilesNear(lat: number, lon: number, radius = 2, limi
   return data;
 }
 
-/** Get depth profile measurements */
+/** Get depth profile measurements with MLD and thermocline boundary */
 export async function getDepthProfile(profileId: number): Promise<{
   profile_id: number;
   measurements: DepthMeasurement[];
   num_levels: number;
+  mld_meters?: number;
+  thermocline_depth_meters?: number;
+  max_depth_meters?: number;
+  surface_temperature?: number;
+  bottom_temperature?: number;
 }> {
   const { data } = await api.get(`/api/profiles/${profileId}/depth`);
   return data;
@@ -75,6 +80,12 @@ export async function getDepthProfile(profileId: number): Promise<{
 /** Get dashboard statistics */
 export async function getStats(): Promise<DashboardStats> {
   const { data } = await api.get('/api/stats');
+  return data;
+}
+
+/** Check real-time offline edge database & satellite cache health */
+export async function getSystemStatus(): Promise<import('../types').SystemStatusResponse> {
+  const { data } = await api.get('/api/system/status');
   return data;
 }
 

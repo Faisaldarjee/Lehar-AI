@@ -106,6 +106,17 @@ function getChlColor(chl: number): string {
   return '#14b8a6';                 // Cyan
 }
 
+const TARGET_SPECIES_OPTIONS = [
+  { id: 'all', label: 'All Marine Species', minSST: 0, maxSST: 40 },
+  { id: 'surmai', label: '🐟 Surmai (King Mackerel)', minSST: 26.0, maxSST: 28.5 },
+  { id: 'bangda', label: '🐟 Bangda (Indian Mackerel)', minSST: 25.0, maxSST: 29.0 },
+  { id: 'rawas', label: '🐟 Rawas (Indian Salmon)', minSST: 24.5, maxSST: 28.0 },
+  { id: 'paplet', label: '🐟 Paplet (Pomfret)', minSST: 25.5, maxSST: 28.5 },
+  { id: 'tuna', label: '🐟 Tuna (Yellowfin)', minSST: 24.0, maxSST: 29.5 },
+  { id: 'tarli', label: '🐟 Tarli / Sardine', minSST: 26.0, maxSST: 29.0 },
+  { id: 'hilsa', label: '🐟 Hilsa (Ilish)', minSST: 25.0, maxSST: 30.0 },
+];
+
 export const OceanMap: React.FC<OceanMapProps> = ({
   floats,
   highlightMarkers,
@@ -122,6 +133,10 @@ export const OceanMap: React.FC<OceanMapProps> = ({
   const [showSatelliteSST, setShowSatelliteSST] = useState<boolean>(false);
   const [showChlorophyll, setShowChlorophyll] = useState<boolean>(false);
   
+  // Target Species Filter State
+  const [selectedSpecies, setSelectedSpecies] = useState<string>('all');
+  const [speciesMenuOpen, setSpeciesMenuOpen] = useState<boolean>(false);
+
   // UI Dropdowns & Collapsible Legend
   const [sectorMenuOpen, setSectorMenuOpen] = useState<boolean>(false);
   const [satLayersMenuOpen, setSatLayersMenuOpen] = useState<boolean>(false);
@@ -188,6 +203,13 @@ export const OceanMap: React.FC<OceanMapProps> = ({
     setSectorMenuOpen(false);
   };
 
+  const activeSpecies = TARGET_SPECIES_OPTIONS.find((s) => s.id === selectedSpecies);
+  const displayedPfzZones = pfzZones.filter((zone) => {
+    if (selectedSpecies === 'all' || !activeSpecies) return true;
+    const sst = zone.sst_celsius ?? 28.0;
+    return sst >= activeSpecies.minSST && sst <= activeSpecies.maxSST;
+  });
+
   const polylinePositions: [number, number][] =
     trajectory?.map((t) => [t.latitude, t.longitude] as [number, number]) || [];
 
@@ -197,46 +219,101 @@ export const OceanMap: React.FC<OceanMapProps> = ({
       {/* Map Floating Control Header */}
       <div className="absolute top-3 left-3 right-3 z-[1000] flex flex-wrap items-center justify-between gap-2 pointer-events-none">
         
-        {/* Left: Sector Selector Dropdown */}
-        <div className="relative pointer-events-auto ml-11 sm:ml-12">
-          <button
-            type="button"
-            onClick={() => {
-              setSectorMenuOpen(!sectorMenuOpen);
-              setSatLayersMenuOpen(false);
-            }}
-            className="flex items-center space-x-2 bg-abyssal-950/95 backdrop-blur-md px-3 py-1.5 rounded-xl border border-abyssal-800 text-xs font-bold text-slate-200 hover:text-white shadow-xl transition cursor-pointer active:scale-95"
-          >
-            <Compass className="w-3.5 h-3.5 text-ocean-cyan" />
-            <span>Jump to sector</span>
-            <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${sectorMenuOpen ? 'rotate-180 text-ocean-cyan' : ''}`} />
-          </button>
+        {/* Left: Sector Selector & Target Species Dropdowns */}
+        <div className="flex items-center gap-2 pointer-events-auto ml-11 sm:ml-12">
+          {/* Sector Selector */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setSectorMenuOpen(!sectorMenuOpen);
+                setSpeciesMenuOpen(false);
+                setSatLayersMenuOpen(false);
+              }}
+              className="flex items-center space-x-2 bg-abyssal-950/95 backdrop-blur-md px-3 py-1.5 rounded-xl border border-abyssal-800 text-xs font-bold text-slate-200 hover:text-white shadow-xl transition cursor-pointer active:scale-95"
+            >
+              <Compass className="w-3.5 h-3.5 text-ocean-cyan" />
+              <span>Jump to sector</span>
+              <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${sectorMenuOpen ? 'rotate-180 text-ocean-cyan' : ''}`} />
+            </button>
 
-          {/* Sector Menu Popover */}
-          {sectorMenuOpen && (
-            <div className="absolute left-0 mt-1.5 w-52 bg-abyssal-950 border border-abyssal-800 rounded-xl shadow-2xl p-1.5 z-50 space-y-1 animate-in fade-in zoom-in-95 duration-100">
-              <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">
-                Indian Ocean Sectors
+            {/* Sector Menu Popover */}
+            {sectorMenuOpen && (
+              <div className="absolute left-0 mt-1.5 w-52 bg-abyssal-950 border border-abyssal-800 rounded-xl shadow-2xl p-1.5 z-50 space-y-1 animate-in fade-in zoom-in-95 duration-100">
+                <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">
+                  Indian Ocean Sectors
+                </div>
+                {[
+                  { id: 'all', label: 'Entire Indian Ocean', coord: '14°N, 75°E' },
+                  { id: 'arabian', label: 'Arabian Sea (West Coast)', coord: '16°N, 68°E' },
+                  { id: 'bengal', label: 'Bay of Bengal (East Coast)', coord: '15°N, 88°E' },
+                  { id: 'equatorial', label: 'Equatorial Indian Ocean', coord: '0°N, 78°E' },
+                  { id: 'south', label: 'South Indian Ocean', coord: '15°S, 80°E' },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleFocusSector(item.id as any)}
+                    className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-xs text-slate-300 hover:text-white hover:bg-abyssal-850 transition cursor-pointer"
+                  >
+                    <span className="font-semibold">{item.label}</span>
+                    <span className="text-[10px] font-mono text-slate-500">{item.coord}</span>
+                  </button>
+                ))}
               </div>
-              {[
-                { id: 'all', label: 'Entire Indian Ocean', coord: '14°N, 75°E' },
-                { id: 'arabian', label: 'Arabian Sea (West Coast)', coord: '16°N, 68°E' },
-                { id: 'bengal', label: 'Bay of Bengal (East Coast)', coord: '15°N, 88°E' },
-                { id: 'equatorial', label: 'Equatorial Indian Ocean', coord: '0°N, 78°E' },
-                { id: 'south', label: 'South Indian Ocean', coord: '15°S, 80°E' },
-              ].map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => handleFocusSector(item.id as any)}
-                  className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-xs text-slate-300 hover:text-white hover:bg-abyssal-850 transition cursor-pointer"
-                >
-                  <span className="font-semibold">{item.label}</span>
-                  <span className="text-[10px] font-mono text-slate-500">{item.coord}</span>
-                </button>
-              ))}
-            </div>
-          )}
+            )}
+          </div>
+
+          {/* Target Species Filter Dropdown */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setSpeciesMenuOpen(!speciesMenuOpen);
+                setSectorMenuOpen(false);
+                setSatLayersMenuOpen(false);
+              }}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition shadow-xl cursor-pointer active:scale-95 ${
+                selectedSpecies !== 'all'
+                  ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 shadow-glow-amber-sm'
+                  : 'bg-abyssal-950/95 backdrop-blur-md border-abyssal-800 text-slate-200 hover:text-white'
+              }`}
+            >
+              <Fish className="w-3.5 h-3.5 text-amber-400" />
+              <span>{selectedSpecies === 'all' ? 'Target Species' : activeSpecies?.label.split('(')[0].trim()}</span>
+              <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${speciesMenuOpen ? 'rotate-180 text-amber-400' : ''}`} />
+            </button>
+
+            {speciesMenuOpen && (
+              <div className="absolute left-0 mt-1.5 w-60 bg-abyssal-950 border border-abyssal-800 rounded-xl shadow-2xl p-1.5 z-50 space-y-1 animate-in fade-in zoom-in-95 duration-100">
+                <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">
+                  Filter PFZ by Marine Species
+                </div>
+                {TARGET_SPECIES_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedSpecies(opt.id);
+                      setSpeciesMenuOpen(false);
+                    }}
+                    className={`w-full text-left px-2.5 py-1.5 text-xs rounded-lg transition font-medium flex items-center justify-between cursor-pointer ${
+                      selectedSpecies === opt.id
+                        ? 'bg-amber-500/25 text-amber-200 border border-amber-500/40 font-bold'
+                        : 'text-slate-300 hover:bg-abyssal-850 hover:text-white'
+                    }`}
+                  >
+                    <span>{opt.label}</span>
+                    {opt.id !== 'all' && (
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        {opt.minSST}–{opt.maxSST}°C
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Right: Clean Grouped Layer Toggles */}
@@ -269,7 +346,7 @@ export const OceanMap: React.FC<OceanMapProps> = ({
             }`}
           >
             <Fish className={`w-3.5 h-3.5 ${showPFZ ? 'text-amber-400' : 'text-slate-400'}`} />
-            <span>PFZ Zones ({pfzZones.length})</span>
+            <span>PFZ Zones ({displayedPfzZones.length})</span>
           </button>
 
           {/* 3. Grouped Satellite Layers Dropdown */}
@@ -351,6 +428,24 @@ export const OceanMap: React.FC<OceanMapProps> = ({
 
       </div>
 
+      {/* Active Species Filter Banner */}
+      {selectedSpecies !== 'all' && activeSpecies && (
+        <div className="absolute top-14 left-14 z-[999] flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-950/90 border border-amber-500/40 text-amber-300 text-xs font-mono shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-1">
+          <Fish className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+          <span>
+            Target Filter: <strong>{activeSpecies.label}</strong> ({activeSpecies.minSST}–{activeSpecies.maxSST}°C) • {displayedPfzZones.length} Matching PFZs
+          </span>
+          <button 
+            type="button" 
+            onClick={() => setSelectedSpecies('all')}
+            className="ml-1 text-slate-400 hover:text-white p-0.5 rounded cursor-pointer transition hover:bg-amber-800/40"
+            title="Clear species filter"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* React Leaflet Map Container */}
       <MapContainer
         center={mapCenter}
@@ -428,7 +523,7 @@ export const OceanMap: React.FC<OceanMapProps> = ({
 
         {/* PFZ FISHING OPPORTUNITY ZONES (WARM GOLDEN TARGET MARKERS) */}
         {showPFZ &&
-          pfzZones.map((pfz, idx) => {
+          displayedPfzZones.map((pfz, idx) => {
             const isHighYield = pfz.pfz_score >= 80;
             return (
               <CircleMarker

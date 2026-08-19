@@ -211,4 +211,30 @@ export interface DashboardStats {
   coverage_area: string;
 }
 
+export interface SystemStatusResponse {
+  status: string;
+  offline_edge_ready: boolean;
+  mode: string;
+  sqlite_db: {
+    status: string;
+    profiles_count: number;
+    floats_count: number;
+    driver: string;
+  };
+  satellite_knowledge_base: {
+    status: string;
+    points_count: number;
+    resolution: string;
+    datasets: string[];
+  };
+  vector_rag_corpus: {
+    status: string;
+    documents_count: number;
+  };
+  species_registry: {
+    status: string;
+    species_count: number;
+  };
+}
+
 export type AppMode = 'chat' | 'map' | 'anomaly' | 'classroom' | 'whatsapp' | 'pipeline' | '3d';

@@ -13,6 +13,7 @@ export const OceanLens3D: React.FC<OceanLens3DProps> = ({ selectedFloatId, profi
   const [currentDepthSlice, setCurrentDepthSlice] = useState(0);
   const [tempAtDepth, setTempAtDepth] = useState<number | null>(null);
   const [salAtDepth, setSalAtDepth] = useState<number | null>(null);
+  const [mldDepth, setMldDepth] = useState<number>(38);
   const observedSampleCount = profileData.filter((sample) => typeof sample.depth === 'number').length;
 
   const isPlayingRef = useRef(true);
@@ -118,6 +119,58 @@ export const OceanLens3D: React.FC<OceanLens3DProps> = ({ selectedFloatId, profi
     deepPlane.position.y = 0;
     scene.add(deepPlane);
 
+    // Calculate actual Mixed Layer Depth (MLD) from observed CTD profile
+    let calculatedMld = 38;
+    if (observedProfile.length > 1) {
+      const surfaceRef = observedProfile[0].temperature ?? 28.5;
+      for (const sample of observedProfile) {
+        if (typeof sample.temperature === 'number' && typeof sample.depth === 'number') {
+          if (surfaceRef - sample.temperature >= 0.5) {
+            calculatedMld = Math.round(sample.depth);
+            break;
+          }
+        }
+      }
+    }
+    setMldDepth(calculatedMld);
+    // Proportional Y in 3D cylinder ([0m, 2000m] mapped to [10, -10])
+    const mldY = 10 - (Math.min(calculatedMld, 2000) / 2000) * 20;
+
+    // Glowing MLD / Thermocline Boundary Ring & Translucent Disc
+    const mldRingGeo = new THREE.RingGeometry(7.6, 8.4, 32);
+    const mldRingMat = new THREE.MeshBasicMaterial({
+      color: 0xf59e0b,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.85,
+    });
+    const mldRingMesh = new THREE.Mesh(mldRingGeo, mldRingMat);
+    mldRingMesh.rotation.x = Math.PI / 2;
+    mldRingMesh.position.y = mldY;
+    scene.add(mldRingMesh);
+
+    const mldDiscMat = new THREE.MeshBasicMaterial({
+      color: 0xf59e0b,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.12,
+    });
+    const mldDisc = new THREE.Mesh(surfaceGeo, mldDiscMat);
+    mldDisc.rotation.x = Math.PI / 2;
+    mldDisc.position.y = mldY;
+    scene.add(mldDisc);
+
+    // Active Argo Float Indicator Sphere in 3D Space
+    const floatGeo = new THREE.SphereGeometry(0.5, 16, 16);
+    const floatMat = new THREE.MeshStandardMaterial({
+      color: 0x38bdf8,
+      emissive: 0x38bdf8,
+      emissiveIntensity: 0.8,
+    });
+    const floatSphere = new THREE.Mesh(floatGeo, floatMat);
+    floatSphere.position.set(2, 10, 2);
+    scene.add(floatSphere);
+
     // Dynamic Depth Slicing Ring (Sweeps up and down to represent real-time dive)
     const ringGeo = new THREE.RingGeometry(7.8, 8.2, 32);
     const ringMat = new THREE.MeshBasicMaterial({
@@ -128,17 +181,6 @@ export const OceanLens3D: React.FC<OceanLens3DProps> = ({ selectedFloatId, profi
     depthRing.rotation.x = Math.PI / 2;
     depthRing.position.y = 10;
     scene.add(depthRing);
-
-    // Active Argo Float Indicator Sphere in 3D Space
-    const floatGeo = new THREE.SphereGeometry(0.5, 16, 16);
-    const floatMat = new THREE.MeshStandardMaterial({
-      color: 0xf59e0b,
-      emissive: 0xf59e0b,
-      emissiveIntensity: 0.8,
-    });
-    const floatSphere = new THREE.Mesh(floatGeo, floatMat);
-    floatSphere.position.set(2, 10, 2);
-    scene.add(floatSphere);
 
     // Volumetric Marine Snow / Ocean Particle Field
     const particleCount = 200;
@@ -307,6 +349,14 @@ export const OceanLens3D: React.FC<OceanLens3DProps> = ({ selectedFloatId, profi
 
       </div>
 
+      {/* Dynamic MLD Thermocline Marker */}
+      <div className="absolute top-14 left-3 z-10 flex items-center gap-2 bg-amber-950/90 backdrop-blur-md px-3 py-1 rounded-xl border border-amber-500/40 text-amber-300 font-mono text-[11px] shadow-lg pointer-events-auto">
+        <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping shrink-0" />
+        <span className="font-bold">
+          Mixed Layer Depth (MLD): {mldDepth}m — Thermocline Boundary
+        </span>
+      </div>
+
       {/* 3D WebGL Canvas Container */}
       <div ref={mountRef} className="flex-1 w-full h-full cursor-grab active:cursor-grabbing" />
 
@@ -317,10 +367,14 @@ export const OceanLens3D: React.FC<OceanLens3DProps> = ({ selectedFloatId, profi
       </div>
 
       {/* Layer Explanatory Legend / Overlay */}
-      <div className="absolute bottom-3 left-3 z-10 flex items-center gap-2 bg-abyssal-950/95 backdrop-blur-md p-2 rounded-xl border border-abyssal-800 text-[10px] text-slate-300 shadow-2xl pointer-events-auto">
+      <div className="absolute bottom-3 left-3 z-10 flex flex-wrap items-center gap-2 bg-abyssal-950/95 backdrop-blur-md p-2 rounded-xl border border-abyssal-800 text-[10px] text-slate-300 shadow-2xl pointer-events-auto">
         <div className="flex items-center gap-1.5 pr-2 border-r border-abyssal-800">
           <span className="w-2.5 h-2.5 rounded-full bg-ocean-cyan shadow-sm"></span>
           <span>Epipelagic (0-200m)</span>
+        </div>
+        <div className="flex items-center gap-1.5 pr-2 border-r border-abyssal-800">
+          <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-sm"></span>
+          <span className="text-amber-300 font-semibold">Thermocline ({mldDepth}m)</span>
         </div>
         <div className="flex items-center gap-1.5 pr-2 border-r border-abyssal-800">
           <span className="w-2.5 h-2.5 rounded-full bg-teal-500 shadow-sm"></span>
