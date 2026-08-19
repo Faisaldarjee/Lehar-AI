@@ -305,49 +305,70 @@ export default function App() {
             </div>
 
             {/* Right Smart Stage: Single Context-Aware Panel (7 Cols) */}
-            <div className="lg:col-span-7 flex flex-col h-full bg-abyssal-950/85 border border-abyssal-800/90 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-2xl relative">
+            <div className="lg:col-span-7 flex flex-col h-full bg-abyssal-950/90 border border-abyssal-800/90 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-2xl relative">
               
-              {/* Stage Top Floating Segmented Switch (Visible only after first query) */}
+              {/* Stage Top Dedicated Header Bar (Zero-Collision Layout) */}
               {isStageActive && (
-                <div className="absolute top-3 right-3 z-30 flex items-center gap-1 bg-abyssal-950/95 backdrop-blur-xl p-1 rounded-xl border border-abyssal-800/90 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
-                  <button
-                    type="button"
-                    onClick={() => setStageView('map')}
-                    className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer active:scale-95 ${
-                      stageView === 'map'
-                        ? 'bg-gradient-to-r from-ocean-cyan to-teal-400 text-abyssal-950 font-bold shadow-md shadow-ocean-cyan/25'
-                        : 'text-slate-400 hover:text-slate-100 hover:bg-abyssal-800/50'
-                    }`}
-                  >
-                    <MapPin className="w-3.5 h-3.5" />
-                    <span>Ocean Map</span>
-                  </button>
+                <div className="flex items-center justify-between px-4 py-2 bg-abyssal-900/95 border-b border-abyssal-800/90 shrink-0 z-20">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="p-1.5 rounded-lg bg-ocean-cyan/15 text-ocean-cyan shrink-0">
+                      {stageView === 'map' && <MapPin className="w-3.5 h-3.5" />}
+                      {stageView === 'chart' && <LineChart className="w-3.5 h-3.5" />}
+                      {stageView === '3d' && <Box className="w-3.5 h-3.5" />}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-white font-heading truncate">
+                        {stageView === 'map' && 'Geospatial Fleet Map & PFZ Frontiers'}
+                        {stageView === 'chart' && 'Hydrographic CTD Depth Curves (0–2,000m)'}
+                        {stageView === '3d' && 'Volumetric 3D Water Column & Thermocline'}
+                      </div>
+                      <div className="text-[10px] text-cyan-300/80 font-mono leading-tight truncate">
+                        {selectedFloatId ? `Active Float #${selectedFloatId} • In-Situ Cast` : 'Continuous Indian Ocean Domain'}
+                      </div>
+                    </div>
+                  </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setStageView('chart')}
-                    className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer active:scale-95 ${
-                      stageView === 'chart'
-                        ? 'bg-gradient-to-r from-ocean-cyan to-teal-400 text-abyssal-950 font-bold shadow-md shadow-ocean-cyan/25'
-                        : 'text-slate-400 hover:text-slate-100 hover:bg-abyssal-800/50'
-                    }`}
-                  >
-                    <LineChart className="w-3.5 h-3.5" />
-                    <span>CTD Profile</span>
-                  </button>
+                  {/* Segmented Switcher (Docked in Header Bar) */}
+                  <div className="flex items-center gap-1 bg-abyssal-950 p-1 rounded-xl border border-abyssal-800 shrink-0 shadow-inner">
+                    <button
+                      type="button"
+                      onClick={() => setStageView('map')}
+                      className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer active:scale-95 ${
+                        stageView === 'map'
+                          ? 'bg-gradient-to-r from-ocean-cyan to-teal-400 text-abyssal-950 font-bold shadow-md shadow-ocean-cyan/25'
+                          : 'text-slate-400 hover:text-slate-100 hover:bg-abyssal-850'
+                      }`}
+                    >
+                      <MapPin className="w-3.5 h-3.5" />
+                      <span>Ocean Map</span>
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setStageView('3d')}
-                    className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer active:scale-95 ${
-                      stageView === '3d'
-                        ? 'bg-gradient-to-r from-ocean-cyan to-teal-400 text-abyssal-950 font-bold shadow-md shadow-ocean-cyan/25'
-                        : 'text-slate-400 hover:text-slate-100 hover:bg-abyssal-800/50'
-                    }`}
-                  >
-                    <Box className="w-3.5 h-3.5" />
-                    <span>3D Lens</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => setStageView('chart')}
+                      className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer active:scale-95 ${
+                        stageView === 'chart'
+                          ? 'bg-gradient-to-r from-ocean-cyan to-teal-400 text-abyssal-950 font-bold shadow-md shadow-ocean-cyan/25'
+                          : 'text-slate-400 hover:text-slate-100 hover:bg-abyssal-850'
+                      }`}
+                    >
+                      <LineChart className="w-3.5 h-3.5" />
+                      <span>CTD Profile</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setStageView('3d')}
+                      className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer active:scale-95 ${
+                        stageView === '3d'
+                          ? 'bg-gradient-to-r from-ocean-cyan to-teal-400 text-abyssal-950 font-bold shadow-md shadow-ocean-cyan/25'
+                          : 'text-slate-400 hover:text-slate-100 hover:bg-abyssal-850'
+                      }`}
+                    >
+                      <Box className="w-3.5 h-3.5" />
+                      <span>3D Lens</span>
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -423,7 +444,7 @@ export default function App() {
                 </div>
               ) : (
                 /* ACTIVE STAGE VIEW (After First Query) */
-                <div className="flex-1 w-full h-full relative">
+                <div className="flex-1 w-full h-full relative overflow-hidden">
                   {stageView === 'map' && (
                     <OceanMap
                       floats={floats}
@@ -435,7 +456,7 @@ export default function App() {
                   )}
 
                   {stageView === 'chart' && (
-                    <div className="w-full h-full p-2">
+                    <div className="w-full h-full p-3">
                       <DepthChart chart={activeChart} />
                     </div>
                   )}
