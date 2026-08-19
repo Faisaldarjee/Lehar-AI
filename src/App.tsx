@@ -113,6 +113,8 @@ export default function App() {
     initData();
   }, []);
 
+  const [sessionId] = useState<string>(() => 'sess-' + Math.random().toString(36).substring(2, 9) + '-' + Date.now());
+
   // Handle user chat submission with context-aware auto-switching
   const handleSendMessage = async (queryText: string, mode: 'text' | 'voice' = 'text') => {
     setHasEverQueried(true);
@@ -138,7 +140,7 @@ export default function App() {
     setIsChatLoading(true);
 
     try {
-      const response = await sendChatQuery(queryText, mode, selectedLanguage);
+      const response = await sendChatQuery(queryText, mode, selectedLanguage, sessionId);
 
       const finalBotMessage: ChatMessage = {
         id: botMsgId,
@@ -153,6 +155,9 @@ export default function App() {
         data: response.data,
         chart: response.chart,
         map_markers: response.map_markers,
+        query_route: response.query_route,
+        species_detected: response.species_detected,
+        knowledge_sources: response.knowledge_sources,
         detected_language: response.detected_language,
         data_sources: response.data_sources,
         language: response.detected_language?.tts_locale || selectedLanguage,

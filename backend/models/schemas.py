@@ -11,6 +11,7 @@ class ChatRequest(BaseModel):
     query: str = Field(..., min_length=2, max_length=500, description="Natural language query from user")
     mode: str = Field(default="text", description="Input mode: 'text' or 'voice'")
     language: str = Field(default="en", description="Language code: en, hi, ta, te")
+    session_id: Optional[str] = Field(default=None, description="Client session identifier for multi-turn memory")
 
 
 class MapMarker(BaseModel):
@@ -51,6 +52,9 @@ class ChatResponse(BaseModel):
     data: Optional[list[dict]] = Field(None, description="Raw query results")
     chart: Optional[ChartData] = Field(None, description="Chart rendering data")
     map_markers: Optional[list[MapMarker]] = Field(None, description="Map markers to render")
+    query_route: Optional[str] = Field(None, description="Routing classification: sql_data, ocean_science_rag, species_advisory, hybrid")
+    species_detected: Optional[str] = Field(None, description="Identified marine species if grounded")
+    knowledge_sources: Optional[list[str]] = Field(default_factory=list, description="Cited oceanographic domain sources")
     detected_language: Optional[dict] = Field(None, description="Detected script and language metadata")
     data_sources: Optional[list[str]] = Field(default_factory=list, description="Contributing sensors (Argo, Satellite SST, Chlorophyll)")
     error: Optional[str] = None

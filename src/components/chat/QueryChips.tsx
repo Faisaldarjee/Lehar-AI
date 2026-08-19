@@ -1,5 +1,5 @@
 import React from 'react';
-import { Compass, Sparkles, AlertTriangle, Thermometer, Fish, Waves } from 'lucide-react';
+import { Sparkles, AlertTriangle, Thermometer, Fish, Waves } from 'lucide-react';
 
 interface QueryChipsProps {
   onSelectQuery: (query: string) => void;
@@ -8,28 +8,34 @@ interface QueryChipsProps {
 export const QueryChips: React.FC<QueryChipsProps> = ({ onSelectQuery }) => {
   const suggestions = [
     {
+      label: 'Surmai / Seer Fish Advisory',
+      icon: Fish,
+      query: 'Ratnagiri me Surmai machhli pakadne ke liye samundar kaisa hai?',
+      tag: 'Species Grounding',
+    },
+    {
+      label: 'Indian Ocean Dipole (IOD)',
+      icon: Sparkles,
+      query: 'What is the Indian Ocean Dipole effect on monsoon upwelling?',
+      tag: 'Science RAG',
+    },
+    {
       label: 'Mumbai Fishing Advisory',
       icon: Fish,
       query: 'Mumbai ke paas machhli pakadne ke liye samundar ka taapman aur hal kaisa hai?',
       tag: 'PFZ Advisory',
     },
     {
+      label: 'Marine Heatwave Hobday',
+      icon: AlertTriangle,
+      query: 'Explain Marine Heatwave Hobday classification and ecological risks',
+      tag: 'MHW RAG',
+    },
+    {
       label: 'Bay of Bengal SST',
       icon: Thermometer,
       query: 'Bay of Bengal ka surface temperature kitna hai aur koi marine heatwave alert hai?',
       tag: 'SST Surface',
-    },
-    {
-      label: 'Arabian Sea Floats',
-      icon: Compass,
-      query: 'Arabian Sea me kitne active Argo floats hain aur unka latest temperature data dikhao',
-      tag: 'Fleet Status',
-    },
-    {
-      label: 'Anomaly Alerts',
-      icon: AlertTriangle,
-      query: 'Koi bhi marine heatwave, temperature spike ya salinity anomaly alert hai recent me?',
-      tag: 'Ocean Alert',
     },
     {
       label: 'Kochi Depth Profile',

@@ -191,11 +191,22 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             <>
               {/* 1. Header with Metadata & Progressive Disclosure Meatball Menu */}
               <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-abyssal-800/80 text-[10px] text-slate-400">
-                <div className="flex items-center space-x-1.5">
-                  <Sparkles className="w-3 h-3 text-ocean-cyan" />
+                <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
+                  <Sparkles className="w-3 h-3 text-ocean-cyan shrink-0" />
                   <span className="font-bold tracking-wider uppercase text-ocean-cyan font-mono">
                     Lehar AI Ocean Intelligence
                   </span>
+                  {message.query_route === 'ocean_science_rag' && (
+                    <span className="px-1.5 py-0.5 rounded-md bg-teal-500/15 border border-teal-500/30 text-[9px] font-mono text-teal-300 font-semibold">
+                      INCOIS Science Base
+                    </span>
+                  )}
+                  {message.species_detected && (
+                    <span className="px-1.5 py-0.5 rounded-md bg-coral-alert/15 border border-coral-alert/30 text-[9px] font-mono text-coral-glow font-semibold flex items-center gap-1">
+                      <Fish className="w-2.5 h-2.5" />
+                      <span>{message.species_detected.split('(')[0].trim()}</span>
+                    </span>
+                  )}
                   {message.detected_language && (
                     <span className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-cyan-950/80 border border-cyan-800/50 text-[9px] font-mono text-cyan-300">
                       <Globe className="w-2.5 h-2.5 text-cyan-400" />

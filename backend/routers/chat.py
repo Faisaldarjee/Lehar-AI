@@ -16,5 +16,9 @@ async def chat(request: ChatRequest):
     Process a natural language query about Argo ocean data.
     Converts NL → SQL → executes → returns answer + visualizations.
     """
-    result = await process_chat_query(request.query, request.language)
+    result = await process_chat_query(
+        user_query=request.query,
+        language=request.language,
+        session_id=request.session_id
+    )
     return ChatResponse(**result)

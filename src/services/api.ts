@@ -21,9 +21,19 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-/** Send a chat query to the NL-to-SQL engine */
-export async function sendChatQuery(query: string, mode = 'text', language = 'en'): Promise<ChatResponse> {
-  const { data } = await api.post<ChatResponse>('/api/chat', { query, mode, language });
+/** Send a chat query to the NL-to-SQL / Hybrid RAG engine */
+export async function sendChatQuery(
+  query: string,
+  mode = 'text',
+  language = 'en',
+  sessionId?: string
+): Promise<ChatResponse> {
+  const { data } = await api.post<ChatResponse>('/api/chat', {
+    query,
+    mode,
+    language,
+    session_id: sessionId,
+  });
   return data;
 }
 

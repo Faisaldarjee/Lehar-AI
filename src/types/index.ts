@@ -48,6 +48,9 @@ export interface ChatResponse {
   data: Record<string, unknown>[] | null;
   chart: ChartData | null;
   map_markers: MapMarker[] | null;
+  query_route?: 'sql_data' | 'ocean_science_rag' | 'species_advisory' | 'hybrid' | 'error' | null;
+  species_detected?: string | null;
+  knowledge_sources?: string[] | null;
   detected_language?: DetectedLanguage | null;
   data_sources?: string[];
   error: string | null;
@@ -68,6 +71,9 @@ export interface ChatMessage {
   data?: Record<string, unknown>[] | null;
   chart?: ChartData | null;
   map_markers?: MapMarker[] | null;
+  query_route?: 'sql_data' | 'ocean_science_rag' | 'species_advisory' | 'hybrid' | 'error' | null;
+  species_detected?: string | null;
+  knowledge_sources?: string[] | null;
   data_sources?: string[];
   isLoading?: boolean;
 }

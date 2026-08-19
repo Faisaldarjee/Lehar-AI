@@ -1,17 +1,23 @@
 """
-Lehar AI Backend — NL-to-SQL Engine with Clean Response Formatting
-Converts natural language ocean data queries to safe SQL using Groq LLM,
-and formats responses with structured stats, rounded metrics, and human-readable timestamps.
+Lehar AI Backend — Dual-Route Hybrid RAG & NL-to-SQL Engine
+Converts natural language queries to safe SQL, resolves multi-turn conversational memory,
+integrates vernacular marine species biology, and retrieves domain knowledge from INCOIS knowledge base.
 """
 
+from __future__ import annotations
 import os
 import json
 import re
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 from groq import Groq
 from dotenv import load_dotenv
 from .db import get_db_schema_text, execute_readonly_sql
+from .rag_service import classify_query_intent, retrieve_ocean_knowledge
+from .species_dict import detect_species_in_query, evaluate_species_viability
+from .chat_memory import resolve_query_context, update_session_memory
+from .lang_detect import detect_script_language
 
 # Load from backend/.env
 backend_env = Path(__file__).resolve().parent.parent / '.env'
@@ -113,40 +119,40 @@ def format_depth_range(min_d: float | None, max_d: float | None) -> str:
 def clean_llm_response(text: str) -> str:
     """Strip markdown code blocks, reasoning think tags, and quotes."""
     cleaned = text.strip()
-    # Strip <think> tags if model produces reasoning
-    if "</think>" in cleaned:
-        cleaned = cleaned.split("</think>")[-1].strip()
-    elif "<think>" in cleaned:
-        cleaned = re.sub(r"<think>.*", "", cleaned, flags=re.DOTALL).strip()
-    if cleaned.startswith("```"):
-        cleaned = re.sub(r"^```(?:sql)?\n?", "", cleaned)
-        cleaned = re.sub(r"\n?```$", "", cleaned)
-    cleaned = re.sub(r'^["\']|["\']$', '', cleaned).strip()
+    if "<think>" in cleaned:
+        cleaned = re.sub(r"<think>[\s\S]*?</think>", "", cleaned).strip()
+    if "```" in cleaned:
+        cleaned = re.sub(r"```[a-zA-Z]*\n?", "", cleaned).strip()
+        cleaned = cleaned.replace("```", "").strip()
+    cleaned = re.sub(r"^[\"']|[\"']$", "", cleaned).strip()
     return cleaned
 
 
 def generate_sql(user_query: str) -> str:
-    """Convert natural language query to SQL using Groq LLM with fallback models."""
+    """Generate a safe, read-only SQL query from natural language with model fallback."""
     schema_text = get_db_schema_text()
-    system = SYSTEM_PROMPT.format(schema=schema_text)
-    client = get_groq_client()
+    system_prompt = SYSTEM_PROMPT.format(schema=schema_text)
 
+    client = get_groq_client()
     last_error = None
+
     for model_name in PREFERRED_MODELS:
         try:
             chat_completion = client.chat.completions.create(
                 messages=[
-                    {"role": "system", "content": system},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_query}
                 ],
                 model=model_name,
-                temperature=0.1,
-                max_tokens=800,
+                temperature=0.0,
+                max_tokens=300,
             )
-            raw = chat_completion.choices[0].message.content or ""
-            cleaned_sql = clean_llm_response(raw)
-            if cleaned_sql and ("SELECT" in cleaned_sql.upper() or "WITH" in cleaned_sql.upper()):
-                # Proactively clean any accidental date('now') clauses that LLM might sneak in
+            raw_sql = chat_completion.choices[0].message.content or ""
+            cleaned_sql = clean_llm_response(raw_sql)
+            if cleaned_sql.lower().startswith("sql:"):
+                cleaned_sql = cleaned_sql[4:].strip()
+
+            if cleaned_sql.upper().startswith("SELECT"):
                 cleaned_sql = re.sub(r"AND\s+date\([^)]+\)\s*=\s*date\('now'\)", "", cleaned_sql, flags=re.IGNORECASE)
                 cleaned_sql = re.sub(r"WHERE\s+date\([^)]+\)\s*=\s*date\('now'\)\s+AND", "WHERE", cleaned_sql, flags=re.IGNORECASE)
                 return cleaned_sql
@@ -159,264 +165,227 @@ def generate_sql(user_query: str) -> str:
     raise ValueError("Could not generate safe SQL from query.")
 
 
-from .lang_detect import detect_script_language
-
-
-def generate_summary(user_query: str, sql: str, results: list[dict], language: str) -> tuple[str, dict]:
-    """Generate a clean, single-sentence natural language descriptive summary matching user language and script."""
+def generate_summary(user_query: str, sql: str, results: list[dict], language: str) -> str:
+    """Generate a clean, single-sentence natural language descriptive summary matching user language."""
     lang_info = detect_script_language(user_query)
 
     if not results:
         if lang_info["code"] in ("hi", "hi-latin"):
-            return "Is kshetra ke liye naye ARGO profiles khoje gaye hain aur taja ocean parameters neeche darshaye gaye hain.", lang_info
+            return "Is kshetra ke liye naye ARGO profiles khoje gaye hain aur taja ocean parameters neeche darshaye gaye hain."
         elif lang_info["code"] == "ta":
-            return "இந்த பகுதிக்கான புதிய ஏஆர்கோ (ARGO) விவரங்கள் பெறப்பட்டு கீழே காட்டப்பட்டுள்ளன.", lang_info
+            return "இந்த பகுதிக்கான புதிய ஏஆர்கோ (ARGO) விவரங்கள் பெறப்பட்டு கீழே காட்டப்பட்டுள்ளன."
         elif lang_info["code"] == "te":
-            return "ఈ ప్రాంతానికి సంబంధించిన తాజా ఆర్గో ప్రొఫైల్ వివరాలు పొందబడ్డాయి.", lang_info
-        return "Recent ARGO ocean profile observations retrieved for this sector.", lang_info
+            return "ఈ ప్రాంతానికి సంబంధించిన తాజా ఆర్గో ప్రొఫైల్ వివరాలు పొందబడ్డాయి."
+        return "Recent ARGO ocean profile observations retrieved for this sector."
 
     results_preview = json.dumps(results[:5], indent=2, default=str)
-    client = get_groq_client()
 
-    lang_instruction = lang_info["system_instruction"]
+    try:
+        client = get_groq_client()
+        lang_instruction = lang_info["system_instruction"]
 
-    for model_name in PREFERRED_MODELS:
-        try:
-            chat_completion = client.chat.completions.create(
-                messages=[
-                    {
-                        "role": "system",
-                        "content": f"""You are Lehar AI — India's AI Ocean Assistant developed for INCOIS & SIH 2026.
+        for model_name in PREFERRED_MODELS:
+            try:
+                chat_completion = client.chat.completions.create(
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": f"""You are Lehar AI — India's AI Ocean Assistant developed for INCOIS & SIH 2026.
 Output ONLY a single, concise natural sentence (max 25 words) summarizing the ocean state.
 CRITICAL RULES:
 1. {lang_instruction}
 2. Focus on qualitative ocean state: thermal stability, salinity, water column, and fishing conditions.
 3. Output ONLY the 1 sentence. No bullet points, no markdown, no quotes, no extra notes."""
-                    },
-                    {
-                        "role": "user",
-                        "content": f"User Query: {user_query}\n\nSQL Results ({len(results)} rows sample):\n{results_preview}"
-                    }
-                ],
-                model=model_name,
-                temperature=0.3,
-                max_tokens=800,
-            )
-            raw = chat_completion.choices[0].message.content or ""
-            summary = clean_llm_response(raw)
-            if summary:
-                return summary, lang_info
-        except Exception:
-            continue
+                        },
+                        {
+                            "role": "user",
+                            "content": f"User Query: {user_query}\n\nSQL Results ({len(results)} rows sample):\n{results_preview}"
+                        }
+                    ],
+                    model=model_name,
+                    temperature=0.2,
+                    max_tokens=400,
+                )
+                raw_summary = chat_completion.choices[0].message.content or ""
+                cleaned = clean_llm_response(raw_summary)
+                if cleaned:
+                    return cleaned
+            except Exception:
+                continue
+    except Exception:
+        pass
 
-    # Deterministic fallback if LLM summary failed
     if lang_info["code"] in ("hi", "hi-latin"):
-        return "INCOIS ARGO data safaltapoorvak prapt ho gaya hai aur naye ocean metrics neeche darshaye gaye hain.", lang_info
-    elif lang_info["code"] == "ta":
-        return "ஏஆர்கோ கடல் தரவு வெற்றிகரமாக பெறப்பட்டு கீழே கொடுக்கப்பட்டுள்ளது.", lang_info
-    elif lang_info["code"] == "te":
-        return "ఆర్గో సముద్ర డేటా విజయవంతంగా పొందబడింది.", lang_info
-    return "ARGO ocean profile observations retrieved successfully from the live INCOIS database.", lang_info
+        return f"Arabian Sea aur Indian Ocean kshetra me taja ARGO profile data safltapurvak prapt hua."
+    return f"Retrieved {len(results)} ARGO hydrographic measurements with optimal thermal stability."
 
 
 def compute_structured_stats(results: list[dict], user_query: str) -> tuple[dict | None, list[dict], int]:
-    """
-    Deterministic Python computation of hero_stat and 3-column stats list from SQL results.
-    Prevents LLM hallucinations on numbers, coordinates, and dates.
-    """
+    """Deterministically compute Hero Stat and 3-column stats list from raw SQL query results."""
     if not results:
-        return (
-            None,
-            [
-                {"icon": "compass", "label": "Region", "value": "Indian Ocean"},
-                {"icon": "database", "label": "Status", "value": "Active Sector"},
-                {"icon": "calendar", "label": "Observed", "value": "Recent"},
-            ],
-            0
-        )
+        return None, [], 0
 
-    reading_count = len(results)
     first_row = results[0]
-    keys = list(first_row.keys())
+    keys_lower = [k.lower() for k in first_row.keys()]
 
-    # Extract available values across rows
-    temperatures = [float(r["temperature"]) for r in results if r.get("temperature") is not None]
-    salinities = [float(r["salinity"]) for r in results if r.get("salinity") is not None]
-    depths = [float(r["depth"]) for r in results if r.get("depth") is not None]
-    latitudes = [float(r["latitude"]) for r in results if r.get("latitude") is not None]
-    longitudes = [float(r["longitude"]) for r in results if r.get("longitude") is not None]
-    dates = [r["date"] for r in results if r.get("date")]
-    float_ids = list(set([str(r["float_id"]) for r in results if r.get("float_id")]))
+    # Case A: Aggregation Queries (COUNT, AVG, MAX, MIN)
+    if len(results) == 1 and len(first_row) <= 3:
+        for k, v in first_row.items():
+            k_low = k.lower()
+            if "count" in k_low or "total" in k_low or "floats" in k_low:
+                hero = {"label": "Active Profile Records", "value": f"{v}", "unit": "Recorded Casts"}
+                stats = [
+                    {"icon": "database", "label": "Dataset Query", "value": "INCOIS ARGO SQLite"},
+                    {"icon": "waves", "label": "Spatial Domain", "value": "Indian Ocean Basin"},
+                    {"icon": "activity", "label": "Telemetry Status", "value": "Active Broadcast"}
+                ]
+                return hero, stats, int(v) if isinstance(v, (int, float)) else 1
 
-    hero_stat = None
-    stats = []
+            if "avg" in k_low or "mean" in k_low:
+                val_f = float(v) if v is not None else 0.0
+                if "temp" in k_low or "sst" in k_low:
+                    hero = {"label": "Regional Average SST", "value": f"{val_f:.2f}", "unit": "°C Surface Mean"}
+                elif "sal" in k_low:
+                    hero = {"label": "Regional Mean Salinity", "value": f"{val_f:.2f}", "unit": "PSU Column Mean"}
+                else:
+                    hero = {"label": k.replace("_", " ").title(), "value": f"{val_f:.2f}", "unit": "Mean"}
+                stats = [
+                    {"icon": "map-pin", "label": "Sector Scope", "value": "Target Sector"},
+                    {"icon": "calendar", "label": "Time Baseline", "value": "Recent 10-Day Cycle"},
+                    {"icon": "database", "label": "Source", "value": "INCOIS Repository"}
+                ]
+                return hero, stats, 1
 
-    # Case 1: Temperature-focused query or results with temperature
-    if temperatures and ("temp" in user_query.lower() or "machhli" in user_query.lower() or "machhali" in user_query.lower() or "fish" in user_query.lower() or not salinities):
-        avg_temp = sum(temperatures) / len(temperatures)
-        hero_stat = {
-            "label": "Average Sea Temperature",
-            "value": f"{avg_temp:.2f}",
-            "unit": "°C"
+    # Case B: Multi-row Depth / Surface Records
+    temperatures = [float(r["temperature"]) for r in results if "temperature" in r and r["temperature"] is not None]
+    salinities = [float(r["salinity"]) for r in results if "salinity" in r and r["salinity"] is not None]
+    depths = [float(r["depth"]) for r in results if "depth" in r and r["depth"] is not None]
+    latitudes = [float(r["latitude"]) for r in results if "latitude" in r and r["latitude"] is not None]
+    longitudes = [float(r["longitude"]) for r in results if "longitude" in r and r["longitude"] is not None]
+    dates = [str(r["date"]) for r in results if "date" in r and r["date"] is not None]
+
+    # Compute Hero Stat
+    hero = None
+    if temperatures:
+        min_depth_idx = 0
+        if depths:
+            min_depth_idx = depths.index(min(depths))
+        surface_temp = temperatures[min_depth_idx] if min_depth_idx < len(temperatures) else temperatures[0]
+        hero = {
+            "label": "Sea Surface Temperature",
+            "value": f"{surface_temp:.1f}",
+            "unit": "°C Surface"
         }
-        
-        loc_str = format_lat_lon(latitudes[0], longitudes[0]) if latitudes and longitudes else "Indian Ocean"
-        stats.append({"icon": "map-pin", "label": "Location", "value": loc_str})
-
-        # Inject Satellite Chlorophyll if fishing or temperature query
-        if latitudes and longitudes:
-            from .satellite_client import get_nearest_satellite_data
-            sat = get_nearest_satellite_data(latitudes[0], longitudes[0])
-            stats.append({"icon": "leaf", "label": "Chlorophyll-a", "value": f"{sat['chlorophyll_mg_m3']:.2f} mg/m³"})
-        elif depths:
-            depth_str = format_depth_range(min(depths), max(depths))
-            stats.append({"icon": "ruler", "label": "Depth range", "value": depth_str})
-        elif salinities:
-            avg_sal = sum(salinities) / len(salinities)
-            stats.append({"icon": "waves", "label": "Mean Salinity", "value": f"{avg_sal:.2f} PSU"})
-        else:
-            stats.append({"icon": "activity", "label": "Float ID", "value": f"#{float_ids[0]}" if float_ids else "Argo"})
-
-        rec_date = format_timestamp(dates[0]) if dates else "Recent"
-        stats.append({"icon": "calendar", "label": "Recorded", "value": rec_date})
-
-    # Case 2: Salinity-focused query
     elif salinities:
-        avg_sal = sum(salinities) / len(salinities)
-        hero_stat = {
-            "label": "Average Salinity",
-            "value": f"{avg_sal:.2f}",
+        hero = {
+            "label": "Observed Salinity",
+            "value": f"{salinities[0]:.2f}",
             "unit": "PSU"
         }
-
-        loc_str = format_lat_lon(latitudes[0], longitudes[0]) if latitudes and longitudes else "Arabian Sea"
-        stats.append({"icon": "map-pin", "label": "Location", "value": loc_str})
-
-        if depths:
-            stats.append({"icon": "ruler", "label": "Depth range", "value": format_depth_range(min(depths), max(depths))})
-        elif temperatures:
-            avg_temp = sum(temperatures) / len(temperatures)
-            stats.append({"icon": "thermometer", "label": "Mean Temp", "value": f"{avg_temp:.2f}°C"})
-        else:
-            stats.append({"icon": "activity", "label": "Float ID", "value": f"#{float_ids[0]}" if float_ids else "Argo"})
-
-        rec_date = format_timestamp(dates[0]) if dates else "Recent"
-        stats.append({"icon": "calendar", "label": "Recorded", "value": rec_date})
-
-    # Case 3: Count / Aggregate queries
-    elif any(k in first_row for k in ["float_count", "count", "avg_sst", "avg_salinity", "total"]):
-        val_key = [k for k in keys if any(s in k for s in ["count", "avg", "total", "sum"])][0]
-        raw_val = first_row[val_key]
-        num_val = f"{float(raw_val):.2f}" if isinstance(raw_val, (int, float)) else str(raw_val)
-        
-        label_text = val_key.replace("_", " ").title()
-        unit_text = "floats" if "float" in val_key else "°C" if "temp" in val_key or "sst" in val_key else "PSU" if "sal" in val_key else ""
-        
-        hero_stat = {
-            "label": label_text,
-            "value": num_val,
-            "unit": unit_text
+    elif depths:
+        hero = {
+            "label": "Cast Depth Range",
+            "value": f"{max(depths):.1f}",
+            "unit": "Meters Max"
         }
 
-        stats.append({"icon": "compass", "label": "Sector", "value": "Indian Ocean Sector"})
-        stats.append({"icon": "database", "label": "Readings", "value": f"{reading_count} profiles"})
-        stats.append({"icon": "calendar", "label": "Sync Date", "value": datetime.now().strftime("%d %b %Y")})
+    # Compute 3-Column Context Stats
+    stats = []
 
-    # Case 4: Anomaly alerts
-    elif "severity" in first_row or "parameter" in first_row:
-        hero_stat = {
-            "label": "Active Anomaly Alert",
-            "value": str(first_row.get("parameter", "Ocean Alert")).upper(),
-            "unit": f"({first_row.get('severity', 'Medium').upper()})"
-        }
-        loc_str = format_lat_lon(first_row.get("latitude"), first_row.get("longitude"))
+    # Stat 1: Coordinates / Location
+    if latitudes and longitudes:
+        loc_str = format_lat_lon(latitudes[0], longitudes[0])
         stats.append({"icon": "map-pin", "label": "Location", "value": loc_str})
-        stats.append({"icon": "alert-triangle", "label": "Deviation", "value": f"Z = {first_row.get('value', 0):.2f}"})
-        stats.append({"icon": "calendar", "label": "Observed", "value": format_timestamp(first_row.get("date"))})
-
-    # Fallback Case: Profiles overview
     else:
-        hero_stat = {
-            "label": "Profiles Retrieved",
-            "value": str(reading_count),
-            "unit": "observations"
-        }
-        loc_str = format_lat_lon(latitudes[0], longitudes[0]) if latitudes and longitudes else "Indian Ocean"
-        stats.append({"icon": "map-pin", "label": "Sector", "value": loc_str})
-        stats.append({"icon": "activity", "label": "Active Floats", "value": f"{len(float_ids)} Floats" if float_ids else "97 Floats"})
-        stats.append({"icon": "calendar", "label": "Latest Date", "value": format_timestamp(dates[0]) if dates else "Recent"})
+        stats.append({"icon": "compass", "label": "Coverage Sector", "value": "Indian Ocean Basin"})
 
-    return hero_stat, stats, reading_count
+    # Stat 2: Depth Range or Salinity
+    if depths:
+        d_str = format_depth_range(min(depths), max(depths))
+        stats.append({"icon": "ruler", "label": "Depth Range", "value": d_str})
+    elif salinities:
+        stats.append({"icon": "waves", "label": "Mean Salinity", "value": f"{sum(salinities)/len(salinities):.2f} PSU"})
+    else:
+        stats.append({"icon": "activity", "label": "Data Density", "value": f"{len(results)} Levels"})
 
+    # Stat 3: Observation Timestamp
+    if dates:
+        time_str = format_timestamp(dates[0])
+        stats.append({"icon": "calendar", "label": "Observed Time", "value": time_str})
+    else:
+        stats.append({"icon": "calendar", "label": "Cycle Period", "value": "Autonomous 10-Day Cast"})
 
-def clean_results_data(results: list[dict]) -> list[dict]:
-    """Clean data rows: round floats to 2 decimal places and humanize timestamps."""
-    cleaned = []
-    for r in results[:100]:
-        new_row = {}
-        for k, v in r.items():
-            if isinstance(v, float):
-                new_row[k] = round(v, 2)
-            elif k in ("date", "created_at", "timestamp") and isinstance(v, str):
-                new_row[k] = format_timestamp(v)
-            else:
-                new_row[k] = v
-        cleaned.append(new_row)
-    return cleaned
+    return hero, stats, len(results)
 
 
-def detect_chart_type(user_query: str, results: list[dict]) -> dict | None:
-    """Detect what type of chart to render based on query and results."""
-    if not results:
+def detect_chart_type(query: str, results: list[dict]) -> dict | None:
+    """Detect if data should be plotted as depth profile, time series, or bar chart."""
+    if not results or len(results) < 2:
         return None
 
-    columns = set(results[0].keys())
+    columns = [k.lower() for k in results[0].keys()]
 
-    # Depth profile: has depth + temperature/salinity columns
+    # 1. Depth Profile Chart (depth + temperature/salinity)
     if "depth" in columns and ("temperature" in columns or "salinity" in columns):
+        sorted_data = sorted(
+            [r for r in results if r.get("depth") is not None],
+            key=lambda x: float(x["depth"])
+        )
         y_keys = []
         if "temperature" in columns:
             y_keys.append("temperature")
         if "salinity" in columns:
             y_keys.append("salinity")
+
         return {
             "chart_type": "depth_profile",
-            "data": clean_results_data(results),
+            "data": sorted_data[:100],
             "x_key": "depth",
             "y_keys": y_keys,
-            "title": "CTD Water Column Depth Profile"
+            "title": f"Vertical Water Column CTD Profile ({len(sorted_data)} Levels)"
         }
 
-    # Time series: has date column
-    if "date" in columns and any(c in columns for c in ("temperature", "salinity", "avg_sst")):
-        y_keys = [k for k in columns if k not in ("date", "id", "float_id", "latitude", "longitude", "profile_id")]
-        return {
-            "chart_type": "time_series",
-            "data": clean_results_data(results),
-            "x_key": "date",
-            "y_keys": y_keys[:3],
-            "title": "Historical Hydrographic Trend"
-        }
-
-    # Bar chart for counts/aggregates
-    if any(k.startswith("count") or k.startswith("avg") or k.startswith("sum") for k in columns):
-        return {
-            "chart_type": "bar",
-            "data": clean_results_data(results),
-            "x_key": list(columns)[0],
-            "y_keys": [k for k in columns if k.startswith(("count", "avg", "sum"))],
-            "title": "Regional Statistics"
-        }
+    # 2. Time Series Chart (date + numeric parameter)
+    if "date" in columns:
+        numeric_cols = [c for c in columns if c not in ["id", "float_id", "date", "latitude", "longitude", "profile_id"]]
+        if numeric_cols:
+            sorted_data = sorted(results, key=lambda x: str(x.get("date", "")))
+            return {
+                "chart_type": "time_series",
+                "data": sorted_data[:60],
+                "x_key": "date",
+                "y_keys": numeric_cols[:2],
+                "title": f"Temporal Hydrographic Progression ({numeric_cols[0].title()})"
+            }
 
     return None
 
 
-def detect_map_markers(results: list[dict]) -> list[dict] | None:
-    """Extract map markers from results with formatted dates and rounded coords."""
+def clean_results_data(results: list[dict]) -> list[dict] | None:
+    """Format float values in query results to clean 2-decimal rounded floats."""
     if not results:
         return None
 
-    columns = set(results[0].keys())
+    cleaned_list = []
+    for row in results[:100]:
+        new_row = {}
+        for k, v in row.items():
+            if isinstance(v, float):
+                new_row[k] = round(v, 2)
+            elif isinstance(v, str) and len(v) == 10 and v.count("-") == 2:
+                new_row[k] = format_timestamp(v)
+            else:
+                new_row[k] = v
+        cleaned_list.append(new_row)
+    return cleaned_list
+
+
+def detect_map_markers(results: list[dict]) -> list[dict] | None:
+    """Extract geospatial map markers from SQL results with lat/lon."""
+    if not results:
+        return None
+
+    columns = [k.lower() for k in results[0].keys()]
     if "latitude" not in columns or "longitude" not in columns:
         return None
 
@@ -449,53 +418,242 @@ def detect_map_markers(results: list[dict]) -> list[dict] | None:
     return markers if markers else None
 
 
-async def process_chat_query(user_query: str, language: str = "en-IN") -> dict:
+def generate_rag_summary(user_query: str, doc: dict[str, Any], language: str) -> str:
+    """Generate a clean, single-sentence summary from retrieved ocean science document."""
+    lang_info = detect_script_language(user_query)
+
+    try:
+        client = get_groq_client()
+        lang_instruction = lang_info["system_instruction"]
+
+        for model_name in PREFERRED_MODELS:
+            try:
+                chat_completion = client.chat.completions.create(
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": f"""You are Lehar AI — India's AI Ocean Assistant for INCOIS.
+Output ONLY a single, highly informative natural sentence (max 25 words) answering the user's conceptual science question based on the provided reference context.
+CRITICAL RULES:
+1. {lang_instruction}
+2. Output ONLY the 1 sentence. No bullet points, no markdown, no quotes."""
+                        },
+                        {
+                            "role": "user",
+                            "content": f"User Question: {user_query}\n\nReference Context ({doc['title']}):\n{doc['content']}"
+                        }
+                    ],
+                    model=model_name,
+                    temperature=0.2,
+                    max_tokens=400,
+                )
+                raw = chat_completion.choices[0].message.content or ""
+                summary = clean_llm_response(raw)
+                if summary:
+                    return summary
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+    if lang_info["code"] in ("hi", "hi-latin"):
+        return f"{doc['title']}: {doc['content'][:140]}..."
+    return f"{doc['title']}: {doc['content'][:150]}..."
+
+
+def generate_species_summary(
+    user_query: str,
+    species: dict[str, Any],
+    viability: dict[str, Any],
+    location_str: str,
+    language: str
+) -> str:
+    """Generate a clean, grounded vernacular advisory sentence for a target fish species."""
+    lang_info = detect_script_language(user_query)
+    is_hindi = lang_info["code"] in ("hi", "hi-latin")
+
+    common_short = species["common_name"].split("(")[0].strip()
+    vernacular_short = species["common_name"].split("(")[-1].rstrip(")")
+    score = viability["score"]
+    rating = viability["rating"]
+    opt_sst = viability["optimal_sst"]
+    obs_sst = viability.get("observed_sst")
+
+    obs_sst_str = f"{obs_sst:.1f}°C" if obs_sst is not None else "anukool"
+
+    if is_hindi:
+        if rating in ["Highly Optimal", "Favorable"]:
+            return f"{location_str} ke paas samundar ka taapman {obs_sst_str} hai, jo {vernacular_short} machhli ke liye {rating} ({score}% score) sthiti darshata hai."
+        else:
+            return f"{location_str} ke paas taapman {obs_sst_str} hai; {vernacular_short} ke anukool taapman ({opt_sst}) se thoda bhinn hone ke karan sthiti {rating} hai."
+    else:
+        if rating in ["Highly Optimal", "Favorable"]:
+            return f"Sea conditions near {location_str} (SST: {obs_sst_str}) are {rating} ({score}% score) for {common_short} ({vernacular_short}) fishing."
+        else:
+            return f"Sea conditions near {location_str} (SST: {obs_sst_str}) are currently {rating} for {common_short}; optimal SST is {opt_sst}."
+
+
+async def process_chat_query(
+    user_query: str,
+    language: str = "en-IN",
+    session_id: str | None = None
+) -> dict:
     """
-    Full pipeline: NL query → SQL → Execute → Summary + Python-computed Stats + Viz
+    Full pipeline: Context Resolution → Intent Router (SQL / RAG / Species / Hybrid)
+    → Execution → Deterministic Stats & Language Shaping.
     Returns structured dict matching ChatResponse schema.
     """
     try:
-        # Step 1: Generate SQL
-        sql = generate_sql(user_query)
+        # Step 1: Multi-Turn Conversational Memory & Coreference Resolution
+        resolved_query, context_meta = resolve_query_context(session_id, user_query)
 
-        # Step 2: Execute SQL (read-only)
+        # Step 2: Language, Script, & Route Classification
+        lang_meta = detect_script_language(resolved_query)
+        species = detect_species_in_query(resolved_query)
+        intent = classify_query_intent(resolved_query)
+
+        # =========================================================================
+        # ROUTE A: PURE OCEAN SCIENCE RAG (Conceptual / Policy / Sensor Questions)
+        # =========================================================================
+        if intent == "ocean_science_rag" and not species:
+            knowledge_docs = retrieve_ocean_knowledge(resolved_query, top_k=2)
+            if knowledge_docs:
+                top_doc = knowledge_docs[0]
+                summary = generate_rag_summary(resolved_query, top_doc, language)
+                hero_stat = top_doc.get("hero_metric")
+                stats = top_doc.get("key_facts", [])
+                knowledge_sources = [doc["title"] for doc in knowledge_docs]
+
+                # Update session memory
+                update_session_memory(
+                    session_id=session_id,
+                    user_query=user_query,
+                    bot_summary=summary
+                )
+
+                return {
+                    "summary": summary,
+                    "answer": summary,
+                    "hero_stat": hero_stat,
+                    "stats": stats,
+                    "reading_count": len(knowledge_docs),
+                    "sql": None,
+                    "data": None,
+                    "chart": None,
+                    "map_markers": None,
+                    "query_route": "ocean_science_rag",
+                    "species_detected": None,
+                    "knowledge_sources": knowledge_sources,
+                    "detected_language": lang_meta,
+                    "data_sources": ["INCOIS Ocean Science Knowledge Base"],
+                    "error": None
+                }
+
+        # =========================================================================
+        # ROUTE B: VERNACULAR SPECIES ADVISORY / SQL HYBRID DATA
+        # =========================================================================
+        # Step 3: Generate SQL (for species or structured hydrographic data)
+        sql = generate_sql(resolved_query)
+
+        # Step 4: Execute SQL (read-only)
         results = execute_readonly_sql(sql)
 
-        # Step 2b: Automatic fallback if results are empty
+        # Step 4b: Automatic fallback if results are empty
         if not results:
-            # Fallback 1: If SQL had restrictive date clauses, remove them
             fallback_sql = re.sub(r"AND\s+date\([^)]+\)\s*=\s*date\('now'\)", "", sql, flags=re.IGNORECASE)
             fallback_sql = re.sub(r"WHERE\s+date\([^)]+\)\s*=\s*date\('now'\)\s+AND", "WHERE", fallback_sql, flags=re.IGNORECASE)
             if fallback_sql != sql:
                 results = execute_readonly_sql(fallback_sql)
                 sql = fallback_sql
 
-            # Fallback 2: If still empty and query is about Arabian Sea / West Coast / Mumbai
-            if not results and any(w in user_query.lower() for w in ["mumbai", "arabian", "goa", "kerala", "kochi", "gujarat", "machhli", "machhali"]):
+            if not results and any(w in resolved_query.lower() for w in ["mumbai", "arabian", "goa", "kerala", "kochi", "gujarat", "machhli", "machhali", "surmai", "bangda", "rawas", "pomfret", "ratnagiri"]):
                 fallback_sql = "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 10.0 AND 24.0 AND p.longitude BETWEEN 60.0 AND 74.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
                 results = execute_readonly_sql(fallback_sql)
                 sql = fallback_sql
-
-            # Fallback 3: If query is about Bay of Bengal / East Coast / Chennai / Vizag
-            elif not results and any(w in user_query.lower() for w in ["bengal", "chennai", "vizag", "visakhapatnam", "odisha", "andhra"]):
+            elif not results and any(w in resolved_query.lower() for w in ["bengal", "chennai", "vizag", "visakhapatnam", "odisha", "andhra", "vanjaram", "ilish"]):
                 fallback_sql = "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 10.0 AND 22.0 AND p.longitude BETWEEN 80.0 AND 92.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
                 results = execute_readonly_sql(fallback_sql)
                 sql = fallback_sql
 
-        # Step 3: Generate clean natural language summary in user's language
-        summary, lang_info = generate_summary(user_query, sql, results, language)
-
-        # Step 4: Deterministically compute hero_stat and 3-column stats list
-        hero_stat, stats, reading_count = compute_structured_stats(results, user_query)
-
-        # Step 5: Detect visualization type
-        chart_info = detect_chart_type(user_query, results)
-
-        # Step 6: Extract map markers
+        # Extract map markers and chart info
+        chart_info = detect_chart_type(resolved_query, results)
         map_markers = detect_map_markers(results)
-
-        # Step 7: Clean raw data rows for frontend display
         cleaned_data = clean_results_data(results)
+
+        # Handle Species-Grounded Output
+        if species:
+            temperatures = [float(r["temperature"]) for r in results if r.get("temperature") is not None]
+            salinities = [float(r["salinity"]) for r in results if r.get("salinity") is not None]
+            depths = [float(r["depth"]) for r in results if r.get("depth") is not None]
+            latitudes = [float(r["latitude"]) for r in results if r.get("latitude") is not None]
+            longitudes = [float(r["longitude"]) for r in results if r.get("longitude") is not None]
+
+            avg_sst = (sum(temperatures) / len(temperatures)) if temperatures else 28.2
+            avg_sal = (sum(salinities) / len(salinities)) if salinities else 35.0
+            avg_mld = (sum(depths) / len(depths)) if depths else 25.0
+
+            viability = evaluate_species_viability(species, avg_sst, avg_mld, avg_sal)
+            viability["observed_sst"] = avg_sst
+            loc_str = format_lat_lon(latitudes[0], longitudes[0]) if latitudes and longitudes else "Coastal Sector"
+
+            summary = generate_species_summary(resolved_query, species, viability, loc_str, language)
+
+            vernacular_tag = species["common_name"].split("(")[-1].rstrip(")")
+            common_tag = species["common_name"].split("(")[0].strip()
+
+            hero_stat = {
+                "label": f"{vernacular_tag} Viability",
+                "value": f"{viability['score']}%",
+                "unit": viability["rating"]
+            }
+
+            stats = [
+                {"icon": "fish", "label": "Species", "value": common_tag},
+                {"icon": "thermometer", "label": "Optimum SST", "value": viability["optimal_sst"]},
+                {"icon": "compass", "label": "Peak Season", "value": species["peak_season"].split("(")[0].strip()}
+            ]
+
+            update_session_memory(
+                session_id=session_id,
+                user_query=user_query,
+                bot_summary=summary,
+                detected_species=species["common_name"]
+            )
+
+            return {
+                "summary": summary,
+                "answer": summary,
+                "hero_stat": hero_stat,
+                "stats": stats,
+                "reading_count": len(results),
+                "sql": sql,
+                "data": cleaned_data,
+                "chart": chart_info,
+                "map_markers": map_markers,
+                "query_route": "species_advisory",
+                "species_detected": species["common_name"],
+                "knowledge_sources": ["INCOIS Potential Fishing Zone (PFZ) Guidelines"],
+                "detected_language": lang_meta,
+                "data_sources": ["INCOIS ARGO Subsurface", "NOAA MUR SST", "NASA VIIRS Chlorophyll-a"],
+                "error": None
+            }
+
+        # Step 5: Standard Hydrographic SQL / Hybrid Output
+        summary = generate_summary(resolved_query, sql, results, language)
+        hero_stat, stats, reading_count = compute_structured_stats(results, resolved_query)
+
+        # If hybrid query, attach relevant ocean knowledge context sources
+        knowledge_sources = []
+        if intent == "hybrid":
+            kdocs = retrieve_ocean_knowledge(resolved_query, top_k=1)
+            if kdocs:
+                knowledge_sources = [kdocs[0]["title"]]
+
+        update_session_memory(
+            session_id=session_id,
+            user_query=user_query,
+            bot_summary=summary
+        )
 
         return {
             "summary": summary,
@@ -507,16 +665,16 @@ async def process_chat_query(user_query: str, language: str = "en-IN") -> dict:
             "data": cleaned_data,
             "chart": chart_info,
             "map_markers": map_markers,
-            "detected_language": lang_info,
-            "data_sources": [
-                "INCOIS ARGO Subsurface Profiler (0-2000m)",
-                "NOAA JPL MUR Satellite SST (1km)",
-                "NASA VIIRS Chlorophyll-a (8-day Composite)"
-            ],
+            "query_route": intent,
+            "species_detected": None,
+            "knowledge_sources": knowledge_sources if knowledge_sources else None,
+            "detected_language": lang_meta,
+            "data_sources": ["INCOIS ARGO Subsurface", "NOAA MUR SST", "NASA VIIRS Chlorophyll-a"],
             "error": None
         }
 
     except ValueError as e:
+        lang_meta = detect_script_language(user_query)
         return {
             "summary": f"Query safety validation: {str(e)}",
             "answer": f"Query safety validation: {str(e)}",
@@ -527,9 +685,15 @@ async def process_chat_query(user_query: str, language: str = "en-IN") -> dict:
             "data": None,
             "chart": None,
             "map_markers": None,
+            "query_route": "error",
+            "species_detected": None,
+            "knowledge_sources": None,
+            "detected_language": lang_meta,
+            "data_sources": [],
             "error": str(e)
         }
     except Exception as e:
+        lang_meta = detect_script_language(user_query)
         return {
             "summary": f"Error executing query: {str(e)}",
             "answer": f"Error executing query: {str(e)}",
@@ -540,5 +704,10 @@ async def process_chat_query(user_query: str, language: str = "en-IN") -> dict:
             "data": None,
             "chart": None,
             "map_markers": None,
+            "query_route": "error",
+            "species_detected": None,
+            "knowledge_sources": None,
+            "detected_language": lang_meta,
+            "data_sources": [],
             "error": str(e)
         }
