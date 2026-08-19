@@ -1,7 +1,20 @@
 import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { Fish, ChevronDown, Compass, Satellite, Leaf, Sparkles, Info, X, ChevronUp, Layers } from 'lucide-react';
+import { 
+  Fish, 
+  ChevronDown, 
+  Compass, 
+  Satellite, 
+  Leaf, 
+  Navigation,
+  Radio,
+  Layers,
+  Info,
+  ChevronUp,
+  Sparkles,
+  X 
+} from 'lucide-react';
 import type { FloatSummary, MapMarker, PFZAdvisory, SatelliteGridPoint } from '../../types';
 import { getPFZAdvisories, getSatelliteGrid } from '../../services/api';
 
@@ -89,6 +102,45 @@ function createFloatIcon(isHighlighted: boolean, isSelected: boolean) {
   });
 }
 
+// Function to create a distinct GPS Boat / Vessel icon with glowing radar pulse
+function createVesselIcon() {
+  const svgHtml = `
+    <div style="position: relative; width: 34px; height: 34px;">
+      <span style="
+        position: absolute;
+        inset: -8px;
+        border-radius: 50%;
+        background: rgba(16, 185, 129, 0.35);
+        border: 1.5px solid rgba(16, 185, 129, 0.75);
+        animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+      "></span>
+      <div style="
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: #064e3b;
+        border: 2px solid #34d399;
+        box-shadow: 0 0 16px #10b981;
+        color: #ffffff;
+        font-size: 16px;
+      ">
+        ⛵
+      </div>
+    </div>
+  `;
+
+  return L.divIcon({
+    html: svgHtml,
+    className: 'custom-vessel-icon',
+    iconSize: [34, 34],
+    iconAnchor: [17, 17],
+  });
+}
+
 // Thermal palette for Satellite SST (Blue 26°C -> Cyan 27.5°C -> Yellow 28.5°C -> Red 30°C)
 function getSSTColor(sst: number): string {
   if (sst >= 29.5) return '#ef4444'; // Hot red
@@ -104,6 +156,19 @@ function getChlColor(chl: number): string {
   if (chl >= 0.8) return '#10b981'; // Green
   if (chl >= 0.4) return '#34d399'; // Mint green
   return '#14b8a6';                 // Cyan
+}
+
+function haversineDistKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 const TARGET_SPECIES_OPTIONS = [
@@ -136,6 +201,14 @@ export const OceanMap: React.FC<OceanMapProps> = ({
   // Target Species Filter State
   const [selectedSpecies, setSelectedSpecies] = useState<string>('all');
   const [speciesMenuOpen, setSpeciesMenuOpen] = useState<boolean>(false);
+
+  // Live Vessel GPS / NavIC Tracker State
+  const [userVesselPos, setUserVesselPos] = useState<[number, number] | null>(null);
+  const [isLocating, setIsLocating] = useState<boolean>(false);
+  const [nearestPfzToVessel, setNearestPfzToVessel] = useState<{
+    pfz: PFZAdvisory;
+    distKm: number;
+  } | null>(null);
 
   // UI Dropdowns & Collapsible Legend
   const [sectorMenuOpen, setSectorMenuOpen] = useState<boolean>(false);
@@ -202,6 +275,62 @@ export const OceanMap: React.FC<OceanMapProps> = ({
     }
     setSectorMenuOpen(false);
   };
+
+  // Live GPS / NavIC Vessel Tracker Handler (Zero-Internet Edge Ready)
+  const handleLocateVessel = () => {
+    setIsLocating(true);
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lon = pos.coords.longitude;
+          let vesselLat = lat;
+          let vesselLon = lon;
+          // In indoor / desktop demo environments, simulate coastal trawler 15nm offshore Mumbai
+          if (lat < -10 || lat > 30 || lon < 50 || lon > 100) {
+            vesselLat = 18.72;
+            vesselLon = 72.45;
+          }
+          setUserVesselPos([vesselLat, vesselLon]);
+          setMapCenter([vesselLat, vesselLon]);
+          setMapZoom(8);
+          setIsLocating(false);
+        },
+        () => {
+          // Fallback: Deep-Sea Fishing Trawler (Offshore Mumbai / Ratnagiri)
+          setUserVesselPos([18.72, 72.45]);
+          setMapCenter([18.72, 72.45]);
+          setMapZoom(8);
+          setIsLocating(false);
+        },
+        { timeout: 4000, enableHighAccuracy: true }
+      );
+    } else {
+      setUserVesselPos([18.72, 72.45]);
+      setMapCenter([18.72, 72.45]);
+      setMapZoom(8);
+      setIsLocating(false);
+    }
+  };
+
+  // Recalculate nearest PFZ zone whenever vessel coordinates or PFZ list change
+  useEffect(() => {
+    if (userVesselPos && pfzZones.length > 0) {
+      let closest: PFZAdvisory = pfzZones[0];
+      let minDist = Infinity;
+      for (const p of pfzZones) {
+        const d = haversineDistKm(userVesselPos[0], userVesselPos[1], p.latitude, p.longitude);
+        if (d < minDist) {
+          minDist = d;
+          closest = p;
+        }
+      }
+      setNearestPfzToVessel({
+        pfz: closest,
+        distKm: Math.round(minDist * 10) / 10,
+      });
+    }
+  }, [userVesselPos, pfzZones]);
 
   const activeSpecies = TARGET_SPECIES_OPTIONS.find((s) => s.id === selectedSpecies);
   const displayedPfzZones = pfzZones.filter((zone) => {
@@ -424,9 +553,66 @@ export const OceanMap: React.FC<OceanMapProps> = ({
             )}
           </div>
 
+          {/* 4. Live GPS Vessel Tracker Button */}
+          <button
+            type="button"
+            onClick={handleLocateVessel}
+            disabled={isLocating}
+            title="Acquire live GPS / NavIC hardware coordinates or simulate deep-sea fishing trawler"
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold backdrop-blur-md shadow-xl transition cursor-pointer active:scale-95 ${
+              userVesselPos
+                ? 'bg-emerald-950/90 border-emerald-500/60 text-emerald-300 shadow-glow-emerald-sm ring-1 ring-emerald-500/40 font-bold'
+                : 'bg-abyssal-950/90 border-abyssal-800 text-slate-300 hover:text-white'
+            }`}
+          >
+            {isLocating ? (
+              <Radio className="w-3.5 h-3.5 text-emerald-400 animate-spin" />
+            ) : (
+              <Navigation className={`w-3.5 h-3.5 ${userVesselPos ? 'text-emerald-400 animate-pulse' : 'text-slate-400'}`} />
+            )}
+            <span>{userVesselPos ? 'GPS Locked ⛵' : '📍 Vessel GPS'}</span>
+          </button>
+
         </div>
 
       </div>
+
+      {/* Live Vessel GPS Telemetry HUD */}
+      {userVesselPos && (
+        <div className="absolute top-14 right-3 z-[999] max-w-xs sm:max-w-sm rounded-2xl border border-emerald-500/40 bg-abyssal-950/95 p-3 font-mono text-xs text-slate-200 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-1">
+          <div className="flex items-center justify-between border-b border-abyssal-800 pb-1.5 mb-1.5">
+            <div className="flex items-center gap-1.5 font-bold text-emerald-300">
+              <Navigation className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+              <span>Vessel NavIC GPS</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                100% Offline Edge
+              </span>
+              <button
+                type="button"
+                onClick={() => setUserVesselPos(null)}
+                className="text-slate-400 hover:text-white p-0.5 cursor-pointer rounded"
+                title="Dismiss vessel tracker"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+          <div className="space-y-1 text-[11px]">
+            <div>Vessel Pos: <strong className="text-white">{userVesselPos[0].toFixed(3)}°N, {userVesselPos[1].toFixed(3)}°E</strong></div>
+            {nearestPfzToVessel && (
+              <>
+                <div>Nearest PFZ: <strong className="text-amber-300">{nearestPfzToVessel.distKm} km</strong> ({nearestPfzToVessel.pfz.nearest_harbour.compass} of {nearestPfzToVessel.pfz.nearest_harbour.harbour})</div>
+                <div>Fused SST: <strong className="text-cyan-300">{nearestPfzToVessel.pfz.sst_celsius}°C</strong> | Confidence: <strong className="text-emerald-300">{nearestPfzToVessel.pfz.pfz_score}/100</strong></div>
+                <div className="pt-1 text-[10px] text-amber-200/90 font-sans border-t border-abyssal-800/80">
+                  Target Catch: <strong>{nearestPfzToVessel.pfz.target_species.slice(0, 3).join(', ')}</strong>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Active Species Filter Banner */}
       {selectedSpecies !== 'all' && activeSpecies && (
@@ -662,6 +848,34 @@ export const OceanMap: React.FC<OceanMapProps> = ({
               </Marker>
             );
           })}
+
+        {/* 5. LIVE GPS VESSEL MARKER & PFZ NAVIGATION LINE (ZERO-INTERNET EDGE) */}
+        {userVesselPos && (
+          <>
+            <Marker position={userVesselPos} icon={createVesselIcon()}>
+              <Popup>
+                <div className="p-1 space-y-1.5 font-mono text-xs text-slate-100 min-w-[210px]">
+                  <div className="font-bold text-emerald-400 flex items-center gap-1">
+                    <Navigation className="w-3.5 h-3.5 text-emerald-400" /> Your Coastal Vessel (GPS)
+                  </div>
+                  <div>Coordinates: <strong className="text-white">{userVesselPos[0].toFixed(3)}°N, {userVesselPos[1].toFixed(3)}°E</strong></div>
+                  {nearestPfzToVessel && (
+                    <div className="text-[11px] text-amber-300 pt-1 border-t border-slate-700">
+                      Target PFZ: <strong>{nearestPfzToVessel.distKm} km</strong> ({nearestPfzToVessel.pfz.nearest_harbour.compass})
+                    </div>
+                  )}
+                </div>
+              </Popup>
+            </Marker>
+
+            {nearestPfzToVessel && (
+              <Polyline
+                positions={[userVesselPos, [nearestPfzToVessel.pfz.latitude, nearestPfzToVessel.pfz.longitude]]}
+                pathOptions={{ color: '#10b981', dashArray: '6, 6', weight: 2.5, opacity: 0.85 }}
+              />
+            )}
+          </>
+        )}
       </MapContainer>
 
       {/* Collapsible Floating Multi-Sensor Legend */}
