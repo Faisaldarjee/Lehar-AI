@@ -162,6 +162,9 @@ class GuardianAlert(BaseModel):
     severity: str
     title: str
     message: str
+    species: Optional[str] = None
+    species_common_name: Optional[str] = None
+    viability_score: Optional[int] = None
     recipient: GuardianRecipient
     location: GuardianLocation
     metrics: dict

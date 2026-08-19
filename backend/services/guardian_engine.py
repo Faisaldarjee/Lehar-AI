@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from .db import get_connection
 from .pfz_engine import get_pfz_advisories, nearest_harbour, haversine_km
 from .satellite_client import get_nearest_satellite_data
+from .species_dict import SPECIES_REGISTRY, evaluate_species_viability
 
 # Simulated Registered Coastal Fishermen Directory (Demo Bounding)
 REGISTERED_FISHERMEN = [
@@ -188,18 +189,59 @@ def scan_for_guardian_alerts() -> list[dict]:
     for pfz in high_yield_pfz[:4]:
         lat, lon = pfz["latitude"], pfz["longitude"]
         fisherman, dist_km = _match_nearest_fisherman(lat, lon)
-        species_str = ", ".join(pfz["target_species"][:3])
-        mld_str = f"{pfz['mld_meters']:.0f}m" if pfz.get("mld_meters") else "35m"
+        sst = pfz.get("sst_celsius", 28.2)
+        sal = pfz.get("salinity", 35.2)
+        mld = pfz.get("mld_meters", 35.0)
+
+        # Cross-reference with Vernacular Species Dictionary (Biology Grounding)
+        scored_species = []
+        for sp_key, sp_info in SPECIES_REGISTRY.items():
+            viability = evaluate_species_viability(sp_info, sst, mld, sal)
+            scored_species.append((viability["score"], sp_info, viability))
+
+        scored_species.sort(key=lambda x: x[0], reverse=True)
+        top_score, top_sp, top_viability = scored_species[0]
+        second_score, second_sp, second_viability = scored_species[1]
+
+        matched_species = None
+        species_common_name = None
+        viability_score = None
+
+        if top_score >= 65:
+            matched_species = top_sp["common_name"].split("(")[-1].rstrip(")")
+            species_common_name = top_sp["common_name"]
+            viability_score = top_score
+
+            if top_score >= 80 and second_score >= 80:
+                sp1_v = top_sp["common_name"].split("(")[-1].rstrip(")")
+                sp2_v = second_sp["common_name"].split("(")[-1].rstrip(")")
+                target_catch_str = f"Favorable for both {sp1_v} ({top_score}% match) and {sp2_v} ({second_score}% match)"
+                opp_lead = (
+                    f"{fisherman['home_sector']} ke paas {sp1_v} aur {sp2_v} ke liye {top_score}% optimal conditions hain — "
+                    f"SST ({sst:.1f}°C) aur depth range dono match kar rahe hain."
+                )
+            else:
+                target_catch_str = f"{top_sp['common_name']} ({top_score}% Viability)"
+                opp_lead = (
+                    f"{fisherman['home_sector']} ke paas {matched_species} ({top_sp['common_name'].split('(')[0].strip()}) ke liye "
+                    f"{top_score}% optimal conditions hain — SST ({sst:.1f}°C) aur depth range dono match kar rahe hain."
+                )
+        else:
+            target_catch_str = ", ".join(pfz["target_species"][:3])
+            opp_lead = f"High-confidence fishing zone detected near {fisherman['home_sector']} ({pfz['pfz_score']}/100 confidence)."
+
+        mld_str = f"{mld:.0f}m" if mld else "35m"
 
         opp_msg = (
             f"🎣 HIGH-YIELD FISHING OPPORTUNITY for {fisherman['name']} ({fisherman['home_sector']}):\n\n"
-            f"Prime Potential Fishing Zone detected {dist_km:.0f}km {pfz['nearest_harbour']['compass']} of {fisherman['harbour']}.\n"
-            f"• Fused SST: {pfz['sst_celsius']:.1f}°C (Ideal feeding range)\n"
+            f"{opp_lead}\n\n"
+            f"• Location: {dist_km:.0f}km {pfz['nearest_harbour']['compass']} of {fisherman['harbour']}\n"
+            f"• Fused SST: {sst:.1f}°C (Ideal feeding range)\n"
             f"• Chlorophyll-a: {pfz.get('chlorophyll_mg_m3', 0.85):.2f} mg/m³ (Active plankton bloom)\n"
             f"• Thermocline MLD: {mld_str}\n"
-            f"• Target Catch: {species_str}\n"
+            f"• Target Catch: {target_catch_str}\n"
             f"• Fused AI Confidence: {pfz['pfz_score']}/100 ({pfz['pfz_rating']})\n\n"
-            f"Optimal time window: Next 24-36 hours."
+            f"Optimal time window: Next 24–36 hours."
         )
 
         alerts.append({
@@ -207,6 +249,9 @@ def scan_for_guardian_alerts() -> list[dict]:
             "type": "opportunity",
             "severity": "high",
             "title": f"High-Confidence PFZ ({fisherman['home_sector']} Sector)",
+            "species": matched_species,
+            "species_common_name": species_common_name,
+            "viability_score": viability_score,
             "message": opp_msg,
             "recipient": {
                 "id": fisherman["id"],
@@ -224,17 +269,20 @@ def scan_for_guardian_alerts() -> list[dict]:
             "metrics": {
                 "pfz_score": pfz["pfz_score"],
                 "pfz_rating": pfz["pfz_rating"],
-                "sst_celsius": pfz["sst_celsius"],
-                "satellite_sst": pfz.get("satellite_sst", pfz["sst_celsius"]),
+                "sst_celsius": sst,
+                "satellite_sst": pfz.get("satellite_sst", sst),
                 "chlorophyll_mg_m3": pfz.get("chlorophyll_mg_m3", 0.85),
                 "mld_meters": pfz.get("mld_meters", 35.0),
-                "target_species": pfz["target_species"],
+                "target_species": [top_sp["common_name"].split("(")[-1].rstrip(")")] if matched_species else pfz["target_species"],
+                "species_matched": species_common_name,
+                "species_viability_score": viability_score,
             },
-            "data_sources": pfz.get("data_sources", [
+            "data_sources": [
                 f"INCOIS ARGO Float #{pfz['float_id']}",
                 "NOAA MUR Satellite SST (1km)",
-                "NASA VIIRS Chlorophyll-a (8-day)"
-            ]),
+                "NASA VIIRS Chlorophyll-a (8-day)",
+                "INCOIS Marine Species Biology Matrix"
+            ],
             "timestamp": datetime.now(timezone.utc).strftime("%I:%M %p"),
         })
 

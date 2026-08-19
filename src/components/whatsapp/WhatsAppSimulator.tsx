@@ -128,6 +128,9 @@ export const WhatsAppSimulator: React.FC<WhatsAppSimulatorProps> = ({ selectedLa
           alertType: 'opportunity',
           title: oppAlert.title,
           text: oppAlert.message,
+          species: oppAlert.species,
+          species_common_name: oppAlert.species_common_name,
+          viability_score: oppAlert.viability_score,
           recipient: oppAlert.recipient,
           location: oppAlert.location,
           data_sources: oppAlert.data_sources,
@@ -350,13 +353,23 @@ export const WhatsAppSimulator: React.FC<WhatsAppSimulatorProps> = ({ selectedLa
                       >
                         {/* Top Proactive Pill */}
                         <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-700/60 font-mono">
-                          <span className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${
-                            isSafety ? 'text-red-400' : 'text-emerald-300'
-                          }`}>
-                            {isSafety ? <ShieldAlert className="w-3.5 h-3.5 text-red-400" /> : <Fish className="w-3.5 h-3.5 text-emerald-400" />}
-                            {isSafety ? '🛡️ Proactive Safety Alert' : '🎣 Proactive Opportunity Alert'}
-                          </span>
-                          <span className="text-[9px] text-slate-400">{msg.time}</span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${
+                              isSafety ? 'text-red-400' : 'text-emerald-300'
+                            }`}>
+                              {isSafety ? <ShieldAlert className="w-3.5 h-3.5 text-red-400" /> : <Fish className="w-3.5 h-3.5 text-emerald-400" />}
+                              {isSafety ? '🛡️ Proactive Safety Alert' : '🎣 Proactive Opportunity Alert'}
+                            </span>
+                            {!isSafety && msg.species && (
+                              <span className="px-1.5 py-0.2 rounded bg-amber-500/20 border border-amber-500/40 text-[9px] font-bold text-amber-300 flex items-center gap-1">
+                                <span>🐟 {msg.species}</span>
+                                {msg.viability_score && (
+                                  <span className="text-amber-200 font-mono">({msg.viability_score}% Match)</span>
+                                )}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[9px] text-slate-400 shrink-0">{msg.time}</span>
                         </div>
 
                         <p className="whitespace-pre-wrap font-sans text-xs leading-relaxed">{msg.text}</p>

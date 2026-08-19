@@ -181,6 +181,9 @@ export interface GuardianAlert {
   severity: 'critical' | 'high' | 'moderate' | 'low';
   title: string;
   message: string;
+  species?: string | null;
+  species_common_name?: string | null;
+  viability_score?: number | null;
   recipient: GuardianRecipient;
   location: GuardianLocation;
   metrics: Record<string, any>;
