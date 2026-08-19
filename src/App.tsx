@@ -9,6 +9,7 @@ import { AdoptFloat } from './components/education/AdoptFloat';
 import { WhatsAppSimulator } from './components/whatsapp/WhatsAppSimulator';
 import { ArchitecturePipeline } from './components/pipeline/ArchitecturePipeline';
 import { OceanAtmosphere } from './components/common/OceanAtmosphere';
+import { HudCornerBrackets } from './components/common/HudCornerBrackets';
 import { 
   MapPin, 
   LineChart, 
@@ -305,7 +306,8 @@ export default function App() {
             </div>
 
             {/* Right Smart Stage: Single Context-Aware Panel (7 Cols) */}
-            <div className="lg:col-span-7 flex flex-col h-full bg-abyssal-950/90 border border-abyssal-800/90 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-2xl relative">
+            <div className="lg:col-span-7 flex flex-col h-full bg-abyssal-950/90 border border-abyssal-800/90 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-2xl relative glow-organism-cyan">
+              <HudCornerBrackets />
               
               {/* Stage Top Dedicated Header Bar (Zero-Collision Layout) */}
               {isStageActive && (
@@ -477,38 +479,56 @@ export default function App() {
 
         {/* VIEW 2: OCEAN EXPLORER (MERGED MAP & 3D WITH INTERNAL TOGGLE) */}
         {(currentMode === 'map' || currentMode === '3d') && (
-          <div className="flex-1 min-h-[580px] h-[calc(100vh-80px)] flex flex-col relative rounded-2xl overflow-hidden shadow-2xl border border-abyssal-800/80">
+          <div className="flex-1 min-h-[580px] h-[calc(100vh-80px)] flex flex-col relative rounded-2xl overflow-hidden shadow-2xl border border-cyan-500/20 glow-organism-cyan bg-abyssal-950">
+            <HudCornerBrackets />
             
-            {/* Top Explorer View Selector */}
-            <div className="absolute top-3 left-16 z-30 flex items-center gap-1 bg-abyssal-950/95 backdrop-blur-xl p-1 rounded-xl border border-abyssal-800 shadow-2xl">
-              <button
-                type="button"
-                onClick={() => setExplorerView('map')}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer active:scale-95 ${
-                  explorerView === 'map'
-                    ? 'bg-gradient-to-r from-ocean-cyan to-teal-400 text-abyssal-950 font-bold shadow-md shadow-ocean-cyan/25'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Compass className="w-3.5 h-3.5" />
-                <span>2D Fleet Map</span>
-              </button>
+            {/* Dedicated Top Explorer Header Bar (Zero-Collision Dock) */}
+            <div className="flex items-center justify-between px-4 py-2 bg-abyssal-900/95 border-b border-abyssal-800/90 shrink-0 z-30">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="p-1.5 rounded-lg bg-ocean-cyan/15 text-ocean-cyan shrink-0">
+                  <Compass className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-xs sm:text-sm font-bold text-white font-heading truncate">
+                    Ocean Explorer & Geospatial Fleet GIS
+                  </h3>
+                  <p className="text-[10px] text-cyan-300/80 font-mono leading-tight truncate">
+                    97 Active ARGO Floats • Multi-Sensor Thermal Fronts • Live NavIC GPS
+                  </p>
+                </div>
+              </div>
 
-              <button
-                type="button"
-                onClick={() => setExplorerView('3d')}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer active:scale-95 ${
-                  explorerView === '3d'
-                    ? 'bg-gradient-to-r from-ocean-cyan to-teal-400 text-abyssal-950 font-bold shadow-md shadow-ocean-cyan/25'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Box className="w-3.5 h-3.5" />
-                <span>3D OceanLens WebGL</span>
-              </button>
+              {/* Segmented Switcher */}
+              <div className="flex items-center gap-1 bg-abyssal-950 p-1 rounded-xl border border-abyssal-800 shrink-0 shadow-inner">
+                <button
+                  type="button"
+                  onClick={() => setExplorerView('map')}
+                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer active:scale-95 ${
+                    explorerView === 'map'
+                      ? 'bg-gradient-to-r from-ocean-cyan to-teal-400 text-abyssal-950 font-bold shadow-md shadow-ocean-cyan/25'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Compass className="w-3.5 h-3.5" />
+                  <span>2D Fleet Map</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setExplorerView('3d')}
+                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer active:scale-95 ${
+                    explorerView === '3d'
+                      ? 'bg-gradient-to-r from-ocean-cyan to-teal-400 text-abyssal-950 font-bold shadow-md shadow-ocean-cyan/25'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Box className="w-3.5 h-3.5" />
+                  <span>3D OceanLens WebGL</span>
+                </button>
+              </div>
             </div>
 
-            <div className="flex-1 w-full h-full">
+            <div className="flex-1 w-full h-full relative overflow-hidden">
               {explorerView === 'map' ? (
                 <OceanMap
                   floats={floats}

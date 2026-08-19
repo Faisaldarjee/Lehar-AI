@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  MessageSquare, 
-  Compass, 
-  Radar, 
-  GraduationCap, 
+import {
+  MessageSquare,
+  Compass,
+  Radar,
+  GraduationCap,
   ChevronDown,
   Smartphone,
   GitBranch,
@@ -43,26 +43,26 @@ export const Navbar: React.FC<NavbarProps> = ({
   ];
 
   const demoItems = [
-    { 
-      id: 'whatsapp' as AppMode, 
-      label: 'WhatsApp Bot', 
-      desc: 'Vernacular voice & PFZ delivery for coastal fishermen', 
+    {
+      id: 'whatsapp' as AppMode,
+      label: 'WhatsApp Bot',
+      desc: 'Vernacular voice & PFZ delivery for coastal fishermen',
       tag: 'Field Delivery',
-      icon: Smartphone 
+      icon: Smartphone
     },
-    { 
-      id: 'classroom' as AppMode, 
-      label: 'Classroom (NEP 2020)', 
-      desc: 'Adopt an ARGO Float & interactive ocean science quizzes', 
+    {
+      id: 'classroom' as AppMode,
+      label: 'Classroom (NEP 2020)',
+      desc: 'Adopt an ARGO Float & interactive ocean science quizzes',
       tag: 'Education',
-      icon: GraduationCap 
+      icon: GraduationCap
     },
-    { 
-      id: 'pipeline' as AppMode, 
-      label: 'System Architecture', 
-      desc: '4-layer dataflow, NetCDF ingestion & Groq benchmarks', 
+    {
+      id: 'pipeline' as AppMode,
+      label: 'System Architecture',
+      desc: '4-layer dataflow, NetCDF ingestion & Groq benchmarks',
       tag: 'For Judges',
-      icon: GitBranch 
+      icon: GitBranch
     },
   ];
 
@@ -72,17 +72,17 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <header className="sticky top-0 z-[1200] bg-[#050e1a]/95 backdrop-blur-2xl border-b border-cyan-500/20 px-4 lg:px-8 py-2.5 shadow-2xl">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
-        
+
         {/* Left: Brand Identity & Tagline */}
-        <div 
+        <div
           className="flex items-center space-x-3 cursor-pointer group shrink-0 select-none"
           onClick={() => onSelectMode('chat')}
           title="Lehar AI — SIH26040 | Team: Ctrl Alt Elites | INCOIS ARGO Intelligence"
         >
           <div className="relative ocean-breathing">
-            <img 
-              src="/logo.png" 
-              alt="Lehar AI" 
+            <img
+              src="/logo.png"
+              alt="Lehar AI"
               className="w-9 h-9 rounded-xl object-cover border border-cyan-400/40 shadow-glow-cyan-sm ring-1 ring-cyan-400/30 group-hover:scale-105 transition-transform duration-200"
             />
           </div>
@@ -109,23 +109,21 @@ export const Navbar: React.FC<NavbarProps> = ({
                 key={tab.id}
                 type="button"
                 onClick={() => onSelectMode(tab.id)}
-                className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 whitespace-nowrap active:scale-95 cursor-pointer ${
-                  isActive
+                className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 whitespace-nowrap active:scale-95 cursor-pointer ${isActive
                     ? 'bg-gradient-to-r from-cyan-400 to-teal-400 text-slate-950 font-extrabold shadow-md shadow-cyan-500/25'
                     : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/60'
-                }`}
+                  }`}
               >
                 <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-slate-950' : 'text-cyan-400'}`} />
                 <span>{tab.label}</span>
                 {tab.badge && (
                   <span
-                    className={`text-[10px] font-bold px-1.5 py-0.2 rounded font-mono ${
-                      isActive
+                    className={`text-[10px] font-bold px-1.5 py-0.2 rounded font-mono ${isActive
                         ? 'bg-slate-950/20 text-slate-950'
                         : tab.alert
-                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30 animate-pulse'
-                        : 'bg-slate-800 text-slate-400'
-                    }`}
+                          ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30 animate-pulse'
+                          : 'bg-slate-800 text-slate-400'
+                      }`}
                   >
                     {tab.badge}
                   </span>
@@ -137,9 +135,9 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Right Section: Offline Edge Badge & Demonstrators Dropdown */}
         <div className="flex items-center gap-2.5 shrink-0">
-          
+
           {/* Real-time Offline Edge Readiness Badge */}
-          <div 
+          <div
             className="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-teal-950/80 border border-teal-500/40 text-[11px] font-mono text-teal-300 shadow-sm select-none"
             title="Lehar Edge Active: Local SQLite In-Situ DB + Cached NOAA Satellite Snapshot. 100% Offline Capable."
           >
@@ -152,11 +150,10 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               type="button"
               onClick={() => setDemoOpen(!demoOpen)}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all duration-200 cursor-pointer active:scale-95 ${
-                isDemoActive
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all duration-200 cursor-pointer active:scale-95 ${isDemoActive
                   ? 'bg-cyan-950/80 border-cyan-400/60 text-cyan-300 shadow-glow-cyan-sm font-bold'
                   : 'bg-[#091524] hover:bg-[#0e2238] border-cyan-500/20 text-slate-300 hover:text-white'
-              }`}
+                }`}
             >
               <Sparkles className={`w-3.5 h-3.5 ${isDemoActive ? 'text-cyan-400' : 'text-slate-400'}`} />
               <span>{isDemoActive ? activeDemo?.label : 'Demonstrators'}</span>
@@ -181,11 +178,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                         onSelectMode(item.id);
                         setDemoOpen(false);
                       }}
-                      className={`w-full flex items-start space-x-2.5 p-2 rounded-xl text-left transition-all duration-150 cursor-pointer ${
-                        isSelected
+                      className={`w-full flex items-start space-x-2.5 p-2 rounded-xl text-left transition-all duration-150 cursor-pointer ${isSelected
                           ? 'bg-cyan-950/80 border border-cyan-500/40 text-white shadow-inner font-bold'
                           : 'hover:bg-[#0c1e34] text-slate-300 hover:text-white'
-                      }`}
+                        }`}
                     >
                       <div className={`p-1.5 rounded-lg shrink-0 mt-0.5 ${isSelected ? 'bg-cyan-500/20 text-cyan-300' : 'bg-slate-800 text-cyan-400'}`}>
                         <Icon className="w-3.5 h-3.5" />

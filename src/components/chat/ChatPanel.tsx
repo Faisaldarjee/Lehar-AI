@@ -3,6 +3,7 @@ import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { QueryChips } from './QueryChips';
 import { Waves, Sparkles } from 'lucide-react';
+import { HudCornerBrackets } from '../common/HudCornerBrackets';
 import type { ChatMessage as ChatMessageType } from '../../types';
 
 interface ChatPanelProps {
@@ -31,7 +32,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   }, [messages, isLoading]);
 
   return (
-    <div className="flex flex-col h-full bg-abyssal-950/85 border border-abyssal-800/90 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-2xl">
+    <div className="flex flex-col h-full bg-abyssal-950/85 border border-abyssal-800/90 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-2xl relative glow-organism-cyan">
+      <HudCornerBrackets />
 
       {/* Top Chat Header */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-abyssal-800/80 bg-abyssal-900/60 shadow-inner">

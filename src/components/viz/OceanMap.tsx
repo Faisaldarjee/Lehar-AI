@@ -182,6 +182,10 @@ const TARGET_SPECIES_OPTIONS = [
   { id: 'hilsa', label: '🐟 Hilsa (Ilish)', minSST: 25.0, maxSST: 30.0 },
 ];
 
+// Global persistent cache to prevent re-fetching and map flicker across tab switches
+let globalPfzCache: PFZAdvisory[] | null = null;
+let globalSatGridCache: SatelliteGridPoint[] | null = null;
+
 export const OceanMap: React.FC<OceanMapProps> = ({
   floats,
   highlightMarkers,
@@ -202,8 +206,8 @@ export const OceanMap: React.FC<OceanMapProps> = ({
   const [selectedSpecies, setSelectedSpecies] = useState<string>('all');
   const [speciesMenuOpen, setSpeciesMenuOpen] = useState<boolean>(false);
 
-  // Live Vessel GPS / NavIC Tracker State
-  const [userVesselPos, setUserVesselPos] = useState<[number, number] | null>(null);
+  // Live Vessel GPS / NavIC Tracker State (Active by default for instant demo immersion)
+  const [userVesselPos, setUserVesselPos] = useState<[number, number] | null>([18.72, 72.45]);
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [nearestPfzToVessel, setNearestPfzToVessel] = useState<{
     pfz: PFZAdvisory;
@@ -215,21 +219,26 @@ export const OceanMap: React.FC<OceanMapProps> = ({
   const [satLayersMenuOpen, setSatLayersMenuOpen] = useState<boolean>(false);
   const [legendOpen, setLegendOpen] = useState<boolean>(false);
 
-  const [pfzZones, setPfzZones] = useState<PFZAdvisory[]>([]);
-  const [satelliteGrid, setSatelliteGrid] = useState<SatelliteGridPoint[]>([]);
+  const [pfzZones, setPfzZones] = useState<PFZAdvisory[]>(() => globalPfzCache || []);
+  const [satelliteGrid, setSatelliteGrid] = useState<SatelliteGridPoint[]>(() => globalSatGridCache || []);
 
-  // Load PFZ advisories & Satellite grid on mount
+  // Load PFZ advisories & Satellite grid on mount (Zero flicker if already cached)
   useEffect(() => {
+    if (globalPfzCache && globalSatGridCache) {
+      return;
+    }
     async function loadData() {
       try {
         const [pfzRes, satRes] = await Promise.all([
-          getPFZAdvisories('all', 50).catch(() => ({ advisories: [] })),
-          getSatelliteGrid(2).catch(() => ({ points: [] })), // 1.0° resolution downsample for high performance
+          globalPfzCache ? { advisories: globalPfzCache } : getPFZAdvisories('all', 50).catch(() => ({ advisories: [] })),
+          globalSatGridCache ? { points: globalSatGridCache } : getSatelliteGrid(2).catch(() => ({ points: [] })),
         ]);
-        if (pfzRes && pfzRes.advisories) {
+        if (pfzRes && pfzRes.advisories && !globalPfzCache) {
+          globalPfzCache = pfzRes.advisories;
           setPfzZones(pfzRes.advisories);
         }
-        if (satRes && satRes.points) {
+        if (satRes && satRes.points && !globalSatGridCache) {
+          globalSatGridCache = satRes.points;
           setSatelliteGrid(satRes.points);
         }
       } catch (err) {
@@ -345,11 +354,12 @@ export const OceanMap: React.FC<OceanMapProps> = ({
   return (
     <div className="relative w-full h-full min-h-[420px] rounded-2xl overflow-hidden border border-abyssal-800/80 bg-abyssal-950 shadow-2xl flex flex-col">
       
-      {/* Map Floating Control Header */}
-      <div className="absolute top-3 left-3 right-3 z-20 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+      {/* Map Floating Control Header (Elevated to z-[1000] above Leaflet tiles) */}
+      <div className="absolute top-3 left-3 right-3 z-[1000] flex flex-wrap items-center justify-between gap-2 pointer-events-none">
         
-        {/* Left: Sector Selector & Target Species Dropdowns */}
-        <div className="flex items-center gap-2 pointer-events-auto ml-11 sm:ml-12">
+        {/* Left: Sector Selector, Target Species & Vessel GPS Button */}
+        <div className="flex flex-wrap items-center gap-2 pointer-events-auto ml-11 sm:ml-12">
+          
           {/* Sector Selector */}
           <div className="relative">
             <button
@@ -359,7 +369,7 @@ export const OceanMap: React.FC<OceanMapProps> = ({
                 setSpeciesMenuOpen(false);
                 setSatLayersMenuOpen(false);
               }}
-              className="flex items-center space-x-2 bg-abyssal-950/95 backdrop-blur-md px-3 py-1.5 rounded-xl border border-abyssal-800 text-xs font-bold text-slate-200 hover:text-white shadow-xl transition cursor-pointer active:scale-95"
+              className="flex items-center space-x-2 bg-abyssal-950/98 backdrop-blur-md px-3 py-1.5 rounded-xl border border-cyan-500/30 text-xs font-bold text-slate-200 hover:text-white shadow-xl transition cursor-pointer active:scale-95"
             >
               <Compass className="w-3.5 h-3.5 text-ocean-cyan" />
               <span>Jump to sector</span>
@@ -368,8 +378,8 @@ export const OceanMap: React.FC<OceanMapProps> = ({
 
             {/* Sector Menu Popover */}
             {sectorMenuOpen && (
-              <div className="absolute left-0 mt-1.5 w-52 bg-abyssal-950 border border-abyssal-800 rounded-xl shadow-2xl p-1.5 z-50 space-y-1 animate-in fade-in zoom-in-95 duration-100">
-                <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">
+              <div className="absolute left-0 mt-1.5 w-52 bg-[#071322] border border-cyan-500/30 rounded-xl shadow-2xl p-1.5 z-[1100] space-y-1 animate-in fade-in zoom-in-95 duration-100 ring-1 ring-cyan-500/20">
+                <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono border-b border-slate-800">
                   Indian Ocean Sectors
                 </div>
                 {[
@@ -383,10 +393,10 @@ export const OceanMap: React.FC<OceanMapProps> = ({
                     key={item.id}
                     type="button"
                     onClick={() => handleFocusSector(item.id as any)}
-                    className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-xs text-slate-300 hover:text-white hover:bg-abyssal-850 transition cursor-pointer"
+                    className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-xs text-slate-300 hover:text-white hover:bg-[#0c1e34] transition cursor-pointer"
                   >
                     <span className="font-semibold">{item.label}</span>
-                    <span className="text-[10px] font-mono text-slate-500">{item.coord}</span>
+                    <span className="text-[10px] font-mono text-cyan-400">{item.coord}</span>
                   </button>
                 ))}
               </div>
@@ -404,8 +414,8 @@ export const OceanMap: React.FC<OceanMapProps> = ({
               }}
               className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition shadow-xl cursor-pointer active:scale-95 ${
                 selectedSpecies !== 'all'
-                  ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 shadow-glow-amber-sm'
-                  : 'bg-abyssal-950/95 backdrop-blur-md border-abyssal-800 text-slate-200 hover:text-white'
+                  ? 'bg-amber-500/25 border-amber-500/60 text-amber-300 shadow-glow-amber-sm'
+                  : 'bg-abyssal-950/98 backdrop-blur-md border-cyan-500/30 text-slate-200 hover:text-white'
               }`}
             >
               <Fish className="w-3.5 h-3.5 text-amber-400" />
@@ -414,8 +424,8 @@ export const OceanMap: React.FC<OceanMapProps> = ({
             </button>
 
             {speciesMenuOpen && (
-              <div className="absolute left-0 mt-1.5 w-60 bg-abyssal-950 border border-abyssal-800 rounded-xl shadow-2xl p-1.5 z-50 space-y-1 animate-in fade-in zoom-in-95 duration-100">
-                <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">
+              <div className="absolute left-0 mt-1.5 w-60 bg-[#071322] border border-cyan-500/30 rounded-xl shadow-2xl p-1.5 z-[1100] space-y-1 animate-in fade-in zoom-in-95 duration-100 ring-1 ring-cyan-500/20">
+                <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono border-b border-slate-800">
                   Filter PFZ by Marine Species
                 </div>
                 {TARGET_SPECIES_OPTIONS.map((opt) => (
@@ -429,12 +439,12 @@ export const OceanMap: React.FC<OceanMapProps> = ({
                     className={`w-full text-left px-2.5 py-1.5 text-xs rounded-lg transition font-medium flex items-center justify-between cursor-pointer ${
                       selectedSpecies === opt.id
                         ? 'bg-amber-500/25 text-amber-200 border border-amber-500/40 font-bold'
-                        : 'text-slate-300 hover:bg-abyssal-850 hover:text-white'
+                        : 'text-slate-300 hover:bg-[#0c1e34] hover:text-white'
                     }`}
                   >
                     <span>{opt.label}</span>
                     {opt.id !== 'all' && (
-                      <span className="text-[10px] text-slate-400 font-mono">
+                      <span className="text-[10px] text-cyan-300 font-mono">
                         {opt.minSST}–{opt.maxSST}°C
                       </span>
                     )}
@@ -579,7 +589,7 @@ export const OceanMap: React.FC<OceanMapProps> = ({
 
       {/* Live Vessel GPS Telemetry HUD */}
       {userVesselPos && (
-        <div className="absolute top-14 right-3 z-20 max-w-xs sm:max-w-sm rounded-2xl border border-emerald-500/40 bg-abyssal-950/95 p-3 font-mono text-xs text-slate-200 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-1">
+        <div className="absolute top-14 right-3 z-[1000] max-w-xs sm:max-w-sm rounded-2xl border border-emerald-500/40 bg-abyssal-950/95 p-3 font-mono text-xs text-slate-200 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-1">
           <div className="flex items-center justify-between border-b border-abyssal-800 pb-1.5 mb-1.5">
             <div className="flex items-center gap-1.5 font-bold text-emerald-300">
               <Navigation className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
@@ -636,7 +646,8 @@ export const OceanMap: React.FC<OceanMapProps> = ({
       <MapContainer
         center={mapCenter}
         zoom={mapZoom}
-        style={{ width: '100%', height: '100%', minHeight: '350px' }}
+        className="flex-1 w-full h-full"
+        style={{ width: '100%', height: '100%' }}
         scrollWheelZoom={true}
         attributionControl={false}
       >
@@ -879,55 +890,60 @@ export const OceanMap: React.FC<OceanMapProps> = ({
       </MapContainer>
 
       {/* Collapsible Floating Multi-Sensor Legend */}
-      <div className="absolute bottom-3 right-3 z-20 pointer-events-auto">
+      <div className="absolute bottom-3 right-3 z-[1000] pointer-events-auto">
         {!legendOpen ? (
           <button
             type="button"
             onClick={() => setLegendOpen(true)}
-            className="flex items-center space-x-1.5 bg-abyssal-950/95 hover:bg-abyssal-900 border border-abyssal-800 px-3 py-1.5 rounded-xl text-xs font-mono font-semibold text-slate-300 shadow-2xl transition cursor-pointer active:scale-95"
+            className="flex items-center space-x-1.5 bg-[#071322]/95 hover:bg-[#0c1e34] border border-cyan-500/30 px-3 py-1.5 rounded-xl text-xs font-mono font-semibold text-slate-200 shadow-2xl transition cursor-pointer active:scale-95 ring-1 ring-cyan-500/10"
           >
             <Info className="w-3.5 h-3.5 text-ocean-cyan" />
             <span>Map Legend</span>
             <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
           </button>
         ) : (
-          <div className="bg-abyssal-950/98 backdrop-blur-2xl p-3 rounded-2xl border border-abyssal-800 text-[10px] text-slate-300 space-y-2 shadow-2xl max-w-xs animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-abyssal-800 pb-1.5 font-mono">
-              <span className="font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-                <Sparkles className="w-3 h-3 text-ocean-cyan" />
-                Sensor Legend
+          <div className="bg-[#071322]/98 backdrop-blur-2xl p-3.5 rounded-2xl border border-cyan-500/40 text-xs text-slate-200 space-y-2.5 shadow-2xl w-80 max-w-[calc(100vw-2rem)] max-h-[calc(100vh-16rem)] overflow-y-auto animate-in fade-in zoom-in-95 duration-150 ring-1 ring-cyan-500/20">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5 font-mono">
+              <span className="font-bold text-white uppercase tracking-wider flex items-center gap-1.5 text-[11px]">
+                <Sparkles className="w-3.5 h-3.5 text-ocean-cyan" />
+                Sensor & PFZ Legend
               </span>
               <button
                 type="button"
                 onClick={() => setLegendOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-abyssal-800 transition cursor-pointer"
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-ocean-cyan shadow-glow-cyan-sm shrink-0"></span>
-              <span>ARGO Floats (0-2000m Subsurface)</span>
+            <div className="flex items-center gap-2.5">
+              <span className="w-3 h-3 rounded-full bg-ocean-cyan shadow-glow-cyan-sm shrink-0"></span>
+              <span className="text-[11px]">ARGO Floats (0–2,000m Subsurface Cast)</span>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 border border-amber-300 shadow-sm shrink-0"></span>
-              <span>PFZ Opportunity Zones (Amber Target)</span>
+            <div className="flex items-center gap-2.5">
+              <span className="w-3 h-3 rounded-full bg-amber-400 border border-amber-300 shadow-sm shrink-0"></span>
+              <span className="text-[11px]">PFZ Opportunity Zones (Thermal Fronts)</span>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-sm shrink-0"></span>
-              <span>NOAA Satellite SST Thermal Heatmap</span>
+            <div className="flex items-center gap-2.5">
+              <span className="w-3 h-3 rounded-full bg-emerald-400 border border-emerald-300 shadow-sm shrink-0"></span>
+              <span className="text-[11px]">Live Fishing Vessel (NavIC GPS Tracker)</span>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm shrink-0"></span>
-              <span>NASA Chlorophyll-a Ocean Color</span>
+            <div className="flex items-center gap-2.5">
+              <span className="w-3 h-3 rounded-full bg-rose-500 shadow-sm shrink-0"></span>
+              <span className="text-[11px]">NOAA Satellite SST Thermal Heatmap</span>
             </div>
 
-            <div className="pt-1 border-t border-abyssal-800/80 text-[9px] text-cyan-300/80 font-mono leading-tight">
-              Scientific Fusion: Subsurface ARGO + continuous satellite SST & Chlorophyll for high-confidence PFZ.
+            <div className="flex items-center gap-2.5">
+              <span className="w-3 h-3 rounded-full bg-teal-400 shadow-sm shrink-0"></span>
+              <span className="text-[11px]">NASA Chlorophyll-a Ocean Color</span>
+            </div>
+
+            <div className="pt-1.5 border-t border-slate-800 text-[10px] text-cyan-300/90 font-mono leading-tight">
+              Scientific Fusion: In-situ ARGO CTD + continuous NOAA & NASA satellite grids for high-yield fishing zones.
             </div>
           </div>
         )}
