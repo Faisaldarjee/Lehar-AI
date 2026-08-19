@@ -160,9 +160,68 @@ def generate_sql(user_query: str) -> str:
             last_error = err
             continue
 
-    if last_error:
-        raise last_error
-    raise ValueError("Could not generate safe SQL from query.")
+    # Rule-based deterministic fallback if Groq API is unavailable
+    q_low = user_query.lower()
+    if any(w in q_low for w in ["mumbai", "bombay", "maharashtra", "konkan", "ratnagiri", "goa", "machhli", "machli", "machhali"]):
+        return "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 14.0 AND 22.0 AND p.longitude BETWEEN 64.0 AND 74.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
+    elif any(w in q_low for w in ["bengal", "chennai", "tamil", "vizag", "visakhapatnam", "andhra", "odisha", "kolkata"]):
+        return "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 10.0 AND 22.0 AND p.longitude BETWEEN 80.0 AND 92.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
+    
+    return "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 5.0 AND 25.0 AND p.longitude BETWEEN 55.0 AND 80.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
+
+
+def repair_and_execute_sql(sql: str, user_query: str) -> tuple[str, list[dict]]:
+    """
+    Safely execute SQL with multi-stage auto-repair:
+    1. Direct execution
+    2. Missing alias repair (e.g. argo_profiles without 'p' or argo_measurements without 'm')
+    3. Trailing/invalid syntax repair
+    4. Deterministic sector query fallback based on keywords (Mumbai, Arabian, Bengal, etc.)
+    """
+    try:
+        results = execute_readonly_sql(sql)
+        if results:
+            return sql, results
+    except Exception as e:
+        print(f"[NL2SQL] Initial SQL failed: {e}. Attempting auto-repair...")
+
+    # Stage 2: Table alias fix
+    repaired_sql = sql
+    if " p." in repaired_sql and "argo_profiles p" not in repaired_sql and "argo_profiles as p" not in repaired_sql:
+        repaired_sql = re.sub(r"\bargo_profiles\b(?!\s+(?:as\s+)?p\b)", "argo_profiles p", repaired_sql, flags=re.IGNORECASE)
+    if " m." in repaired_sql and "argo_measurements m" not in repaired_sql and "argo_measurements as m" not in repaired_sql:
+        repaired_sql = re.sub(r"\bargo_measurements\b(?!\s+(?:as\s+)?m\b)", "argo_measurements m", repaired_sql, flags=re.IGNORECASE)
+    
+    # Remove strict date filters
+    repaired_sql = re.sub(r"AND\s+date\([^)]+\)\s*=\s*date\('now'\)", "", repaired_sql, flags=re.IGNORECASE)
+    repaired_sql = re.sub(r"WHERE\s+date\([^)]+\)\s*=\s*date\('now'\)\s+AND", "WHERE", repaired_sql, flags=re.IGNORECASE)
+
+    try:
+        results = execute_readonly_sql(repaired_sql)
+        if results:
+            return repaired_sql, results
+    except Exception as e:
+        print(f"[NL2SQL] Repaired SQL failed: {e}. Falling back to canonical sector query...")
+
+    # Stage 3: Canonical Sector Fallback based on user query
+    q_low = user_query.lower()
+    if any(w in q_low for w in ["mumbai", "bombay", "maharashtra", "konkan", "ratnagiri", "goa", "machhli", "machli", "machhali", "fishing"]):
+        canonical_sql = "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 14.0 AND 22.0 AND p.longitude BETWEEN 64.0 AND 74.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
+    elif any(w in q_low for w in ["bengal", "chennai", "tamil", "vizag", "visakhapatnam", "andhra", "odisha", "kolkata"]):
+        canonical_sql = "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 10.0 AND 22.0 AND p.longitude BETWEEN 80.0 AND 92.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
+    elif any(w in q_low for w in ["kochi", "cochin", "kerala", "lakshadweep", "malabar"]):
+        canonical_sql = "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 7.0 AND 14.0 AND p.longitude BETWEEN 70.0 AND 78.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
+    elif any(w in q_low for w in ["gujarat", "saurashtra", "veraval", "porbandar", "kutch"]):
+        canonical_sql = "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 19.0 AND 24.0 AND p.longitude BETWEEN 65.0 AND 72.5 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
+    else:
+        canonical_sql = "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 5.0 AND 25.0 AND p.longitude BETWEEN 55.0 AND 80.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
+
+    try:
+        results = execute_readonly_sql(canonical_sql)
+        return canonical_sql, results
+    except Exception as e:
+        print(f"[NL2SQL] Canonical fallback failed: {e}")
+        return canonical_sql, []
 
 
 def generate_summary(user_query: str, sql: str, results: list[dict], language: str) -> str:
@@ -552,28 +611,9 @@ async def process_chat_query(
         # =========================================================================
         # ROUTE B: VERNACULAR SPECIES ADVISORY / SQL HYBRID DATA
         # =========================================================================
-        # Step 3: Generate SQL (for species or structured hydrographic data)
-        sql = generate_sql(resolved_query)
-
-        # Step 4: Execute SQL (read-only)
-        results = execute_readonly_sql(sql)
-
-        # Step 4b: Automatic fallback if results are empty
-        if not results:
-            fallback_sql = re.sub(r"AND\s+date\([^)]+\)\s*=\s*date\('now'\)", "", sql, flags=re.IGNORECASE)
-            fallback_sql = re.sub(r"WHERE\s+date\([^)]+\)\s*=\s*date\('now'\)\s+AND", "WHERE", fallback_sql, flags=re.IGNORECASE)
-            if fallback_sql != sql:
-                results = execute_readonly_sql(fallback_sql)
-                sql = fallback_sql
-
-            if not results and any(w in resolved_query.lower() for w in ["mumbai", "arabian", "goa", "kerala", "kochi", "gujarat", "machhli", "machhali", "surmai", "bangda", "rawas", "pomfret", "ratnagiri"]):
-                fallback_sql = "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 10.0 AND 24.0 AND p.longitude BETWEEN 60.0 AND 74.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
-                results = execute_readonly_sql(fallback_sql)
-                sql = fallback_sql
-            elif not results and any(w in resolved_query.lower() for w in ["bengal", "chennai", "vizag", "visakhapatnam", "odisha", "andhra", "vanjaram", "ilish"]):
-                fallback_sql = "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 10.0 AND 22.0 AND p.longitude BETWEEN 80.0 AND 92.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
-                results = execute_readonly_sql(fallback_sql)
-                sql = fallback_sql
+        # Step 3 & 4: Generate SQL & Safely Execute with Multi-Stage Auto-Repair
+        initial_sql = generate_sql(resolved_query)
+        sql, results = repair_and_execute_sql(initial_sql, resolved_query)
 
         # Extract map markers and chart info
         chart_info = detect_chart_type(resolved_query, results)

@@ -346,7 +346,7 @@ export const OceanMap: React.FC<OceanMapProps> = ({
     <div className="relative w-full h-full min-h-[420px] rounded-2xl overflow-hidden border border-abyssal-800/80 bg-abyssal-950 shadow-2xl flex flex-col">
       
       {/* Map Floating Control Header */}
-      <div className="absolute top-3 left-3 right-3 z-[1000] flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+      <div className="absolute top-3 left-3 right-3 z-20 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
         
         {/* Left: Sector Selector & Target Species Dropdowns */}
         <div className="flex items-center gap-2 pointer-events-auto ml-11 sm:ml-12">
@@ -579,7 +579,7 @@ export const OceanMap: React.FC<OceanMapProps> = ({
 
       {/* Live Vessel GPS Telemetry HUD */}
       {userVesselPos && (
-        <div className="absolute top-14 right-3 z-[999] max-w-xs sm:max-w-sm rounded-2xl border border-emerald-500/40 bg-abyssal-950/95 p-3 font-mono text-xs text-slate-200 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-1">
+        <div className="absolute top-14 right-3 z-20 max-w-xs sm:max-w-sm rounded-2xl border border-emerald-500/40 bg-abyssal-950/95 p-3 font-mono text-xs text-slate-200 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-1">
           <div className="flex items-center justify-between border-b border-abyssal-800 pb-1.5 mb-1.5">
             <div className="flex items-center gap-1.5 font-bold text-emerald-300">
               <Navigation className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
@@ -616,7 +616,7 @@ export const OceanMap: React.FC<OceanMapProps> = ({
 
       {/* Active Species Filter Banner */}
       {selectedSpecies !== 'all' && activeSpecies && (
-        <div className="absolute top-14 left-14 z-[999] flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-950/90 border border-amber-500/40 text-amber-300 text-xs font-mono shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-1">
+        <div className="absolute top-14 left-14 z-20 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-950/90 border border-amber-500/40 text-amber-300 text-xs font-mono shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-1">
           <Fish className="w-3.5 h-3.5 text-amber-400 shrink-0" />
           <span>
             Target Filter: <strong>{activeSpecies.label}</strong> ({activeSpecies.minSST}–{activeSpecies.maxSST}°C) • {displayedPfzZones.length} Matching PFZs
@@ -879,7 +879,7 @@ export const OceanMap: React.FC<OceanMapProps> = ({
       </MapContainer>
 
       {/* Collapsible Floating Multi-Sensor Legend */}
-      <div className="absolute bottom-3 right-3 z-[1000] pointer-events-auto">
+      <div className="absolute bottom-3 right-3 z-20 pointer-events-auto">
         {!legendOpen ? (
           <button
             type="button"
