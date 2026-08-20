@@ -213,6 +213,94 @@ function phoneticizeForLanguage(text: string, lang: string): string {
   return res;
 }
 
+const TA_ROMAN_WORDS: Record<string, string> = {
+  'சென்னை': 'Chennai',
+  'கடல்': 'kadal',
+  'பகுதியில்': 'pagudhiyil',
+  'பகுதி': 'pagudhi',
+  'மேற்பரப்பு': 'maetparappu',
+  'வெப்பநிலை': 'veppanilai',
+  'மற்றும்': 'mattrum',
+  'மீன்பிடிக்க': 'meenpidikka',
+  'மீன்': 'meen',
+  'சாதகமான': 'saadhagamaana',
+  'ஏஆர்கோ': 'Aargo',
+  'விவரங்கள்': 'vivarangal',
+  'வெற்றிகரமாக': 'vetrigaramaaga',
+  'பெறப்பட்டன': 'perappattana',
+  'பெறலாம்': 'peralaam',
+  'அருகில்': 'arugil',
+  'வங்காள': 'Vangaala',
+  'விரிகுடா': 'Virikudaa',
+  'தமிழ்நாடு': 'Tamil Nadu',
+  'எங்கே': 'engae',
+  'நான்': 'naan',
+  'சூழல்': 'soozhal',
+  'ஆனது': 'aanadhu',
+  'உகந்த': 'ugandha',
+  'தரவுகள்': 'dharavugal',
+  'நிலையான': 'nilaiyana'
+};
+
+const TE_ROMAN_WORDS: Record<string, string> = {
+  'చెన్నై': 'Chennai',
+  'సముద్ర': 'samudra',
+  'ఉపరితల': 'uparitala',
+  'ఉష్ణోగ్రత': 'ushnogratha',
+  'మరియు': 'mariyu',
+  'చేపల': 'chepala',
+  'వేటకు': 'vetaku',
+  'అనుకూలమైన': 'anukoolamaina',
+  'ఆర్గో': 'Aargo',
+  'డేటా': 'data',
+  'విజయవంతంగా': 'vijayavanthanga',
+  'పొందబడింది': 'pondabadindi',
+  'తీర': 'teera',
+  'ప్రాంతంలో': 'praanthamlo'
+};
+
+function transliterateIndicToPhonetic(text: string, lang: string): string {
+  let res = text;
+  const prefix = lang.slice(0, 2).toLowerCase();
+
+  if (prefix === 'ta') {
+    Object.entries(TA_ROMAN_WORDS).forEach(([k, v]) => {
+      res = res.replaceAll(k, v);
+    });
+    res = res.replace(/ARGO/gi, 'Aargo')
+             .replace(/PSU/gi, 'P S U')
+             .replace(/km/gi, ' kilometer ')
+             .replace(/\b(\d+)\.(\d+)°C/gi, (_, i, d) => {
+               const iW = TA_NUMBERS[parseInt(i, 10)] ? TA_ROMAN_NUMS[parseInt(i, 10)] || i : i;
+               const dW = TA_NUMBERS[parseInt(d, 10)] ? TA_ROMAN_NUMS[parseInt(d, 10)] || d : d;
+               return `${iW} point ${dW} degree celsius`;
+             })
+             .replace(/\b(\d+)°C/gi, (_, i) => {
+               const iW = TA_ROMAN_NUMS[parseInt(i, 10)] || i;
+               return `${iW} degree celsius`;
+             })
+             .replace(/°C/g, ' degree celsius');
+  } else if (prefix === 'te') {
+    Object.entries(TE_ROMAN_WORDS).forEach(([k, v]) => {
+      res = res.replaceAll(k, v);
+    });
+    res = res.replace(/ARGO/gi, 'Aargo')
+             .replace(/PSU/gi, 'P S U')
+             .replace(/°C/g, ' degree celsius');
+  }
+
+  return res;
+}
+
+const TA_ROMAN_NUMS: Record<number, string> = {
+  0: 'poojiyam', 1: 'onru', 2: 'irandu', 3: 'moondru', 4: 'naangu', 5: 'aindhu',
+  6: 'aaru', 7: 'ezhu', 8: 'ettu', 9: 'onbadhu', 10: 'patthu',
+  20: 'irubadhu', 21: 'irubathi onru', 22: 'irubathi irandu', 23: 'irubathi moondru', 24: 'irubathi naangu',
+  25: 'irubathi aindhu', 26: 'irubathi aaru', 27: 'irubathi ezhu', 28: 'irubathi ettu', 29: 'irubathi onbadhu',
+  30: 'muppadhu', 31: 'muppathi onru', 32: 'muppathi irandu', 33: 'muppathi moondru', 34: 'muppathi naangu', 35: 'muppathi aindhu',
+  50: 'aimbadhu', 97: 'thonnootti ezhu', 100: 'nooru', 2000: 'irandaayiram'
+};
+
 /**
  * Select the best natural soft female voice for the given language locale.
  */
@@ -267,8 +355,13 @@ export function speakText(text: string, preferredLanguage?: string): Promise<voi
       window.speechSynthesis.cancel();
 
       const lang = preferredLanguage || detectLanguageFromText(text);
+      const prefix = lang.slice(0, 2).toLowerCase();
 
-      // Clean markdown, symbols, and convert numbers/temperatures to native pronunciation words
+      // Check if client browser actually has a native voice installed for this language
+      const voices = cachedVoices.length > 0 ? cachedVoices : loadVoices();
+      const hasNativeVoice = voices.some((v) => v.lang.toLowerCase().startsWith(prefix));
+
+      // Clean basic formatting
       let cleanText = text
         .replace(/[*_#`~[\]()]/g, ' ')
         .replace(/•/g, ' ')
@@ -279,25 +372,37 @@ export function speakText(text: string, preferredLanguage?: string): Promise<voi
         .replace(/\s+/g, ' ')
         .trim();
 
-      // Apply native phonetic translation for numbers and units
-      cleanText = phoneticizeForLanguage(cleanText, lang);
+      let targetLang = lang;
+      let targetVoice: SpeechSynthesisVoice | null = null;
+
+      if (hasNativeVoice && prefix !== 'en') {
+        // Device has native TTS voice (e.g. Google தமிழ் / Microsoft Kalpana)
+        cleanText = phoneticizeForLanguage(cleanText, lang);
+        targetVoice = getSoftFemaleVoice(lang);
+      } else if (prefix === 'ta' || prefix === 'te' || prefix === 'kn' || prefix === 'ml') {
+        // Device lacks native Indic engine -> Transliterate to smooth phonetic Roman text and use Indian English voice!
+        cleanText = transliterateIndicToPhonetic(cleanText, lang);
+        targetLang = 'en-IN';
+        targetVoice = getSoftFemaleVoice('en-IN');
+      } else {
+        cleanText = phoneticizeForLanguage(cleanText, lang);
+        targetVoice = getSoftFemaleVoice(lang);
+      }
 
       if (!cleanText) {
         resolve();
         return;
       }
 
-      const voice = getSoftFemaleVoice(lang);
-
       const utterance = new SpeechSynthesisUtterance(cleanText);
-      utterance.lang = lang;
-      if (voice) {
-        utterance.voice = voice;
+      utterance.lang = targetLang;
+      if (targetVoice) {
+        utterance.voice = targetVoice;
       }
 
       // Natural acoustic pacing
-      utterance.rate = 0.90;
-      utterance.pitch = 1.05;
+      utterance.rate = 0.88;
+      utterance.pitch = 1.02;
       utterance.volume = 1.0;
 
       utterance.onend = () => resolve();
