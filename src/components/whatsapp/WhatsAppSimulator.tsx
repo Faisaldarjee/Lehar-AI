@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Smartphone, 
   Send, 
@@ -15,7 +15,7 @@ import {
   ShieldCheck,
   ShieldAlert,
   Radio,
-  BellRing
+  Zap
 } from 'lucide-react';
 import { speakText } from '../../services/voiceSynthesis';
 import { sendChatQuery, triggerGuardianScan } from '../../services/api';
@@ -49,6 +49,12 @@ export const WhatsAppSimulator: React.FC<WhatsAppSimulatorProps> = ({ selectedLa
   const [isTyping, setIsTyping] = useState(false);
   const [isGuardianScanning, setIsGuardianScanning] = useState(false);
   const [playingId, setPlayingId] = useState<string | number | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll chat to latest message smoothly
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isTyping, isGuardianScanning]);
 
   const quickFishermanQueries = [
     'Mumbai ke paas machhli pakadne ke liye samundar kaisa hai?',
@@ -92,20 +98,47 @@ export const WhatsAppSimulator: React.FC<WhatsAppSimulatorProps> = ({ selectedLa
   };
 
   const handleSimulateGuardianPush = async () => {
+    if (isGuardianScanning) return;
     setIsGuardianScanning(true);
+
     try {
-      const res = await triggerGuardianScan();
-      const alerts = res.alerts || [];
-
-      // Find one safety alert and one opportunity alert to push
-      const safetyAlert = alerts.find((a: GuardianAlert) => a.type === 'safety');
-      const oppAlert = alerts.find((a: GuardianAlert) => a.type === 'opportunity');
-
-      const toPush: any[] = [];
       const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      let safetyAlert: any = null;
+      let oppAlert: any = null;
 
-      if (safetyAlert) {
-        toPush.push({
+      try {
+        const res = await triggerGuardianScan();
+        const alerts = res.alerts || [];
+        safetyAlert = alerts.find((a: GuardianAlert) => a.type === 'safety');
+        oppAlert = alerts.find((a: GuardianAlert) => a.type === 'opportunity');
+      } catch (e) {
+        console.warn('Live scan API failed, using canonical guardian fallback:', e);
+      }
+
+      // Robust fallback if API response is empty or offline
+      if (!safetyAlert) {
+        safetyAlert = {
+          title: 'Ocean Safety Warning (Mumbai Offshore Sector)',
+          message: '⚠️ SAFETY WARNING for Maharashtra Coast:\n\nMarine Heatwave (+2.35°C anomaly) detected 140km offshore Mumbai. Thermocline compression and localized rough sea conditions expected.',
+          recipient: { name: 'Devendra Patil', home_sector: 'Mumbai', phone_last4: '3910' },
+          data_sources: ['INCOIS ARGO Float #2902154', 'NOAA MUR Satellite SST', 'AnomalyRadar Watchdog'],
+        };
+      }
+
+      if (!oppAlert) {
+        oppAlert = {
+          title: 'High-Confidence PFZ (Porbandar / Konkan Sector)',
+          message: '🎣 HIGH-YIELD FISHING OPPORTUNITY for Bhikha Bhai (Porbandar):\n\nSST (28.5°C) & Chlorophyll-a (1.12 mg/m³) convergence detected 18km offshore.\n\n• Target Catch: Bangda (Indian Mackerel) & Surmai (100% viability match)\n• Thermocline MLD: 38m\n• Fused Confidence: 86/100 (Optimal)\n\nOptimal fishing window: Next 24 hours.',
+          species: 'Bangda',
+          species_common_name: 'Indian Mackerel (Bangda)',
+          viability_score: 95,
+          recipient: { name: 'Bhikha Bhai', home_sector: 'Porbandar', phone_last4: '5021' },
+          data_sources: ['INCOIS ARGO Float #4903839', 'NASA VIIRS Chlorophyll-a (8-day)', 'NOAA MUR Satellite SST (1km)'],
+        };
+      }
+
+      const toPush = [
+        {
           id: `guard-safe-${Date.now()}`,
           sender: 'guardian_bot',
           type: 'proactive_alert',
@@ -117,11 +150,8 @@ export const WhatsAppSimulator: React.FC<WhatsAppSimulatorProps> = ({ selectedLa
           data_sources: safetyAlert.data_sources,
           time: nowTime,
           hasAudio: true,
-        });
-      }
-
-      if (oppAlert) {
-        toPush.push({
+        },
+        {
           id: `guard-opp-${Date.now() + 1}`,
           sender: 'guardian_bot',
           type: 'proactive_alert',
@@ -136,12 +166,10 @@ export const WhatsAppSimulator: React.FC<WhatsAppSimulatorProps> = ({ selectedLa
           data_sources: oppAlert.data_sources,
           time: nowTime,
           hasAudio: true,
-        });
-      }
+        }
+      ];
 
-      if (toPush.length > 0) {
-        setMessages((prev) => [...prev, ...toPush]);
-      }
+      setMessages((prev) => [...prev, ...toPush]);
     } catch (err) {
       console.warn('Guardian scan simulation warning:', err);
     } finally {
@@ -191,15 +219,15 @@ export const WhatsAppSimulator: React.FC<WhatsAppSimulatorProps> = ({ selectedLa
             type="button"
             onClick={handleSimulateGuardianPush}
             disabled={isGuardianScanning}
-            className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 text-abyssal-950 font-bold text-xs shadow-lg shadow-orange-500/20 transition active:scale-95 cursor-pointer disabled:opacity-50"
+            className="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-ocean-cyan hover:from-emerald-400 hover:to-cyan-400 text-abyssal-950 font-black text-xs shadow-lg shadow-emerald-500/25 transition-all duration-200 active:scale-95 cursor-pointer disabled:opacity-50"
           >
             {isGuardianScanning ? (
-              <Radio className="w-3.5 h-3.5 animate-spin text-abyssal-950" />
+              <Radio className="w-4 h-4 animate-spin text-abyssal-950" />
             ) : (
-              <BellRing className="w-3.5 h-3.5 text-abyssal-950 animate-bounce" />
+              <Zap className="w-4 h-4 text-abyssal-950 animate-pulse fill-abyssal-950" />
             )}
-            <span className="font-heading">
-              {isGuardianScanning ? 'Scanning Watchdog...' : '▶ Simulate Guardian Scan'}
+            <span className="font-heading tracking-wide">
+              {isGuardianScanning ? '🛰️ Fusing ARGO + Satellite...' : '⚡ Push Proactive Alert'}
             </span>
           </button>
 
@@ -463,6 +491,7 @@ export const WhatsAppSimulator: React.FC<WhatsAppSimulatorProps> = ({ selectedLa
                   <span className="text-[10px]">Typing reply...</span>
                 </div>
               )}
+              <div ref={messagesEndRef} />
             </div>
 
             {/* Quick Prompt Chips for Fisherman */}
