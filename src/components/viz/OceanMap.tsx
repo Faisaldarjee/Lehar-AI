@@ -150,18 +150,23 @@ interface OceanMapProps {
 
 // Function to create styled SVG pulsating markers for ARGO floats
 function createFloatIcon(isHighlighted: boolean, isSelected: boolean) {
-  const color = isSelected ? '#f59e0b' : isHighlighted ? '#f43f5e' : '#06b6d4';
-  const size = isSelected ? 22 : isHighlighted ? 18 : 12;
+  // If selected: Ultra-bright Electric Cyan (#00f0ff) with glowing white core and double ring
+  // If highlighted: Vibrant Coral (#f43f5e)
+  // Default: Electric Ocean Cyan (#06b6d4)
+  const color = isSelected ? '#00f0ff' : isHighlighted ? '#f43f5e' : '#06b6d4';
+  const size = isSelected ? 24 : isHighlighted ? 18 : 12;
+  const pulseColor = isSelected ? 'rgba(0, 240, 255, 0.9)' : isHighlighted ? 'rgba(244, 63, 94, 0.8)' : 'rgba(6, 182, 212, 0.7)';
+  const borderRing = isSelected ? '3px solid #ffffff' : '2px solid #ffffff';
+  const glow = isSelected ? '0 0 16px #00f0ff, 0 0 8px #ffffff' : isHighlighted ? '0 0 12px #f43f5e' : '0 0 10px #06b6d4';
 
   const svgHtml = `
-    <div style="position: relative; width: ${size}px; height: ${size}px;">
+    <div style="position: relative; width: ${size}px; height: ${size}px; cursor: pointer;">
       <span style="
         position: absolute;
         width: 100%;
         height: 100%;
         border-radius: 50%;
-        background-color: ${color};
-        opacity: 0.75;
+        background-color: ${pulseColor};
         animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
       "></span>
       <span style="
@@ -171,8 +176,8 @@ function createFloatIcon(isHighlighted: boolean, isSelected: boolean) {
         height: 100%;
         border-radius: 50%;
         background-color: ${color};
-        border: 2px solid #ffffff;
-        box-shadow: 0 0 10px ${color};
+        border: ${borderRing};
+        box-shadow: ${glow};
       "></span>
     </div>
   `;
@@ -1102,38 +1107,33 @@ export const OceanMap: React.FC<OceanMapProps> = ({
             </div>
 
             <div className="flex items-center gap-2.5">
-              <span className="w-3 h-3 rounded-full bg-ocean-cyan shadow-glow-cyan-sm shrink-0"></span>
-              <span className="text-[11px]">ARGO Floats (0–2,000m Subsurface Cast)</span>
+              <span className="w-3 h-3 rounded-full border border-white shrink-0" style={{ backgroundColor: '#06b6d4', boxShadow: '0 0 10px #06b6d4' }}></span>
+              <span className="text-[11px] font-medium">ARGO Floats (0–2,000m Subsurface Cast)</span>
             </div>
 
             <div className="flex items-center gap-2.5">
-              <span className="w-3 h-3 rounded-full bg-amber-400 border border-amber-300 shadow-sm shrink-0"></span>
-              <span className="text-[11px]">PFZ Opportunity Zones (Thermal Fronts)</span>
+              <span className="w-3 h-3 rounded-full border border-amber-200 shrink-0" style={{ backgroundColor: '#f59e0b', boxShadow: '0 0 8px #f59e0b' }}></span>
+              <span className="text-[11px] font-medium">PFZ Opportunity Zones (Thermal Fronts)</span>
             </div>
 
             <div className="flex items-center gap-2.5">
-              <span className="w-3.5 h-1.5 bg-yellow-400 border border-yellow-300 rounded shrink-0"></span>
-              <span className="text-[11px]">Coastal Front Vector Polylines (Upwelling)</span>
+              <span className="w-3.5 h-3.5 rounded-full border border-sky-300 flex items-center justify-center shrink-0 text-[8px]" style={{ backgroundColor: '#0369a1', boxShadow: '0 0 8px #38bdf8' }}>⚓</span>
+              <span className="text-[11px] font-medium">150+ Indian Harbours & Fish Landing Centers</span>
             </div>
 
             <div className="flex items-center gap-2.5">
-              <span className="w-3 h-3 rounded-full bg-sky-500 border border-sky-300 shadow-sm shrink-0"></span>
-              <span className="text-[11px]">150+ Indian Harbours & Fish Landing Centers</span>
+              <span className="w-3.5 h-3.5 rounded-full border border-emerald-300 flex items-center justify-center shrink-0 text-[8px]" style={{ backgroundColor: '#064e3b', boxShadow: '0 0 8px #10b981' }}>⛵</span>
+              <span className="text-[11px] font-medium">Live Fishing Vessel (NavIC GPS Tracker)</span>
             </div>
 
             <div className="flex items-center gap-2.5">
-              <span className="w-3 h-3 rounded-full bg-emerald-400 border border-emerald-300 shadow-sm shrink-0"></span>
-              <span className="text-[11px]">Live Fishing Vessel (NavIC GPS Tracker)</span>
+              <span className="w-3 h-3 rounded-full border border-rose-300 shrink-0" style={{ backgroundColor: '#ef4444', boxShadow: '0 0 8px #ef4444' }}></span>
+              <span className="text-[11px] font-medium">NOAA Satellite SST Thermal Heatmap</span>
             </div>
 
             <div className="flex items-center gap-2.5">
-              <span className="w-3 h-3 rounded-full bg-rose-500 shadow-sm shrink-0"></span>
-              <span className="text-[11px]">NOAA Satellite SST Thermal Heatmap</span>
-            </div>
-
-            <div className="flex items-center gap-2.5">
-              <span className="w-3 h-3 rounded-full bg-teal-400 shadow-sm shrink-0"></span>
-              <span className="text-[11px]">NASA Chlorophyll-a Ocean Color</span>
+              <span className="w-3 h-3 rounded-full border border-teal-300 shrink-0" style={{ backgroundColor: '#10b981', boxShadow: '0 0 8px #10b981' }}></span>
+              <span className="text-[11px] font-medium">NASA Chlorophyll-a Ocean Color</span>
             </div>
 
             <div className="pt-1.5 border-t border-slate-800 text-[10px] text-cyan-300/90 font-mono leading-tight">
