@@ -5,9 +5,9 @@ import { OceanMap } from './components/viz/OceanMap';
 import { DepthChart } from './components/viz/DepthChart';
 import { OceanLens3D } from './components/viz/OceanLens3D';
 import { AnomalyRadar } from './components/anomaly/AnomalyRadar';
-import { AdoptFloat } from './components/education/AdoptFloat';
 import { WhatsAppSimulator } from './components/whatsapp/WhatsAppSimulator';
 import { ArchitecturePipeline } from './components/pipeline/ArchitecturePipeline';
+import { TelegramModal } from './components/common/TelegramModal';
 import { OceanAtmosphere } from './components/common/OceanAtmosphere';
 import { HudCornerBrackets } from './components/common/HudCornerBrackets';
 import { 
@@ -51,6 +51,7 @@ export default function App() {
   // Chat Conversation State
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isChatLoading, setIsChatLoading] = useState<boolean>(false);
+  const [isTelegramModalOpen, setIsTelegramModalOpen] = useState<boolean>(false);
 
   // Smart Stage Visualization State (Chat View)
   const [stageView, setStageView] = useState<'map' | 'chart' | '3d'>('map');
@@ -276,6 +277,13 @@ export default function App() {
           }
         }}
         backendOnline={backendOnline}
+        onOpenTelegramModal={() => setIsTelegramModalOpen(true)}
+      />
+
+      {/* Live Telegram Bot QR Modal for Judges & Field Demos */}
+      <TelegramModal
+        isOpen={isTelegramModalOpen}
+        onClose={() => setIsTelegramModalOpen(false)}
       />
 
       {/* Main Interactive Workspace */}
@@ -599,21 +607,7 @@ export default function App() {
           </div>
         )}
 
-        {/* VIEW 5: CLASSROOM / ADOPT A FLOAT */}
-        {currentMode === 'classroom' && (
-          <div className="flex-1 min-h-[580px] h-[calc(100vh-80px)] flex flex-col">
-            <AdoptFloat
-              floats={floats}
-              onSelectFloatForMap={(fId) => {
-                handleSelectFloat(fId);
-                setCurrentMode('map');
-                setExplorerView('map');
-              }}
-            />
-          </div>
-        )}
-
-        {/* VIEW 6: SYSTEM ARCHITECTURE PIPELINE */}
+        {/* VIEW 5: SYSTEM ARCHITECTURE PIPELINE */}
         {currentMode === 'pipeline' && (
           <div className="flex-1 min-h-[580px] h-[calc(100vh-80px)] flex flex-col">
             <ArchitecturePipeline />

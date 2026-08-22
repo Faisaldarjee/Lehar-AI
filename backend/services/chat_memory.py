@@ -12,11 +12,13 @@ from .species_dict import detect_species_in_query
 
 
 KNOWN_COASTAL_LOCATIONS = [
-    "mumbai", "bombay", "maharashtra", "konkan", "goa", "ratnagiri", "alibaug",
-    "kochi", "cochin", "kerala", "lakshadweep", "malabar", "mangalore", "karnataka",
-    "chennai", "madras", "tamil nadu", "tuticorin", "thoothukudi", "coromandel",
-    "visakhapatnam", "vizag", "andhra", "odisha", "paradip", "bengal", "west bengal",
-    "kolkata", "hooghly", "gujarat", "porbandar", "saurashtra", "arabian sea", "bay of bengal"
+    "mumbai", "bombay", "maharashtra", "konkan", "goa", "ratnagiri", "alibaug", "मुंबई", "मुम्बई", "महाराष्ट्र", "कोकण", "रत्नागिरी",
+    "kochi", "cochin", "kerala", "lakshadweep", "malabar", "mangalore", "karnataka", "कोच्चि", "केरल", "കൊച്ചി", "കേരളം",
+    "chennai", "madras", "tamil nadu", "tuticorin", "thoothukudi", "coromandel", "चेन्नई", "तमिलनाडु", "சென்னை", "தமிழ்நாடு",
+    "visakhapatnam", "vizag", "andhra", "odisha", "paradip", "विशाखापट्टनम", "वाइज़ैग", "आंध्र", "ओडिशा", "విశాఖపట్నం", "ఆంధ్ర", "ଓଡ଼ିଶା",
+    "bengal", "west bengal", "kolkata", "hooghly", "digha", "sundarbans", "बंगाल", "पश्चिम बंगाल", "कोलकाता", "বাঙলা", "কলকাতা", "দীঘা",
+    "gujarat", "porbandar", "veraval", "saurashtra", "okha", "गुजरात", "वेरावल", "પોરબંદર", "ગુજરાત", "વેરાવળ",
+    "arabian sea", "bay of bengal", "अरब सागर", "बंगाल की खाड़ी"
 ]
 
 

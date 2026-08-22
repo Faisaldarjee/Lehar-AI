@@ -10,7 +10,8 @@ import os
 
 from .services.db import init_db
 from .services.anomaly_detector import run_anomaly_scan
-from .routers import chat, data, anomaly, pfz, satellite, guardian
+from .services.telegram_bot import start_telegram_bot_task, stop_telegram_bot_task
+from .routers import chat, data, anomaly, pfz, satellite, guardian, telegram
 
 
 @asynccontextmanager
@@ -21,9 +22,12 @@ async def lifespan(app: FastAPI):
     # Populate alerts exclusively from locally ingested Argo observations.
     print("[Lehar AI] Calculating evidence-based anomaly observations...")
     run_anomaly_scan(reset_existing=True, max_profiles=200)
+    print("[Lehar AI] Launching Telegram Bot Gateway (@LeharAIBot)...")
+    start_telegram_bot_task()
     print("[Lehar AI] Backend ready!")
     yield
     print("[Lehar AI] Shutting down...")
+    stop_telegram_bot_task()
 
 
 app = FastAPI(
@@ -58,6 +62,7 @@ app.include_router(anomaly.router)
 app.include_router(pfz.router)
 app.include_router(satellite.router)
 app.include_router(guardian.router)
+app.include_router(telegram.router)
 
 
 @app.get("/")

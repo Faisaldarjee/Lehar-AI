@@ -74,14 +74,19 @@ def detect_script_language(text: str) -> Dict[str, Any]:
     # 1. Native Indic Scripts
     if devanagari_count >= 2:
         # Check for Marathi specific vocabulary in Devanagari
-        marathi_markers = {"मासे", "कुठे", "मिळतील", "सांगा", "आहेत", "कशी", "कसा", "करावे", "करा", "ताशी", "किनारपट्टी", "समुद्रात", "पाणी"}
+        marathi_markers = {
+            "मला", "माझे", "आम्हाला", "चांगली", "चांगले", "कुठे", "मिळतील", "मिळेल",
+            "मिडेल", "मासे", "मच्छी", "सांगा", "आहेत", "कशी", "कसा", "करावे", "करा",
+            "ताशी", "किनारपट्टी", "समुद्रात", "पाणी", "होईल", "येईल", "नाही", "आहे",
+            "खोली", "जास्त", "कमी", "बघा", "दाखवा"
+        }
         if any(marker in text for marker in marathi_markers):
             return {
                 "code": "mr",
                 "label": "मराठी (Marathi)",
                 "script": "Devanagari",
                 "tts_locale": "mr-IN",
-                "system_instruction": "The user's query was in Marathi (Devanagari script). Reply entirely in natural, fluent Marathi."
+                "system_instruction": "The user's query was in Marathi (Devanagari script). Reply entirely in natural, fluent Marathi in Devanagari script."
             }
         return {
             "code": "hi",

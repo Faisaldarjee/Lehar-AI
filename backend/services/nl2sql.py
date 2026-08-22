@@ -18,6 +18,7 @@ from .rag_service import classify_query_intent, retrieve_ocean_knowledge
 from .species_dict import detect_species_in_query, evaluate_species_viability
 from .chat_memory import resolve_query_context, update_session_memory
 from .lang_detect import detect_script_language
+from .marine_weather import get_live_marine_weather, format_marine_weather_response
 
 # Load from backend/.env
 backend_env = Path(__file__).resolve().parent.parent / '.env'
@@ -37,6 +38,108 @@ def get_groq_client():
     if not api_key or api_key == "your_groq_api_key_here":
         raise ValueError("GROQ_API_KEY is not set in backend/.env file. Please add your Groq API key.")
     return Groq(api_key=api_key)
+COASTAL_BOUNDS = {
+    "bengal": {
+        "lat_min": 11.0, "lat_max": 22.5, "lon_min": 80.0, "lon_max": 91.0,
+        "name": "West Bengal & North Bay of Bengal",
+        "species_en": "Hilsa (Ilish / Tenualosa ilisha), Bhetki (Barramundi), Silver Pomfret (Chandi), and Tiger Prawns",
+        "species_hi": "हिल्सा (इलीश), भेटकी (Barramundi), सिल्वर पापलेट और टाइगर प्रॉन्स",
+        "species_mr": "हिल्सा (इलीश), भेटकी, पापलेट आणि कोळंबी",
+        "species_bn": "ইলিশ (Hilsa), ভেটকি, পমফ্রেট এবং বাগদা চিংড়ি",
+        "depth": "5m - 35m",
+        "keywords": ["bengal", "west bengal", "kolkata", "digha", "sundarbans", "hooghly", "baangla", "বাঙলা", "কলকাতা", "দীঘা", "সুন্দরবন", "ইলিশ", "बंगाल", "कोलकाता"]
+    },
+    "mumbai": {
+        "lat_min": 14.0, "lat_max": 20.5, "lon_min": 65.0, "lon_max": 73.8,
+        "name": "Mumbai & Konkan Coast",
+        "species_en": "Surmai (King Mackerel), Bangda (Indian Mackerel), Bombil (Bombay Duck), and Paplet (Silver Pomfret)",
+        "species_hi": "सुरमई (King Mackerel), बांगड़ा (Indian Mackerel), पापलेट (Pomfret) और बोंबिल (Bombay Duck)",
+        "species_mr": "सुरमई (King Mackerel), बांगडा (Mackerel), पापलेट (Pomfret) आणि बोंबील (Bombay Duck)",
+        "species_bn": "সুরমাই, ভারতীয় ম্যাকেরেল, পমফ্রেট এবং বোম্বে ডাক",
+        "depth": "10m - 45m",
+        "keywords": ["mumbai", "bombay", "sassoon", "versova", "alibaug", "मुंबई", "मुम्बई", "बॉम्बे", "कोंकण", "konkan"]
+    },
+    "maharashtra": {
+        "lat_min": 14.0, "lat_max": 20.5, "lon_min": 65.0, "lon_max": 73.8,
+        "name": "Maharashtra & Konkan Coast",
+        "species_en": "Surmai, Bangda, Bombil, Paplet, and Yellowfin Tuna",
+        "species_hi": "सुरमई, बांगड़ा, बोंबिल, पापलेट और टूना",
+        "species_mr": "सुरमई, बांगडा, बोंबील, पापलेट आणि टुना मासे",
+        "species_bn": "সুরমাই, ম্যাকেরেল, পমফ্রেট এবং টুনা",
+        "depth": "15m - 50m",
+        "keywords": ["maharashtra", "konkan", "ratnagiri", "malvan", "sindhudurg", "महाराष्ट्र", "कोकण", "रत्नागिरी", "मालवण", "मासे", "मच्छी"]
+    },
+    "kerala": {
+        "lat_min": 6.0, "lat_max": 13.5, "lon_min": 71.0, "lon_max": 77.5,
+        "name": "Kerala Coast & Malabar",
+        "species_en": "Mathi (Oil Sardine), Ayala (Indian Mackerel), Kera (Yellowfin Tuna), and Karimeen",
+        "species_hi": "मथी (ऑयल सार्डिन), अयला (मैकेरल), केरा (टूना) और करीमीन",
+        "species_mr": "मथी, अयला, केरा (टुना) आणि करीमीन",
+        "species_ml": "മത്തി (ചാള), അയല, കേര (ചൂര), കരിമീൻ",
+        "depth": "10m - 50m",
+        "keywords": ["kerala", "kochi", "cochin", "malabar", "calicut", "trivandrum", "munambam", "കേരളം", "കൊച്ചി", "മത്തി", "അയല", "ചൂര", "कोच्चि", "केरल"]
+    },
+    "tamil_nadu": {
+        "lat_min": 8.0, "lat_max": 15.0, "lon_min": 78.0, "lon_max": 85.0,
+        "name": "Tamil Nadu & Coromandel Coast",
+        "species_en": "Vanjaram (King Seer Fish), Nethili (Anchovy), Soorai (Tuna), and Sankara (Red Snapper)",
+        "species_hi": "वंजारम (सीर फिश), नेथिली, सूराई (टूना) और संकरा",
+        "species_mr": "वंजारम, नेथिली, सुराई (टुना)",
+        "species_ta": "வஞ்சிரம் (சீலா), நெத்திலி, சூரை (டூனா), சங்கரா மீன்",
+        "depth": "15m - 50m",
+        "keywords": ["chennai", "tamil nadu", "madras", "tuticorin", "thoothukudi", "rameshwaram", "coromandel", "சென்னை", "தமிழ்நாடு", "தூத்துக்குடி", "வஞ்சிரம்", "நெத்திலி", "चेन्नई", "तमिलनाडु"]
+    },
+    "andhra": {
+        "lat_min": 13.5, "lat_max": 19.5, "lon_min": 80.0, "lon_max": 88.0,
+        "name": "Andhra Pradesh Coast",
+        "species_en": "Vanjaram (Seer Fish), Pomfret, Ribbonfish, Tuna, and Tiger Prawns",
+        "species_hi": "वंजारम, पापलेट, रिबनफिश, टूना और टाइगर प्रॉन्स",
+        "species_te": "వంజరం, చందువ (పాంఫ్రెట్), సావళ్లు, సూర చేపలు",
+        "depth": "15m - 50m",
+        "keywords": ["vizag", "visakhapatnam", "andhra", "kakinada", "machilipatnam", "విశాఖపట్నం", "ఆంధ్ర", "వంజరం", "చేపలు", "विशाखापट्टनम", "वाइज़ैग"]
+    },
+    "gujarat": {
+        "lat_min": 19.0, "lat_max": 23.5, "lon_min": 63.5, "lon_max": 72.5,
+        "name": "Gujarat Coast (Veraval / Porbandar)",
+        "species_en": "Ribbon Fish, Cuttlefish / Squid, Silver Pomfret, and Ghol (Croaker)",
+        "species_hi": "रिबन फिश, कटलफिश/स्क्विड, पापलेट और घोल (Croaker)",
+        "species_gu": "રીબન ફિશ, કટલફિશ, પાપલેટ અને ઘોલ માછલી",
+        "depth": "15m - 60m",
+        "keywords": ["gujarat", "veraval", "porbandar", "saurashtra", "okha", "kutch", "ગુજરાત", "વેરાવળ", "પોરબંદર", "गुजरात", "वेरावल"]
+    },
+    "odisha": {
+        "lat_min": 18.5, "lat_max": 21.8, "lon_min": 84.5, "lon_max": 88.5,
+        "name": "Odisha Coast (Paradip / Puri)",
+        "species_en": "Hilsa (Ilish), Silver Pomfret, Ribbonfish, and Prawns",
+        "species_hi": "हिल्सा, पापलेट, रिबनफिश और झींगा",
+        "depth": "10m - 40m",
+        "keywords": ["odisha", "paradip", "puri", "chandipur", "gopalpur", "ଓଡ଼ିଶା", "ପାରାଦ୍ୱୀପ", "ओडिशा"]
+    }
+}
+
+
+def detect_coastal_sector(query: str, lang_code: str = "en") -> dict | None:
+    """Detects target coastal geographical sector from query tokens or language defaults."""
+    q_low = query.lower()
+    for key, sector in COASTAL_BOUNDS.items():
+        if any(kw.lower() in q_low for kw in sector["keywords"]):
+            return sector
+
+    # Regional language defaults if no explicit city/state name mentioned
+    if lang_code == "mr":
+        return COASTAL_BOUNDS["maharashtra"]
+    elif lang_code == "ta":
+        return COASTAL_BOUNDS["tamil_nadu"]
+    elif lang_code == "te":
+        return COASTAL_BOUNDS["andhra"]
+    elif lang_code == "bn":
+        return COASTAL_BOUNDS["bengal"]
+    elif lang_code == "gu":
+        return COASTAL_BOUNDS["gujarat"]
+    elif lang_code == "ml":
+        return COASTAL_BOUNDS["kerala"]
+
+    return None
 
 
 SYSTEM_PROMPT = """You are Lehar AI SQL Assistant — an expert at converting natural language questions about ocean data into safe, read-only SQLite queries.
@@ -46,33 +149,8 @@ SYSTEM_PROMPT = """You are Lehar AI SQL Assistant — an expert at converting na
 CRITICAL RULES:
 1. ONLY generate SELECT queries. Never INSERT, UPDATE, DELETE, DROP, or ALTER.
 2. Always use proper table and column names from the schema above.
-3. NEVER USE date('now') or strict date equality:
-   Argo ocean profiling floats sample data on 10-day autonomous cycles. When the user asks about "today", "aaj", "current", "latest", "now", or "recent", NEVER filter by date('now') or date = date('now'). Instead, ALWAYS sort by `ORDER BY p.date DESC` to get the most recent recorded profiles!
-4. For coastal regions, use broad offshore sector bounding boxes:
-   - Mumbai / Maharashtra / Konkan / Goa: latitude BETWEEN 14.0 AND 22.0 AND longitude BETWEEN 64.0 AND 74.0
-   - Gujarat / Saurashtra: latitude BETWEEN 19.0 AND 24.0 AND longitude BETWEEN 65.0 AND 72.5
-   - Kochi / Kerala / Lakshadweep: latitude BETWEEN 7.0 AND 13.0 AND longitude BETWEEN 70.0 AND 78.0
-   - Chennai / Tamil Nadu: latitude BETWEEN 10.0 AND 16.0 AND longitude BETWEEN 79.0 AND 86.0
-   - Visakhapatnam / Andhra / Odisha: latitude BETWEEN 15.0 AND 21.0 AND longitude BETWEEN 80.0 AND 90.0
-   - Arabian Sea (general / West Coast): latitude BETWEEN 5.0 AND 25.0 AND longitude BETWEEN 55.0 AND 76.0
-   - Bay of Bengal (general / East Coast): latitude BETWEEN 5.0 AND 23.0 AND longitude BETWEEN 78.0 AND 95.0
-5. For fishing / machhli / PFZ / where to catch fish queries:
-   SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity
-   FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id
-   WHERE [location clause] AND m.depth <= 50
-   ORDER BY p.date DESC, m.depth ASC LIMIT 50
-6. For depth profiles, JOIN argo_profiles with argo_measurements ordered by m.depth ASC.
-7. Return ONLY the SQL query, nothing else. No explanation, no markdown.
-
-EXAMPLES:
-User: "Mumbai Mein aaj machhali kahaan pakad sakte Hain" or "Mumbai me machhli pakadne ke liye samundar kaisa hai"
-SQL: SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 14.0 AND 22.0 AND p.longitude BETWEEN 64.0 AND 74.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50
-
-User: "How many floats are in the Arabian Sea?"
-SQL: SELECT COUNT(DISTINCT float_id) as float_count FROM argo_profiles WHERE latitude BETWEEN 5.0 AND 25.0 AND longitude BETWEEN 55.0 AND 76.0
-
-User: "What is the sea temperature near Chennai?"
-SQL: SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 10.0 AND 16.0 AND p.longitude BETWEEN 79.0 AND 86.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50
+3. NEVER USE date('now') or strict date equality. Always sort by `ORDER BY p.date DESC` to get the most recent recorded profiles.
+4. Return ONLY the raw SQL query, nothing else. No explanation, no markdown code blocks.
 """
 
 
@@ -120,7 +198,7 @@ def clean_llm_response(text: str) -> str:
     """Strip markdown code blocks, reasoning think tags, and quotes."""
     cleaned = text.strip()
     if "<think>" in cleaned:
-        cleaned = re.sub(r"<think>[\s\S]*?</think>", "", cleaned).strip()
+        cleaned = re.sub(r"<think>[\s\S]*?(?:</think>|$)", "", cleaned).strip()
     if "```" in cleaned:
         cleaned = re.sub(r"```[a-zA-Z]*\n?", "", cleaned).strip()
         cleaned = cleaned.replace("```", "").strip()
@@ -129,12 +207,19 @@ def clean_llm_response(text: str) -> str:
 
 
 def generate_sql(user_query: str) -> str:
-    """Generate a safe, read-only SQL query from natural language with model fallback."""
+    """Generate a safe, read-only SQL query from natural language with model fallback and exact coastal bounds."""
+    lang_info = detect_script_language(user_query)
+    sector = detect_coastal_sector(user_query, lang_info.get("code", "en"))
+
+    # Direct high-precision sector binding if sector identified
+    if sector:
+        lat_min, lat_max = sector["lat_min"], sector["lat_max"]
+        lon_min, lon_max = sector["lon_min"], sector["lon_max"]
+        return f"SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN {lat_min} AND {lat_max} AND p.longitude BETWEEN {lon_min} AND {lon_max} AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
+
     schema_text = get_db_schema_text()
     system_prompt = SYSTEM_PROMPT.format(schema=schema_text)
-
     client = get_groq_client()
-    last_error = None
 
     for model_name in PREFERRED_MODELS:
         try:
@@ -156,21 +241,9 @@ def generate_sql(user_query: str) -> str:
                 cleaned_sql = re.sub(r"AND\s+date\([^)]+\)\s*=\s*date\('now'\)", "", cleaned_sql, flags=re.IGNORECASE)
                 cleaned_sql = re.sub(r"WHERE\s+date\([^)]+\)\s*=\s*date\('now'\)\s+AND", "WHERE", cleaned_sql, flags=re.IGNORECASE)
                 return cleaned_sql
-        except Exception as err:
-            last_error = err
+        except Exception:
             continue
 
-    # Rule-based deterministic fallback if Groq API is unavailable
-    q_low = user_query.lower()
-    if any(w in q_low for w in ["bengal", "chennai", "tamil", "vizag", "visakhapatnam", "andhra", "odisha", "kolkata", "சென்னை", "தமிழ்", "மீன்", "மச்சம்", "வங்காள", "తమిళ", "చెన్నై", "చేపలు", "বাঙলা", "কলকাতা"]):
-        return "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 10.0 AND 22.0 AND p.longitude BETWEEN 80.0 AND 92.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
-    elif any(w in q_low for w in ["kochi", "cochin", "kerala", "lakshadweep", "malabar", "കൊച്ചി", "കേരളം", "കണ്ണൂർ"]):
-        return "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 7.0 AND 14.0 AND p.longitude BETWEEN 70.0 AND 78.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
-    elif any(w in q_low for w in ["gujarat", "saurashtra", "veraval", "porbandar", "kutch", "ગુજરાત", "વેરાવળ"]):
-        return "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 19.0 AND 24.0 AND p.longitude BETWEEN 65.0 AND 72.5 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
-    elif any(w in q_low for w in ["mumbai", "bombay", "maharashtra", "konkan", "ratnagiri", "goa", "machhli", "machli", "machhali", "fishing", "मुंबई", "मासे", "मच्छी", "मछली"]):
-        return "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 14.0 AND 22.0 AND p.longitude BETWEEN 64.0 AND 74.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
-    
     return "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 5.0 AND 25.0 AND p.longitude BETWEEN 55.0 AND 80.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
 
 
@@ -178,76 +251,72 @@ def repair_and_execute_sql(sql: str, user_query: str) -> tuple[str, list[dict]]:
     """
     Safely execute SQL with multi-stage auto-repair:
     1. Direct execution
-    2. Missing alias repair (e.g. argo_profiles without 'p' or argo_measurements without 'm')
-    3. Trailing/invalid syntax repair
-    4. Deterministic sector query fallback based on keywords (Mumbai, Arabian, Bengal, etc.)
+    2. Retry with fallback sector query if 0 rows returned
     """
     try:
         results = execute_readonly_sql(sql)
-        if results:
+        if results and len(results) > 0:
             return sql, results
-    except Exception as e:
-        print(f"[NL2SQL] Initial SQL failed: {e}. Attempting auto-repair...")
+    except Exception:
+        pass
 
-    # Stage 2: Table alias fix
-    repaired_sql = sql
-    if " p." in repaired_sql and "argo_profiles p" not in repaired_sql and "argo_profiles as p" not in repaired_sql:
-        repaired_sql = re.sub(r"\bargo_profiles\b(?!\s+(?:as\s+)?p\b)", "argo_profiles p", repaired_sql, flags=re.IGNORECASE)
-    if " m." in repaired_sql and "argo_measurements m" not in repaired_sql and "argo_measurements as m" not in repaired_sql:
-        repaired_sql = re.sub(r"\bargo_measurements\b(?!\s+(?:as\s+)?m\b)", "argo_measurements m", repaired_sql, flags=re.IGNORECASE)
-    
-    # Remove strict date filters
-    repaired_sql = re.sub(r"AND\s+date\([^)]+\)\s*=\s*date\('now'\)", "", repaired_sql, flags=re.IGNORECASE)
-    repaired_sql = re.sub(r"WHERE\s+date\([^)]+\)\s*=\s*date\('now'\)\s+AND", "WHERE", repaired_sql, flags=re.IGNORECASE)
+    # If original query returned 0 rows, use detected coastal sector fallback query
+    lang_info = detect_script_language(user_query)
+    sector = detect_coastal_sector(user_query, lang_info.get("code", "en"))
+    if sector:
+        lat_min, lat_max = sector["lat_min"], sector["lat_max"]
+        lon_min, lon_max = sector["lon_min"], sector["lon_max"]
+        fallback_sql = f"SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN {lat_min} AND {lat_max} AND p.longitude BETWEEN {lon_min} AND {lon_max} AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
+        try:
+            fb_results = execute_readonly_sql(fallback_sql)
+            if fb_results:
+                return fallback_sql, fb_results
+        except Exception:
+            pass
 
-    try:
-        results = execute_readonly_sql(repaired_sql)
-        if results:
-            return repaired_sql, results
-    except Exception as e:
-        print(f"[NL2SQL] Repaired SQL failed: {e}. Falling back to canonical sector query...")
-
-    # Stage 3: Canonical Sector Fallback based on user query
-    q_low = user_query.lower()
-    if any(w in q_low for w in ["bengal", "chennai", "tamil", "vizag", "visakhapatnam", "andhra", "odisha", "kolkata", "சென்னை", "தமிழ்", "மீன்", "மச்சம்", "வங்காள", "తమిళ", "చెన్నై", "చేపలు", "বাঙলা", "কলকাতা"]):
-        canonical_sql = "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 10.0 AND 22.0 AND p.longitude BETWEEN 80.0 AND 92.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
-    elif any(w in q_low for w in ["kochi", "cochin", "kerala", "lakshadweep", "malabar", "കൊച്ചി", "കേരളം", "കണ്ണൂർ"]):
-        canonical_sql = "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 7.0 AND 14.0 AND p.longitude BETWEEN 70.0 AND 78.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
-    elif any(w in q_low for w in ["gujarat", "saurashtra", "veraval", "porbandar", "kutch", "ગુજરાત", "વેરાવળ"]):
-        canonical_sql = "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 19.0 AND 24.0 AND p.longitude BETWEEN 65.0 AND 72.5 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
-    elif any(w in q_low for w in ["mumbai", "bombay", "maharashtra", "konkan", "ratnagiri", "goa", "machhli", "machli", "machhali", "fishing", "मुंबई", "मासे", "मच्छी", "मछली"]):
-        canonical_sql = "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 14.0 AND 22.0 AND p.longitude BETWEEN 64.0 AND 74.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
-    else:
-        canonical_sql = "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 5.0 AND 25.0 AND p.longitude BETWEEN 55.0 AND 80.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
-
-    try:
-        results = execute_readonly_sql(canonical_sql)
-        return canonical_sql, results
-    except Exception as e:
-        print(f"[NL2SQL] Canonical fallback failed: {e}")
-        return canonical_sql, []
+    # Global basin fallback
+    global_sql = "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 5.0 AND 25.0 AND p.longitude BETWEEN 55.0 AND 85.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
+    return global_sql, execute_readonly_sql(global_sql)
 
 
-def generate_summary(user_query: str, sql: str, results: list[dict], language: str) -> str:
-    """Generate a clean, single-sentence natural language descriptive summary matching user language natively."""
+def generate_summary(user_query: str, sql: str, results: list[dict], language: str = "en") -> str:
+    """Format raw SQL results into a rich, species-specific answer in the user's native language."""
+    return format_answer(user_query, results, language)
+
+
+def format_answer(user_query: str, results: list[dict], language: str = "en") -> str:
+    """Format query results into rich, species-specific, practical answer in the user's exact native language."""
+    if not results:
+        return "No hydrographic data available for this query sector."
+
     lang_info = detect_script_language(user_query)
     code = lang_info.get("code", "en")
+    sector = detect_coastal_sector(user_query, code)
 
-    # Extract sector name & SST from results
+    # Compute observed SST and salinity
     temps = [float(r["temperature"]) for r in results if r.get("temperature") is not None]
-    sst_val = temps[0] if temps else 28.5
-    sst_str = f"{sst_val:.1f}°C"
+    sals = [float(r["salinity"]) for r in results if r.get("salinity") is not None]
+    avg_sst = (sum(temps) / len(temps)) if temps else 28.5
+    avg_sal = (sum(sals) / len(sals)) if sals else 35.0
+    sst_str = f"{avg_sst:.1f}°C"
+    sal_str = f"{avg_sal:.1f} PSU"
 
-    q_low = user_query.lower()
-    sector_en = "Indian Ocean"
-    if any(w in q_low for w in ["chennai", "tamil", "bengal", "சென்னை", "தமிழ்"]):
-        sector_en = "Chennai"
-    elif any(w in q_low for w in ["mumbai", "bombay", "maharashtra", "konkan", "मुंबई"]):
-        sector_en = "Mumbai"
-    elif any(w in q_low for w in ["kochi", "cochin", "kerala", "കൊച്ചി"]):
-        sector_en = "Kochi"
-    elif any(w in q_low for w in ["gujarat", "veraval", "ગુજરાત"]):
-        sector_en = "Gujarat"
+    sector_name = sector["name"] if sector else "Indian Coastal Waters"
+    species_text = sector["species_en"] if sector else "Surmai, Bangda, Pomfret, and Tuna"
+    gear_depth = sector["depth"] if sector else "10m - 45m"
+
+    if code == "hi":
+        species_text = sector.get("species_hi", species_text) if sector else "सुरमई, बांगड़ा, पापलेट और टूना"
+    elif code == "mr":
+        species_text = sector.get("species_mr", species_text) if sector else "सुरमई, बांगडा, पापलेट आणि बोंबील"
+    elif code == "bn":
+        species_text = sector.get("species_bn", species_text) if sector else "ইলিশ, ভেটকি, পমফ্রেট এবং বাগদা চিংড়ি"
+    elif code == "ta":
+        species_text = sector.get("species_ta", species_text) if sector else "வஞ்சிரம், நெத்திலி, சூரை மற்றும் சங்கரா"
+    elif code == "te":
+        species_text = sector.get("species_te", species_text) if sector else "వంజరం, చందువ, సావళ్లు మరియు సూర చేపలు"
+    elif code == "gu":
+        species_text = sector.get("species_gu", species_text) if sector else "રીબન ફિશ, કટલફિશ, પાપલેટ અને ઘોલ"
 
     results_preview = json.dumps(results[:5], indent=2, default=str)
 
@@ -255,23 +324,26 @@ def generate_summary(user_query: str, sql: str, results: list[dict], language: s
         client = get_groq_client()
         lang_instruction = lang_info["system_instruction"]
 
+        prompt_context = f"""You are Lehar AI — India's premier Conversational Marine Intelligence Assistant developed for INCOIS & Ministry of Earth Sciences (SIH26040).
+
+USER QUESTION: {user_query}
+TARGET COASTAL SECTOR: {sector_name}
+PRIMARY COMMERCIAL SPECIES IN THIS SECTOR: {species_text}
+RECOMMENDED FISHING DEPTH: {gear_depth}
+OBSERVED IN-SITU DATA: Sea Surface Temperature = {sst_str}, Salinity = {sal_str}
+
+CRITICAL RULES:
+1. {lang_instruction}
+2. DIRECTLY answer the user's specific practical question! If they ask what fish are found or where to fish, explicitly name the local species ({species_text}), the sea temperature ({sst_str}), and the gear depth ({gear_depth}).
+3. Keep it punchy, practical, and highly informative (2 to 3 natural sentences).
+4. Output ONLY the response in the user's requested language/script. No quotes, no markdown headers."""
+
         for model_name in PREFERRED_MODELS:
             try:
                 chat_completion = client.chat.completions.create(
                     messages=[
-                        {
-                            "role": "system",
-                            "content": f"""You are Lehar AI — India's AI Ocean Assistant developed for INCOIS & SIH 2026.
-Output ONLY a single, concise natural sentence (max 25 words) summarizing the ocean state.
-CRITICAL RULES:
-1. {lang_instruction}
-2. Focus on qualitative ocean state: thermal stability, salinity, water column, and fishing conditions.
-3. Output ONLY the 1 sentence. No bullet points, no markdown, no quotes, no extra notes."""
-                        },
-                        {
-                            "role": "user",
-                            "content": f"User Query: {user_query}\n\nSQL Results ({len(results)} rows sample):\n{results_preview}"
-                        }
+                        {"role": "system", "content": prompt_context},
+                        {"role": "user", "content": f"Answer the user query concisely based on this in-situ data:\n{results_preview}"}
                     ],
                     model=model_name,
                     temperature=0.2,
@@ -286,29 +358,25 @@ CRITICAL RULES:
     except Exception:
         pass
 
-    # High-fidelity native offline templates for all Indian coastal languages
-    if code == "ta":
-        if "chennai" in sector_en.lower():
-            return f"சென்னை கடல் பகுதியில் மேற்பரப்பு வெப்பநிலை {sst_str} மற்றும் மீன்பிடிக்க சாதகமான ARGO விவரங்கள் வெற்றிகரமாக பெறப்பட்டன."
-        return f"தமிழ்நாடு மற்றும் வங்காள விரிகுடா பகுதியில் மேற்பரப்பு வெப்பநிலை {sst_str} மற்றும் தகுந்த ARGO விவரங்கள் பெறப்பட்டன."
-    elif code == "te":
-        return f"ఈ తీర ప్రాంతంలో సముద్ర ఉపరితల ఉష్ణోగ్రత {sst_str} మరియు చేపల వేటకు అనుకూలమైన ARGO డేటా విజయవంతంగా పొందబడింది."
-    elif code == "hi":
-        return f"{sector_en} तटीय क्षेत्र में समुद्र की सतह का तापमान {sst_str} है और मछली पकड़ने के अनुकूल ARGO डेटा प्राप्त हुआ।"
-    elif code == "hi-latin":
-        return f"{sector_en} coastal kshetra me samundar ka taapman {sst_str} hai aur machhli pakadne ke anukool ARGO data prapt hua."
+    # High-fidelity native offline fallback templates for each coastal language
+    if code == "hi":
+        return f"{sector_name} क्षेत्र में समुद्र की सतह का तापमान {sst_str} और लवणता {sal_str} है। यहाँ {species_text} {gear_depth} गहराई में पकड़ने के लिए सबसे अनुकूल स्थिति है।"
     elif code == "mr":
-        return f"{sector_en} किनारपट्टी भागात समुद्राचे तापमान {sst_str} असून मासेमारीसाठी अनुकूल ARGO डेटा यशस्वीरित्या प्राप्त झाला आहे."
-    elif code == "gu":
-        return f"{sector_en} દરિયાકાંઠાના વિસ્તારમાં સપાટીનું તાપમાન {sst_str} અને માછીમારી માટે અનુકૂળ ARGO ડેટા સફળતાપૂર્વક મળ્યો છે."
+        return f"{sector_name} किनारपट्टी भागात समुद्राचे तापमान {sst_str} असून {species_text} पकडण्यासाठी {gear_depth} खोलीवर उत्तम अनुकूल परिस्थिती आहे."
     elif code == "bn":
-        return f"{sector_en} উপকূলীয় অঞ্চলে সমুদ্রের পৃষ্ঠের তাপমাত্রা {sst_str} এবং মাছ ধরার জন্য অনুকূল ARGO তথ্য সফলভাবে পাওয়া গেছে।"
+        return f"{sector_name} উপকূলীয় অঞ্চলে সমুদ্রের তাপমাত্রা {sst_str} এবং {species_text} ধরার জন্য {gear_depth} গভীরতায় চমৎকার অনুকূল পরিবেশ রয়েছে।"
+    elif code == "ta":
+        return f"{sector_name} பகுதியில் கடல் மேற்பரப்பு வெப்பநிலை {sst_str} ஆக உள்ளது. இங்கு {species_text} பிடிக்க {gear_depth} ஆழத்தில் மிகவும் சாதகமான சூழல் நிலவுகிறது."
+    elif code == "te":
+        return f"{sector_name} తీర ప్రాంతంలో సముద్ర ఉష్ణోగ్రత {sst_str} గా ఉంది. ఇక్కడ {species_text} వేటకు {gear_depth} లోతులో అత్యంత అనుకూలమైన పరిస్థితులు ఉన్నాయి."
+    elif code == "gu":
+        return f"{sector_name} દરિયાકાંઠાના વિસ્તારમાં સપાટીનું તાપમાન {sst_str} છે અને {species_text} પકડવા માટે {gear_depth} ઊંડાઈએ ઉત્તમ અનુકૂળ સ્થિતિ છે."
     elif code == "ml":
-        return f"{sector_en} തീരദേശ മേഖലയിലെ സമുദ്രോപരിതല താപനില {sst_str} കൂടാതെ മത്സ്യബന്ധനത്തിന് അനുയോജ്യമായ ARGO വിവരങ്ങൾ ലഭ്യമായി."
+        return f"{sector_name} തീരദേശ മേഖലയിലെ സമുദ്രോപരിതല താപനില {sst_str} കൂടാതെ {species_text} പിടിക്കാൻ {gear_depth} ആഴത്തിൽ അനുകൂല സാഹചര്യമാണ്."
     elif code == "kn":
-        return f"{sector_en} ಕರಾವಳಿ ಪ್ರದೇಶದಲ್ಲಿ ಸಮುದ್ರದ ತಾಪಮಾನ {sst_str} ಮತ್ತು ಮೀನುಗಾರಿಕೆಗೆ ಸೂಕ್ತವಾದ ARGO ವಿವರಗಳು ಯಶಸ್ವಿಯಾಗಿ ಲಭ್ಯವಾಗಿವೆ."
+        return f"{sector_name} ಕರಾವಳಿ ಪ್ರದೇಶದಲ್ಲಿ ಸಮುದ್ರದ ತಾಪಮಾನ {sst_str} ಮತ್ತು {species_text} ಹಿಡಿಯಲು {gear_depth} ಆಳದಲ್ಲಿ ಉತ್ತಮ ಪರಿಸ್ಥಿತಿ ಇದೆ."
     
-    return f"Retrieved {len(results)} ARGO hydrographic measurements near {sector_en} with optimal thermal stability ({sst_str})."
+    return f"In {sector_name}, the sea surface temperature is {sst_str} with optimal conditions for {species_text} at depths of {gear_depth}."
 
 
 def compute_structured_stats(results: list[dict], user_query: str) -> tuple[dict | None, list[dict], int]:
@@ -632,6 +700,55 @@ async def process_chat_query(
         lang_meta = detect_script_language(resolved_query)
         species = detect_species_in_query(resolved_query)
         intent = classify_query_intent(resolved_query)
+
+        # =========================================================================
+        # ROUTE 0: LIVE MARINE WEATHER, HYDRODYNAMICS & SAFETY DECISION ENGINE
+        # =========================================================================
+        if intent == "marine_weather_safety":
+            sector = detect_coastal_sector(resolved_query, lang_meta.get("code", "en"))
+            sector_name = sector["name"] if sector else "Indian Coastal Waters"
+            lat = (sector["lat_min"] + sector["lat_max"]) / 2.0 if sector else 18.9
+            lon = (sector["lon_min"] + sector["lon_max"]) / 2.0 if sector else 72.8
+
+            weather = get_live_marine_weather(lat, lon)
+            resp_data = format_marine_weather_response(
+                weather=weather,
+                sector_name=sector_name,
+                user_query=resolved_query,
+                lang_code=lang_meta.get("code", "en")
+            )
+
+            map_markers = [{
+                "lat": round(lat, 4),
+                "lon": round(lon, 4),
+                "float_id": "METEO-BUOY",
+                "date": "Live Wave Dynamics",
+                "label": f"{sector_name} Marine State: {weather['wave_height_m']}m Waves ({weather['safety_status']})"
+            }]
+
+            update_session_memory(
+                session_id=session_id,
+                user_query=user_query,
+                bot_summary=resp_data["answer"]
+            )
+
+            return {
+                "summary": resp_data["summary"],
+                "answer": resp_data["answer"],
+                "hero_stat": resp_data["hero_stat"],
+                "stats": resp_data["stats"],
+                "reading_count": 1,
+                "sql": None,
+                "data": [weather],
+                "chart": None,
+                "map_markers": map_markers,
+                "query_route": "marine_weather_safety",
+                "species_detected": None,
+                "knowledge_sources": ["INCOIS Ocean State Forecast", "Open-Meteo High-Res ECMWF Waves"],
+                "detected_language": lang_meta,
+                "data_sources": ["Open-Meteo Marine API", "INCOIS Wave Climatology", "IMD Coastal Safety"],
+                "error": None
+            }
 
         # =========================================================================
         # ROUTE A: PURE OCEAN SCIENCE RAG (Conceptual / Policy / Sensor Questions)

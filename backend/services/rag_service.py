@@ -258,11 +258,18 @@ def retrieve_ocean_knowledge(query: str, top_k: int = 2) -> list[dict[str, Any]]
 def classify_query_intent(query: str) -> str:
     """
     Classify whether the query requires:
-    1. 'ocean_science_rag': Conceptual, definitions, mechanisms, INCOIS policies
-    2. 'sql_data': Numerical ARGO float data (SST, depth cast, float counts)
-    3. 'hybrid': Both data and conceptual explanations
+    1. 'marine_weather_safety': Wave height, wind, swell, storm, safe to sail, Go/No-Go
+    2. 'ocean_science_rag': Conceptual, definitions, mechanisms, INCOIS policies
+    3. 'sql_data': Numerical ARGO float data (SST, depth cast, float counts)
+    4. 'hybrid': Both data and conceptual explanations
     """
     lowered = query.lower()
+
+    weather_triggers = [
+        "weather", "wave", "waves", "swell", "wind", "storm", "cyclone", "gust", "safe to sail",
+        "safe for fishing", "is it safe", "safe hai", "kaisa hai weather", "mausam", "havaman", "hawa",
+        "lahare", "lehar", "toofan", "rough sea", "मौसम", "हवामान", "लहरें", "हवा", "तूफान", "सुरक्षित", "सावधानी", "लाटा"
+    ]
 
     rag_triggers = [
         "what is", "explain", "how does", "why does", "define", "meaning of",
@@ -276,6 +283,9 @@ def classify_query_intent(query: str) -> str:
         "temperature near", "latest float", "floats in", "coordinates", "today", "aaj",
         "machhli kahaan", "fishing spot", "where to catch", "sst near"
     ]
+
+    if any(trigger in lowered for trigger in weather_triggers):
+        return "marine_weather_safety"
 
     has_rag = any(trigger in lowered for trigger in rag_triggers)
     has_sql = any(trigger in lowered for trigger in sql_triggers)

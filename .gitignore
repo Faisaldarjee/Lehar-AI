@@ -27,9 +27,9 @@ backend/data/*.db-journal
 *.env
 *.env.*
 !*.env.example
-.agents/mcp_config.json
 
-# IDE & OS Metadata
+# Custom IDE Agents & Metadata
+.agents/
 .vscode/*
 !.vscode/extensions.json
 .idea/

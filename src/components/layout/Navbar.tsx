@@ -3,12 +3,12 @@ import {
   MessageSquare,
   Compass,
   Radar,
-  GraduationCap,
   ChevronDown,
   Smartphone,
   GitBranch,
   Sparkles,
-  Activity
+  Activity,
+  Send
 } from 'lucide-react';
 import type { AppMode } from '../../types';
 
@@ -16,11 +16,13 @@ interface NavbarProps {
   currentMode: AppMode;
   onSelectMode: (mode: AppMode) => void;
   backendOnline?: boolean;
+  onOpenTelegramModal?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentMode,
   onSelectMode,
+  onOpenTelegramModal,
 }) => {
   const [demoOpen, setDemoOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -44,29 +46,30 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const demoItems = [
     {
+      id: 'telegram' as AppMode,
+      label: 'Telegram Live Bot',
+      desc: 'Scan QR & test live @LeharAIBot on smartphone',
+      tag: 'Live Phone Demo',
+      icon: Send,
+      isModal: true,
+    },
+    {
       id: 'whatsapp' as AppMode,
       label: 'WhatsApp Bot',
       desc: 'Vernacular voice & PFZ delivery for coastal fishermen',
       tag: 'Field Delivery',
-      icon: Smartphone
-    },
-    {
-      id: 'classroom' as AppMode,
-      label: 'Classroom (NEP 2020)',
-      desc: 'Adopt an ARGO Float & interactive ocean science quizzes',
-      tag: 'Education',
-      icon: GraduationCap
+      icon: Smartphone,
     },
     {
       id: 'pipeline' as AppMode,
       label: 'System Architecture',
       desc: '4-layer dataflow, NetCDF ingestion & Groq benchmarks',
       tag: 'For Judges',
-      icon: GitBranch
+      icon: GitBranch,
     },
   ];
 
-  const activeDemo = demoItems.find((d) => d.id === currentMode);
+  const activeDemo = demoItems.find((d) => d.id === currentMode && !d.isModal);
   const isDemoActive = Boolean(activeDemo);
 
   return (
@@ -133,12 +136,12 @@ export const Navbar: React.FC<NavbarProps> = ({
           })}
         </nav>
 
-        {/* Right Section: Offline Edge Badge & Demonstrators Dropdown */}
+        {/* Right Section: Offline Readiness Badge & Demonstrators Dropdown */}
         <div className="flex items-center gap-2.5 shrink-0">
 
           {/* Real-time Offline Edge Readiness Badge */}
           <div
-            className="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-teal-950/80 border border-teal-500/40 text-[11px] font-mono text-teal-300 shadow-sm select-none"
+            className="hidden lg:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-teal-950/80 border border-teal-500/40 text-[11px] font-mono text-teal-300 shadow-sm select-none"
             title="Lehar Edge Active: Local SQLite In-Situ DB + Cached NOAA Satellite Snapshot. 100% Offline Capable."
           >
             <span className="w-2 h-2 rounded-full bg-teal-400 shadow-glow-cyan-sm animate-pulse shrink-0" />
@@ -160,7 +163,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${demoOpen ? 'rotate-180 text-cyan-400' : 'text-slate-400'}`} />
             </button>
 
-            {/* Dropdown Popover (100% Solid Deep Navy Opaque Background) */}
+            {/* Dropdown Popover */}
             {demoOpen && (
               <div className="absolute right-0 mt-2 w-72 bg-[#071322] border border-cyan-500/30 rounded-2xl shadow-2xl shadow-black p-2 z-[9999] space-y-1 animate-in fade-in slide-in-from-top-2 duration-150 ring-1 ring-cyan-500/20">
                 <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono flex items-center justify-between border-b border-slate-800 pb-1.5 mb-1">
@@ -169,13 +172,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </div>
                 {demoItems.map((item) => {
                   const Icon = item.icon;
-                  const isSelected = currentMode === item.id;
+                  const isSelected = currentMode === item.id && !item.isModal;
                   return (
                     <button
                       key={item.id}
                       type="button"
                       onClick={() => {
-                        onSelectMode(item.id);
+                        if (item.isModal && onOpenTelegramModal) {
+                          onOpenTelegramModal();
+                        } else {
+                          onSelectMode(item.id);
+                        }
                         setDemoOpen(false);
                       }}
                       className={`w-full flex items-start space-x-2.5 p-2 rounded-xl text-left transition-all duration-150 cursor-pointer ${isSelected
