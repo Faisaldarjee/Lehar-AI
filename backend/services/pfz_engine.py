@@ -599,3 +599,93 @@ def _generate_fused_advisory_text(
             f"Suboptimal conditions. Chlorophyll {chlorophyll:.2f} mg/m³ outside prime feeding threshold. "
             f"Location: {harbour_text}."
         )
+
+
+# =========================================================================
+# COASTAL THERMAL FRONT VECTORS & MULTI-SENSOR FRONTAL LINES
+# =========================================================================
+COASTAL_SECTOR_LINES = [
+    {
+        "id": "LINE-KONKAN-01",
+        "sector": "Maharashtra & Konkan Shelf Front",
+        "state": "Maharashtra",
+        "coordinates": [
+            [19.45, 72.35],
+            [19.12, 72.42],
+            [18.72, 72.48],
+            [17.85, 72.75],
+            [16.98, 73.02],
+            [16.05, 73.18],
+        ],
+        "depth_range": "30m - 75m",
+        "target_species": ["Surmai (King Mackerel)", "Silver Pomfret", "Bombay Duck", "Karli"],
+        "advisory": "Strong thermal gradient front at 28.2°C with high chlorophyll-a (0.88 mg/m³). Ideal for mechanized purse-seine and gillnets.",
+    },
+    {
+        "id": "LINE-SAURASHTRA-02",
+        "sector": "Gujarat & Saurashtra Upwelling Ridge",
+        "state": "Gujarat",
+        "coordinates": [
+            [22.45, 68.65],
+            [21.65, 69.15],
+            [20.90, 69.85],
+            [20.72, 70.65],
+            [20.85, 71.20],
+        ],
+        "depth_range": "40m - 90m",
+        "target_species": ["Ribbonfish", "Croakers (Ghol)", "Squids", "Yellowfin Tuna"],
+        "advisory": "Active cold-core upwelling eddy along Saurashtra shelf edge. High concentration of pelagic ribbonfish & squids.",
+    },
+    {
+        "id": "LINE-MALABAR-03",
+        "sector": "Malabar & Kerala Continental Slope Front",
+        "state": "Kerala",
+        "coordinates": [
+            [12.85, 74.35],
+            [11.85, 75.05],
+            [11.15, 75.45],
+            [10.15, 75.85],
+            [9.25, 76.15],
+            [8.35, 76.65],
+        ],
+        "depth_range": "35m - 120m",
+        "target_species": ["Oil Sardine (Mathi)", "Indian Mackerel (Ayala)", "Skipjack Tuna", "Seer Fish"],
+        "advisory": "Intense coastal bloom front (Chl-a 1.12 mg/m³). Peak morning feed activity for pelagic shoals.",
+    },
+    {
+        "id": "LINE-COROMANDEL-04",
+        "sector": "Coromandel & Andhra Pelagic Convergence",
+        "state": "Tamil Nadu & AP",
+        "coordinates": [
+            [8.75, 78.45],
+            [10.75, 80.15],
+            [13.15, 80.65],
+            [15.85, 80.95],
+            [17.65, 83.55],
+        ],
+        "depth_range": "45m - 150m",
+        "target_species": ["Yellowfin Tuna", "Mahi Mahi (Dorab)", "Barracuda", "Sailfish"],
+        "advisory": "Shelf boundary current convergence line with high dissolved oxygen and thermal gradient.",
+    },
+    {
+        "id": "LINE-BENGAL-05",
+        "sector": "Northern Bay of Bengal & Odisha Delta Front",
+        "state": "Odisha & West Bengal",
+        "coordinates": [
+            [19.25, 85.25],
+            [20.30, 86.95],
+            [21.45, 87.35],
+            [21.65, 88.05],
+            [21.85, 88.65],
+        ],
+        "depth_range": "25m - 60m",
+        "target_species": ["Hilsa (Ilish)", "Bhetki (Barramundi)", "Tiger Shrimp", "Silver Pomfret"],
+        "advisory": "Nutrient-rich estuarine plume boundary from Mahanadi and Hooghly discharge. Premier zone for Hilsa shoaling.",
+    },
+]
+
+
+def get_coastal_pfz_lines() -> list[dict]:
+    """Return all coastal PFZ vector front lines."""
+    return COASTAL_SECTOR_LINES
+

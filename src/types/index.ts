@@ -117,6 +117,23 @@ export interface PFZHarbour {
   compass: string;
 }
 
+export interface PFZLine {
+  id: string;
+  sector: string;
+  state: string;
+  coordinates: [number, number][];
+  depth_range: string;
+  target_species: string[];
+  advisory: string;
+}
+
+export interface AIAnomalyImpact {
+  coral_bleaching_risk: 'Low' | 'Moderate' | 'High' | 'Severe';
+  fish_migration_shift: string;
+  yield_impact_pct: string;
+  actionable_advisory: string;
+}
+
 export interface PFZAdvisory {
   float_id: string;
   latitude: number;

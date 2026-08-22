@@ -200,6 +200,26 @@ export async function getPFZAdvisories(region = 'arabian_sea', limit = 30): Prom
   return data;
 }
 
+/** Get coastal multi-sensor PFZ front vector lines */
+export async function getPFZLines(): Promise<{ lines: any[]; count: number }> {
+  try {
+    const { data } = await api.get('/api/pfz/lines');
+    return data;
+  } catch {
+    return { lines: [], count: 0 };
+  }
+}
+
+/** Get 586+ coastal fish landing centers */
+export async function getFLCPorts(): Promise<{ ports: any[]; count: number }> {
+  try {
+    const { data } = await api.get('/api/ports');
+    return data;
+  } catch {
+    return { ports: [], count: 0 };
+  }
+}
+
 /** Get continuous satellite SST & Chlorophyll-a grid for Leaflet map overlay */
 export async function getSatelliteGrid(downsample = 2): Promise<SatelliteGridResponse> {
   const { data } = await api.get<SatelliteGridResponse>('/api/satellite/grid', { params: { downsample } });

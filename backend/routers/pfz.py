@@ -4,7 +4,8 @@ Provides real-time multi-sensor fused fishing zone advisories for Indian coastal
 """
 
 from fastapi import APIRouter, Query
-from ..services.pfz_engine import get_pfz_advisories, get_all_harbours
+from ..services.pfz_engine import get_pfz_advisories, get_all_harbours, get_coastal_pfz_lines
+from ..services.flc_service import get_all_flc_centers
 from ..models.schemas import PFZResponse
 
 router = APIRouter(prefix="/api", tags=["pfz"])
@@ -29,11 +30,22 @@ async def pfz_advisories(
     }
 
 
+@router.get("/pfz/lines")
+async def pfz_vector_lines():
+    """Get coastal multi-sensor PFZ thermal & chlorophyll front vector lines."""
+    lines = get_coastal_pfz_lines()
+    return {
+        "lines": lines,
+        "count": len(lines)
+    }
+
+
+@router.get("/ports")
 @router.get("/pfz/ports")
 async def pfz_ports():
-    """Get all major and minor Indian fishing harbours."""
-    ports = get_all_harbours()
+    """Get full coastal registry of 586+ Indian fishing harbours and landing centres."""
+    flc_ports = get_all_flc_centers()
     return {
-        "ports": ports,
-        "count": len(ports)
+        "ports": flc_ports,
+        "count": len(flc_ports)
     }
