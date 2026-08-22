@@ -11,22 +11,52 @@ import math
 from .db import get_connection
 from .satellite_client import get_nearest_satellite_data
 
-# Major Indian fishing harbours (name, lat, lon)
+# Comprehensive 34 Major & Minor Indian Fishing Harbours (name, lat, lon)
 HARBOURS = [
-    ("Mumbai (Sassoon Dock)", 18.91, 72.83),
-    ("Mumbai (Versova Jetty)", 19.13, 72.81),
-    ("Ratnagiri, Maharashtra", 16.99, 73.30),
+    # Gujarat
     ("Veraval, Gujarat", 20.90, 70.37),
     ("Porbandar, Gujarat", 21.64, 69.61),
-    ("Goa (Panaji)", 15.50, 73.81),
-    ("Mangalore, Karnataka", 12.87, 74.84),
-    ("Kochi (Cochin), Kerala", 9.97, 76.27),
+    ("Okha / Dwarka, Gujarat", 22.46, 69.07),
+    ("Mangrol, Gujarat", 21.12, 70.11),
+    ("Jakhau (Kutch), Gujarat", 23.23, 68.70),
+    # Maharashtra
+    ("Mumbai (Sassoon Dock)", 18.91, 72.83),
+    ("Mumbai (Versova Jetty)", 19.13, 72.81),
+    ("Alibaug / Murud, Maharashtra", 18.64, 72.87),
+    ("Ratnagiri (Mirkarwada)", 16.99, 73.30),
+    ("Malvan (Sindhudurg), Maharashtra", 16.05, 73.46),
+    # Goa
+    ("Goa (Panaji & Malim)", 15.50, 73.81),
+    ("Vasco da Gama (Cortalim), Goa", 15.40, 73.81),
+    # Karnataka
+    ("Karwar (Baithkol), Karnataka", 14.80, 74.12),
+    ("Malpe (Udupi), Karnataka", 13.35, 74.70),
+    ("Mangalore (Old Port), Karnataka", 12.87, 74.84),
+    # Kerala
+    ("Beypore (Kozhikode), Kerala", 11.16, 75.80),
+    ("Munambam (Ernakulam), Kerala", 10.18, 76.17),
+    ("Kochi (Thoppumpady), Kerala", 9.97, 76.27),
     ("Kollam (Neendakara), Kerala", 8.94, 76.54),
-    ("Tuticorin, Tamil Nadu", 8.76, 78.14),
-    ("Chennai (Royapuram)", 13.12, 80.30),
-    ("Visakhapatnam, AP", 17.69, 83.22),
+    ("Vizhinjam (Trivandrum), Kerala", 8.37, 76.99),
+    # Tamil Nadu & Puducherry
+    ("Tuticorin (Vembar), Tamil Nadu", 8.76, 78.14),
+    ("Rameswaram / Mandapam, Tamil Nadu", 9.28, 79.31),
+    ("Nagapattinam, Tamil Nadu", 10.76, 79.84),
+    ("Cuddalore, Tamil Nadu", 11.75, 79.77),
+    ("Chennai (Kasimedu/Royapuram)", 13.12, 80.30),
+    # Andhra Pradesh
+    ("Machilipatnam (Gilakaladindi), AP", 16.18, 81.16),
+    ("Kakinada, Andhra Pradesh", 16.98, 82.25),
+    ("Visakhapatnam, Andhra Pradesh", 17.69, 83.22),
+    # Odisha
+    ("Dhamra / Chandipur, Odisha", 20.80, 86.97),
     ("Paradip, Odisha", 20.32, 86.61),
+    # West Bengal
     ("Digha (Sankarpur), West Bengal", 21.62, 87.51),
+    ("Kakdwip / Frasergunj (Sundarbans)", 21.87, 88.18),
+    # Island Territories
+    ("Port Blair (Junglighat), A&N", 11.66, 92.73),
+    ("Kavaratti / Agatti, Lakshadweep", 10.56, 72.64),
 ]
 
 # Optimal Sea Surface Temperature Ranges for Indian Marine Species

@@ -28,17 +28,59 @@ interface HarbourPoint {
 }
 
 const INDIAN_HARBOURS: HarbourPoint[] = [
+  // Gujarat
+  { harbour: 'Veraval Port', state: 'Gujarat', latitude: 20.90, longitude: 70.37, type: "India's Largest Fish Landing Base" },
+  { harbour: 'Porbandar Harbour', state: 'Gujarat', latitude: 21.64, longitude: 69.61, type: 'Deep Sea Mechanized Base' },
+  { harbour: 'Okha / Dwarka', state: 'Gujarat', latitude: 22.46, longitude: 69.07, type: 'Saurashtra Marine Fisheries Base' },
+  { harbour: 'Mangrol Harbour', state: 'Gujarat', latitude: 21.12, longitude: 70.11, type: 'High-Yield Pelagic Landing Center' },
+  { harbour: 'Jakhau Port (Kutch)', state: 'Gujarat', latitude: 23.23, longitude: 68.70, type: 'Northern Arabian Sea Base' },
+
+  // Maharashtra
   { harbour: 'Mumbai (Sassoon Dock)', state: 'Maharashtra', latitude: 18.91, longitude: 72.83, type: 'Major Commercial Deep-Sea & Trawler Port' },
+  { harbour: 'Mumbai (Versova Jetty)', state: 'Maharashtra', latitude: 19.13, longitude: 72.81, type: 'Artisanal Koli Fishermen Base' },
+  { harbour: 'Alibaug / Murud', state: 'Maharashtra', latitude: 18.64, longitude: 72.87, type: 'Pomfret & Coastal Fisheries Hub' },
   { harbour: 'Ratnagiri (Mirkarwada)', state: 'Maharashtra', latitude: 16.99, longitude: 73.30, type: 'Mechanized Trawler Base' },
-  { harbour: 'Veraval Port', state: 'Gujarat', latitude: 20.90, longitude: 70.37, type: "India's Largest Commercial Fish Landing Base" },
+  { harbour: 'Malvan (Sindhudurg)', state: 'Maharashtra', latitude: 16.05, longitude: 73.46, type: 'South Konkan Marine Base' },
+
+  // Goa
   { harbour: 'Goa (Panaji & Malim)', state: 'Goa', latitude: 15.50, longitude: 73.81, type: 'Purse-Seine Marine Fishing Port' },
+  { harbour: 'Vasco (Cortalim)', state: 'Goa', latitude: 15.40, longitude: 73.81, type: 'Pelagic Mackerel & Sardine Base' },
+
+  // Karnataka
+  { harbour: 'Karwar (Baithkol)', state: 'Karnataka', latitude: 14.80, longitude: 74.12, type: 'North Karnataka Purse-Seine Hub' },
+  { harbour: 'Malpe (Udupi)', state: 'Karnataka', latitude: 13.35, longitude: 74.70, type: 'Major Deep-Sea Longlining Harbour' },
   { harbour: 'Mangalore (Old Port)', state: 'Karnataka', latitude: 12.87, longitude: 74.84, type: 'Pelagic Fish Landing Base' },
+
+  // Kerala
+  { harbour: 'Beypore (Kozhikode)', state: 'Kerala', latitude: 11.16, longitude: 75.80, type: 'North Kerala Marine Fisheries Port' },
+  { harbour: 'Munambam (Ernakulam)', state: 'Kerala', latitude: 10.18, longitude: 76.17, type: 'High-Capacity Mechanized Gillnet Hub' },
   { harbour: 'Kochi (Thoppumpady)', state: 'Kerala', latitude: 9.97, longitude: 76.27, type: 'Central Oceanic Tuna & Deep-Sea Hub' },
+  { harbour: 'Kollam (Neendakara)', state: 'Kerala', latitude: 8.94, longitude: 76.54, type: 'Major Trawler & Shrimp Port' },
+  { harbour: 'Vizhinjam (Trivandrum)', state: 'Kerala', latitude: 8.37, longitude: 76.99, type: 'Southern Deep Oceanic Tuna Landing Base' },
+
+  // Tamil Nadu & Puducherry
   { harbour: 'Tuticorin (Vembar)', state: 'Tamil Nadu', latitude: 8.76, longitude: 78.14, type: 'Gulf of Mannar Fishing Base' },
+  { harbour: 'Rameswaram / Mandapam', state: 'Tamil Nadu', latitude: 9.28, longitude: 79.31, type: 'Palk Bay Artisanal & Squid Base' },
+  { harbour: 'Nagapattinam', state: 'Tamil Nadu', latitude: 10.76, longitude: 79.84, type: 'Coromandel Coast Pelagic Hub' },
+  { harbour: 'Cuddalore Harbour', state: 'Tamil Nadu', latitude: 11.75, longitude: 79.77, type: 'Central TN Mechanized Port' },
   { harbour: 'Chennai (Kasimedu)', state: 'Tamil Nadu', latitude: 13.12, longitude: 80.30, type: 'East Coast Deep-Sea Trawler Hub' },
+
+  // Andhra Pradesh
+  { harbour: 'Machilipatnam (Gilakaladindi)', state: 'Andhra Pradesh', latitude: 16.18, longitude: 81.16, type: 'Krishna Delta Marine Base' },
+  { harbour: 'Kakinada Harbour', state: 'Andhra Pradesh', latitude: 16.98, longitude: 82.25, type: 'Godavari Delta Trawler Hub' },
   { harbour: 'Visakhapatnam Port', state: 'Andhra Pradesh', latitude: 17.69, longitude: 83.22, type: 'Bay of Bengal Commercial Fishing Base' },
+
+  // Odisha
+  { harbour: 'Dhamra / Chandipur', state: 'Odisha', latitude: 20.80, longitude: 86.97, type: 'North Odisha Pomfret & Hilsa Base' },
   { harbour: 'Paradip Harbour', state: 'Odisha', latitude: 20.32, longitude: 86.61, type: 'Deep Sea Mechanized Fishing Base' },
+
+  // West Bengal
   { harbour: 'Digha (Sankarpur)', state: 'West Bengal', latitude: 21.62, longitude: 87.51, type: 'Northern Bay Hilsa Landing Hub' },
+  { harbour: 'Kakdwip / Frasergunj', state: 'West Bengal', latitude: 21.87, longitude: 88.18, type: 'Sundarbans Estuarine & Marine Base' },
+
+  // Island Territories
+  { harbour: 'Port Blair (Junglighat)', state: 'Andaman & Nicobar', latitude: 11.66, longitude: 92.73, type: 'Oceanic Yellowfin Tuna Hub' },
+  { harbour: 'Kavaratti / Agatti', state: 'Lakshadweep', latitude: 10.56, longitude: 72.64, type: 'Skipjack Tuna Pole & Line Base' },
 ];
 
 const createHarbourIcon = () =>
