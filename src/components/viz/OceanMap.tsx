@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, useMap } from 'react-leaflet';
+import { useState, useEffect, useMemo } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, useMap, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import { 
   Fish, 
@@ -18,91 +18,72 @@ import {
 } from 'lucide-react';
 import type { FloatSummary, MapMarker, PFZAdvisory, SatelliteGridPoint } from '../../types';
 import { getPFZAdvisories, getSatelliteGrid } from '../../services/api';
+import { INDIAN_PORTS_DATABASE, type IndianPort } from '../../data/indianPorts';
 
-interface HarbourPoint {
-  harbour: string;
-  state: string;
-  latitude: number;
-  longitude: number;
-  type: string;
-}
-
-const INDIAN_HARBOURS: HarbourPoint[] = [
-  // Gujarat
-  { harbour: 'Veraval Port', state: 'Gujarat', latitude: 20.90, longitude: 70.37, type: "India's Largest Fish Landing Base" },
-  { harbour: 'Porbandar Harbour', state: 'Gujarat', latitude: 21.64, longitude: 69.61, type: 'Deep Sea Mechanized Base' },
-  { harbour: 'Okha / Dwarka', state: 'Gujarat', latitude: 22.46, longitude: 69.07, type: 'Saurashtra Marine Fisheries Base' },
-  { harbour: 'Mangrol Harbour', state: 'Gujarat', latitude: 21.12, longitude: 70.11, type: 'High-Yield Pelagic Landing Center' },
-  { harbour: 'Jakhau Port (Kutch)', state: 'Gujarat', latitude: 23.23, longitude: 68.70, type: 'Northern Arabian Sea Base' },
-
-  // Maharashtra
-  { harbour: 'Mumbai (Sassoon Dock)', state: 'Maharashtra', latitude: 18.91, longitude: 72.83, type: 'Major Commercial Deep-Sea & Trawler Port' },
-  { harbour: 'Mumbai (Versova Jetty)', state: 'Maharashtra', latitude: 19.13, longitude: 72.81, type: 'Artisanal Koli Fishermen Base' },
-  { harbour: 'Alibaug / Murud', state: 'Maharashtra', latitude: 18.64, longitude: 72.87, type: 'Pomfret & Coastal Fisheries Hub' },
-  { harbour: 'Ratnagiri (Mirkarwada)', state: 'Maharashtra', latitude: 16.99, longitude: 73.30, type: 'Mechanized Trawler Base' },
-  { harbour: 'Malvan (Sindhudurg)', state: 'Maharashtra', latitude: 16.05, longitude: 73.46, type: 'South Konkan Marine Base' },
-
-  // Goa
-  { harbour: 'Goa (Panaji & Malim)', state: 'Goa', latitude: 15.50, longitude: 73.81, type: 'Purse-Seine Marine Fishing Port' },
-  { harbour: 'Vasco (Cortalim)', state: 'Goa', latitude: 15.40, longitude: 73.81, type: 'Pelagic Mackerel & Sardine Base' },
-
-  // Karnataka
-  { harbour: 'Karwar (Baithkol)', state: 'Karnataka', latitude: 14.80, longitude: 74.12, type: 'North Karnataka Purse-Seine Hub' },
-  { harbour: 'Malpe (Udupi)', state: 'Karnataka', latitude: 13.35, longitude: 74.70, type: 'Major Deep-Sea Longlining Harbour' },
-  { harbour: 'Mangalore (Old Port)', state: 'Karnataka', latitude: 12.87, longitude: 74.84, type: 'Pelagic Fish Landing Base' },
-
-  // Kerala
-  { harbour: 'Beypore (Kozhikode)', state: 'Kerala', latitude: 11.16, longitude: 75.80, type: 'North Kerala Marine Fisheries Port' },
-  { harbour: 'Munambam (Ernakulam)', state: 'Kerala', latitude: 10.18, longitude: 76.17, type: 'High-Capacity Mechanized Gillnet Hub' },
-  { harbour: 'Kochi (Thoppumpady)', state: 'Kerala', latitude: 9.97, longitude: 76.27, type: 'Central Oceanic Tuna & Deep-Sea Hub' },
-  { harbour: 'Kollam (Neendakara)', state: 'Kerala', latitude: 8.94, longitude: 76.54, type: 'Major Trawler & Shrimp Port' },
-  { harbour: 'Vizhinjam (Trivandrum)', state: 'Kerala', latitude: 8.37, longitude: 76.99, type: 'Southern Deep Oceanic Tuna Landing Base' },
-
-  // Tamil Nadu & Puducherry
-  { harbour: 'Tuticorin (Vembar)', state: 'Tamil Nadu', latitude: 8.76, longitude: 78.14, type: 'Gulf of Mannar Fishing Base' },
-  { harbour: 'Rameswaram / Mandapam', state: 'Tamil Nadu', latitude: 9.28, longitude: 79.31, type: 'Palk Bay Artisanal & Squid Base' },
-  { harbour: 'Nagapattinam', state: 'Tamil Nadu', latitude: 10.76, longitude: 79.84, type: 'Coromandel Coast Pelagic Hub' },
-  { harbour: 'Cuddalore Harbour', state: 'Tamil Nadu', latitude: 11.75, longitude: 79.77, type: 'Central TN Mechanized Port' },
-  { harbour: 'Chennai (Kasimedu)', state: 'Tamil Nadu', latitude: 13.12, longitude: 80.30, type: 'East Coast Deep-Sea Trawler Hub' },
-
-  // Andhra Pradesh
-  { harbour: 'Machilipatnam (Gilakaladindi)', state: 'Andhra Pradesh', latitude: 16.18, longitude: 81.16, type: 'Krishna Delta Marine Base' },
-  { harbour: 'Kakinada Harbour', state: 'Andhra Pradesh', latitude: 16.98, longitude: 82.25, type: 'Godavari Delta Trawler Hub' },
-  { harbour: 'Visakhapatnam Port', state: 'Andhra Pradesh', latitude: 17.69, longitude: 83.22, type: 'Bay of Bengal Commercial Fishing Base' },
-
-  // Odisha
-  { harbour: 'Dhamra / Chandipur', state: 'Odisha', latitude: 20.80, longitude: 86.97, type: 'North Odisha Pomfret & Hilsa Base' },
-  { harbour: 'Paradip Harbour', state: 'Odisha', latitude: 20.32, longitude: 86.61, type: 'Deep Sea Mechanized Fishing Base' },
-
-  // West Bengal
-  { harbour: 'Digha (Sankarpur)', state: 'West Bengal', latitude: 21.62, longitude: 87.51, type: 'Northern Bay Hilsa Landing Hub' },
-  { harbour: 'Kakdwip / Frasergunj', state: 'West Bengal', latitude: 21.87, longitude: 88.18, type: 'Sundarbans Estuarine & Marine Base' },
-
-  // Island Territories
-  { harbour: 'Port Blair (Junglighat)', state: 'Andaman & Nicobar', latitude: 11.66, longitude: 92.73, type: 'Oceanic Yellowfin Tuna Hub' },
-  { harbour: 'Kavaratti / Agatti', state: 'Lakshadweep', latitude: 10.56, longitude: 72.64, type: 'Skipjack Tuna Pole & Line Base' },
-];
-
-const createHarbourIcon = () =>
-  L.divIcon({
-    className: 'custom-harbour-marker',
+// Dynamic Multi-Tier Port Marker Icon Generator based on Zoom & Tier
+const createPortIcon = (tier: 1 | 2 | 3) => {
+  if (tier === 1) {
+    return L.divIcon({
+      className: 'custom-harbour-tier1',
+      html: `<div style="
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        width: 22px; 
+        height: 22px; 
+        border-radius: 50%; 
+        background: rgba(10, 25, 47, 0.95); 
+        border: 2px solid #38bdf8; 
+        box-shadow: 0 0 12px rgba(56, 189, 248, 0.7);
+        font-size: 11px;
+        cursor: pointer;
+      ">⚓</div>`,
+      iconSize: [22, 22],
+      iconAnchor: [11, 11],
+      popupAnchor: [0, -11],
+    });
+  }
+  if (tier === 2) {
+    return L.divIcon({
+      className: 'custom-harbour-tier2',
+      html: `<div style="
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        width: 17px; 
+        height: 17px; 
+        border-radius: 50%; 
+        background: rgba(13, 31, 45, 0.92); 
+        border: 1.5px solid #2dd4bf; 
+        box-shadow: 0 0 8px rgba(45, 212, 191, 0.5);
+        font-size: 9px;
+        cursor: pointer;
+      ">⚓</div>`,
+      iconSize: [17, 17],
+      iconAnchor: [8.5, 8.5],
+      popupAnchor: [0, -9],
+    });
+  }
+  return L.divIcon({
+    className: 'custom-harbour-tier3',
     html: `<div style="
       display: flex; 
       align-items: center; 
       justify-content: center; 
-      width: 26px; 
-      height: 26px; 
+      width: 13px; 
+      height: 13px; 
       border-radius: 50%; 
-      background: rgba(15, 23, 42, 0.95); 
-      border: 2px solid #38bdf8; 
-      box-shadow: 0 0 14px rgba(56, 189, 248, 0.7);
-      font-size: 13px;
+      background: rgba(15, 23, 42, 0.9); 
+      border: 1px solid #7dd3fc; 
+      box-shadow: 0 0 5px rgba(125, 211, 252, 0.4);
+      font-size: 7px;
       cursor: pointer;
     ">⚓</div>`,
-    iconSize: [26, 26],
-    iconAnchor: [13, 13],
-    popupAnchor: [0, -13],
+    iconSize: [13, 13],
+    iconAnchor: [6.5, 6.5],
+    popupAnchor: [0, -7],
   });
+};
 
 // Custom Map Auto-Focuser & Dynamic Bounds Fitter Component
 function MapBoundsController({
@@ -140,6 +121,22 @@ function MapBoundsController({
     map.flyTo(center, zoom, { duration: 1.0 });
   }, [center, zoom, highlightMarkers, map]);
 
+  return null;
+}
+
+// Helper to watch and update current zoom level for Level-of-Detail (LOD) decimation
+function MapZoomWatcher({ onZoomChange }: { onZoomChange: (zoom: number) => void }) {
+  const map = useMap();
+  useEffect(() => {
+    onZoomChange(map.getZoom());
+    const handleZoom = () => {
+      onZoomChange(map.getZoom());
+    };
+    map.on('zoomend', handleZoom);
+    return () => {
+      map.off('zoomend', handleZoom);
+    };
+  }, [map, onZoomChange]);
   return null;
 }
 
@@ -281,6 +278,21 @@ export const OceanMap: React.FC<OceanMapProps> = ({
 }) => {
   const [mapCenter, setMapCenter] = useState<[number, number]>([14.0, 75.0]); // Indian Ocean
   const [mapZoom, setMapZoom] = useState<number>(5);
+  const [currentZoom, setCurrentZoom] = useState<number>(5);
+
+  // Dynamic Level-of-Detail (LOD) Filtering for 150+ Indian Coastal Fishing Harbours
+  const visiblePorts = useMemo(() => {
+    if (currentZoom <= 5) {
+      // High-Level National Overview: Show only Tier-1 Major Strategic Ports
+      return INDIAN_PORTS_DATABASE.filter((p) => p.tier === 1);
+    }
+    if (currentZoom <= 7) {
+      // Regional Sector View: Show Tier-1 & Tier-2 Commercial Mechanized Harbours
+      return INDIAN_PORTS_DATABASE.filter((p) => p.tier <= 2);
+    }
+    // Inshore Coastal / In-depth Zoom: Show All 150+ Harbours, Jetties & Koli Fish Landing Centres
+    return INDIAN_PORTS_DATABASE;
+  }, [currentZoom]);
   
   // Layer Toggle States
   const [showPFZ, setShowPFZ] = useState<boolean>(true);
@@ -579,11 +591,11 @@ export const OceanMap: React.FC<OceanMapProps> = ({
             <span>PFZ Zones ({displayedPfzZones.length})</span>
           </button>
 
-          {/* 3. Major Fishing Harbours / Ports Toggle */}
+          {/* 3. Major Fishing Harbours / Ports Toggle with Dynamic Zoom LOD */}
           <button
             type="button"
             onClick={() => setShowHarbours(!showHarbours)}
-            title="Toggle 14 Major Indian Fishing Harbours & Jetties"
+            title={`Toggle 150+ Indian Coastal Fishing Harbours & Jetties (Active in view: ${visiblePorts.length})`}
             className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold backdrop-blur-md shadow-xl transition cursor-pointer active:scale-95 ${
               showHarbours
                 ? 'bg-sky-950/85 border-sky-500/60 text-sky-300 shadow-sky-950/40'
@@ -591,7 +603,12 @@ export const OceanMap: React.FC<OceanMapProps> = ({
             }`}
           >
             <Anchor className={`w-3.5 h-3.5 ${showHarbours ? 'text-sky-400' : 'text-slate-400'}`} />
-            <span>Ports ({INDIAN_HARBOURS.length})</span>
+            <span>Ports ({INDIAN_PORTS_DATABASE.length}+)</span>
+            {showHarbours && (
+              <span className="text-[9px] px-1.5 py-0.2 rounded bg-sky-900/90 text-sky-200 font-mono border border-sky-700/50">
+                {visiblePorts.length} in view
+              </span>
+            )}
           </button>
 
           {/* 4. Grouped Satellite Layers Dropdown */}
@@ -758,6 +775,7 @@ export const OceanMap: React.FC<OceanMapProps> = ({
         attributionControl={false}
       >
         <MapBoundsController center={mapCenter} zoom={mapZoom} highlightMarkers={highlightMarkers} />
+        <MapZoomWatcher onZoomChange={setCurrentZoom} />
 
         {/* CartoDB Dark Matter Basemap */}
         <TileLayer
@@ -824,22 +842,35 @@ export const OceanMap: React.FC<OceanMapProps> = ({
             );
           })}
 
-        {/* PFZ FISHING OPPORTUNITY ZONES (WARM GOLDEN TARGET MARKERS) */}
+        {/* PFZ FISHING OPPORTUNITY ZONES (ZOOM-ADAPTIVE GLOWING TARGET MARKERS) */}
         {showPFZ &&
           displayedPfzZones.map((pfz, idx) => {
             const isHighYield = pfz.pfz_score >= 80;
+            // Adaptive Level of Detail: Smaller clean dots at country overview, rich glowing circles when zoomed in
+            const dynamicRadius =
+              currentZoom <= 5
+                ? (isHighYield ? 6.5 : 4.5)
+                : currentZoom <= 7
+                ? (isHighYield ? 9 : 7)
+                : (isHighYield ? 12 : 9);
+
             return (
               <CircleMarker
                 key={`pfz-zone-${idx}`}
                 center={[pfz.latitude, pfz.longitude]}
-                radius={isHighYield ? 12 : 9}
+                radius={dynamicRadius}
                 pathOptions={{
                   color: '#fbbf24', // Warm Golden Amber
                   fillColor: isHighYield ? '#f59e0b' : '#d97706',
-                  fillOpacity: 0.85,
-                  weight: isHighYield ? 2.5 : 1.5,
+                  fillOpacity: currentZoom <= 5 ? 0.8 : 0.88,
+                  weight: isHighYield ? (currentZoom <= 5 ? 1.5 : 2.5) : 1,
                 }}
               >
+                <Tooltip direction="top" offset={[0, -dynamicRadius]}>
+                  <span className="font-sans text-[10px] font-bold text-amber-300 bg-abyssal-950 px-1.5 py-0.5 rounded border border-amber-500/40 shadow-lg">
+                    {pfz.pfz_rating} ({pfz.pfz_score}/100) • {pfz.sst_celsius}°C
+                  </span>
+                </Tooltip>
                 <Popup>
                   <div className="p-1 space-y-2 text-slate-100 min-w-[240px]">
                     <div className="flex items-center justify-between border-b border-abyssal-800 pb-1">
@@ -908,39 +939,56 @@ export const OceanMap: React.FC<OceanMapProps> = ({
           />
         )}
 
-        {/* INDIAN FISHING HARBOURS / PORTS LAYER */}
+        {/* 150+ INDIAN FISHING HARBOURS & JETTIES LAYER (DYNAMIC ZOOM-ADAPTIVE LOD) */}
         {showHarbours &&
-          INDIAN_HARBOURS.map((h, idx) => (
+          visiblePorts.map((h) => (
             <Marker
-              key={`harbour-${idx}`}
-              position={[h.latitude, h.longitude]}
-              icon={createHarbourIcon()}
+              key={`harbour-${h.id}`}
+              position={[h.lat, h.lng]}
+              icon={createPortIcon(h.tier)}
             >
+              <Tooltip direction="top" offset={[0, h.tier === 1 ? -12 : h.tier === 2 ? -10 : -8]}>
+                <div className="text-[11px] font-sans font-semibold text-sky-200 bg-abyssal-950 px-2 py-0.5 rounded border border-sky-500/50 shadow-xl flex items-center gap-1">
+                  <span>⚓</span>
+                  <span>{h.name}</span>
+                  <span className="text-[9px] text-sky-400/80">({h.state})</span>
+                </div>
+              </Tooltip>
               <Popup>
-                <div className="p-1 space-y-1.5 text-slate-100 min-w-[220px] font-sans">
+                <div className="p-1 space-y-1.5 text-slate-100 min-w-[230px] font-sans">
                   <div className="flex items-center justify-between border-b border-abyssal-800 pb-1">
-                    <span className="font-bold text-sky-400 text-sm flex items-center gap-1 font-heading">
-                      ⚓ {h.harbour}
+                    <span className="font-bold text-sky-400 text-xs flex items-center gap-1 font-heading">
+                      ⚓ {h.name}
                     </span>
-                    <span className="text-[10px] font-mono bg-sky-950 text-sky-300 px-1.5 py-0.5 rounded border border-sky-800">
+                    <span className="text-[9px] font-mono bg-sky-950 text-sky-300 px-1.5 py-0.5 rounded border border-sky-700">
                       {h.state}
                     </span>
                   </div>
-                  <div className="text-xs text-slate-300 leading-snug">{h.type}</div>
-                  <div className="text-[11px] font-mono text-slate-400">
-                    GPS: {h.latitude.toFixed(2)}°N, {h.longitude.toFixed(2)}°E
+
+                  <p className="text-[11px] text-slate-300 leading-snug">
+                    {h.type}
+                    {h.district && <span className="block text-[10px] text-slate-400 mt-0.5 font-mono">District: {h.district}</span>}
+                  </p>
+
+                  <div className="text-[10px] font-mono text-slate-400 pt-1 border-t border-abyssal-800 flex items-center justify-between">
+                    <span>Coordinates:</span>
+                    <span className="text-sky-300 font-bold">{h.lat.toFixed(3)}°N, {h.lng.toFixed(3)}°E</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUserVesselPos([h.latitude, h.longitude]);
-                      setMapCenter([h.latitude, h.longitude]);
-                      setMapZoom(8);
-                    }}
-                    className="w-full mt-1.5 py-1 px-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs transition text-center cursor-pointer shadow-md flex items-center justify-center gap-1"
-                  >
-                    <Navigation className="w-3 h-3" /> Set Vessel Pos Here
-                  </button>
+
+                  <div className="pt-1.5 border-t border-abyssal-800 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserVesselPos([h.lat, h.lng]);
+                        setMapCenter([h.lat, h.lng]);
+                        setMapZoom(9);
+                      }}
+                      className="text-[10px] font-mono bg-emerald-950 hover:bg-emerald-900 border border-emerald-500/50 text-emerald-300 px-2 py-1 rounded cursor-pointer transition flex items-center gap-1 font-bold shadow-md"
+                    >
+                      <Navigation className="w-3 h-3" />
+                      <span>Set Vessel Pos Here</span>
+                    </button>
+                  </div>
                 </div>
               </Popup>
             </Marker>
