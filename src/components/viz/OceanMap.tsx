@@ -14,11 +14,10 @@ import {
   ChevronUp,
   Sparkles,
   Anchor,
-  Zap,
   X 
 } from 'lucide-react';
-import type { FloatSummary, MapMarker, PFZAdvisory, PFZLine, SatelliteGridPoint } from '../../types';
-import { getPFZAdvisories, getPFZLines, getSatelliteGrid } from '../../services/api';
+import type { FloatSummary, MapMarker, PFZAdvisory, SatelliteGridPoint } from '../../types';
+import { getPFZAdvisories, getSatelliteGrid } from '../../services/api';
 import { INDIAN_PORTS_DATABASE, type IndianPort } from '../../data/indianPorts';
 
 // Dynamic Multi-Tier Port Marker Icon Generator based on Zoom & Tier
@@ -299,7 +298,6 @@ export const OceanMap: React.FC<OceanMapProps> = ({
   const [showPFZ, setShowPFZ] = useState<boolean>(true);
   const [showFloats, setShowFloats] = useState<boolean>(true);
   const [showHarbours, setShowHarbours] = useState<boolean>(true);
-  const [showPFZLines, setShowPFZLines] = useState<boolean>(true);
   const [showSatelliteSST, setShowSatelliteSST] = useState<boolean>(false);
   const [showChlorophyll, setShowChlorophyll] = useState<boolean>(false);
   
@@ -321,17 +319,15 @@ export const OceanMap: React.FC<OceanMapProps> = ({
   const [legendOpen, setLegendOpen] = useState<boolean>(false);
 
   const [pfzZones, setPfzZones] = useState<PFZAdvisory[]>(() => globalPfzCache || []);
-  const [pfzLines, setPfzLines] = useState<PFZLine[]>([]);
   const [satelliteGrid, setSatelliteGrid] = useState<SatelliteGridPoint[]>(() => globalSatGridCache || []);
 
   // Load PFZ advisories & Satellite grid on mount (Zero flicker if already cached)
   useEffect(() => {
     async function loadData() {
       try {
-        const [pfzRes, satRes, linesRes] = await Promise.all([
+        const [pfzRes, satRes] = await Promise.all([
           globalPfzCache ? { advisories: globalPfzCache } : getPFZAdvisories('all', 50).catch(() => ({ advisories: [] })),
           globalSatGridCache ? { points: globalSatGridCache } : getSatelliteGrid(2).catch(() => ({ points: [] })),
-          getPFZLines().catch(() => ({ lines: [] })),
         ]);
         if (pfzRes && pfzRes.advisories && !globalPfzCache) {
           globalPfzCache = pfzRes.advisories;
@@ -340,9 +336,6 @@ export const OceanMap: React.FC<OceanMapProps> = ({
         if (satRes && satRes.points && !globalSatGridCache) {
           globalSatGridCache = satRes.points;
           setSatelliteGrid(satRes.points);
-        }
-        if (linesRes && linesRes.lines) {
-          setPfzLines(linesRes.lines);
         }
       } catch (err) {
         console.warn('Map data fetch warning:', err);
@@ -608,21 +601,6 @@ export const OceanMap: React.FC<OceanMapProps> = ({
           >
             <Anchor className={`w-3.5 h-3.5 ${showHarbours ? 'text-sky-400' : 'text-slate-400'}`} />
             <span>Ports ({INDIAN_PORTS_DATABASE.length}+)</span>
-          </button>
-
-          {/* 3.5 Coastal Thermal Front Vectors Toggle */}
-          <button
-            type="button"
-            onClick={() => setShowPFZLines(!showPFZLines)}
-            title="Toggle Coastal Multi-Sensor Thermal & Chlorophyll Front Lines"
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold backdrop-blur-md shadow-xl transition cursor-pointer active:scale-95 ${
-              showPFZLines
-                ? 'bg-yellow-950/85 border-yellow-500/60 text-yellow-300 shadow-yellow-950/40'
-                : 'bg-abyssal-950/90 border-abyssal-800 text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Zap className={`w-3.5 h-3.5 ${showPFZLines ? 'text-yellow-400' : 'text-slate-400'}`} />
-            <span>Front Lines ({pfzLines.length || 5})</span>
           </button>
 
           {/* 4. Grouped Satellite Layers Dropdown */}
@@ -940,52 +918,6 @@ export const OceanMap: React.FC<OceanMapProps> = ({
             );
           })}
 
-        {/* COASTAL THERMAL FRONT VECTORS (GLOWING GOLDEN DASHED POLYLINES) */}
-        {showPFZLines &&
-          pfzLines.map((line) => (
-            <Polyline
-              key={line.id}
-              positions={line.coordinates}
-              pathOptions={{
-                color: '#facc15',
-                weight: 3.5,
-                dashArray: '8, 6',
-                opacity: 0.9,
-              }}
-            >
-              <Tooltip sticky>
-                <div className="font-sans text-[11px] font-bold text-yellow-300 bg-abyssal-950 px-2 py-1 rounded border border-yellow-500/50 shadow-lg">
-                  ⚡ {line.sector} ({line.depth_range})
-                </div>
-              </Tooltip>
-              <Popup>
-                <div className="p-1 space-y-2 text-slate-100 min-w-[260px]">
-                  <div className="flex items-center justify-between border-b border-abyssal-800 pb-1">
-                    <span className="font-bold text-yellow-400 text-xs flex items-center gap-1 font-heading">
-                      <Zap className="w-3.5 h-3.5" /> {line.sector}
-                    </span>
-                    <span className="text-[10px] font-mono bg-yellow-950 text-yellow-300 px-1.5 py-0.2 rounded border border-yellow-700">
-                      {line.depth_range}
-                    </span>
-                  </div>
-
-                  <p className="text-xs text-slate-200 leading-relaxed">{line.advisory}</p>
-
-                  <div className="pt-1 border-t border-abyssal-800">
-                    <span className="text-[10px] font-mono text-slate-400 block mb-1">Target Pelagic Species:</span>
-                    <div className="flex flex-wrap gap-1">
-                      {line.target_species.map((sp, sIdx) => (
-                        <span key={sIdx} className="px-1.5 py-0.5 rounded bg-yellow-950/80 border border-yellow-700/60 text-yellow-200 text-[9px] font-mono">
-                          🐟 {sp}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </Popup>
-            </Polyline>
-          ))}
-
         {/* Trajectory Polyline if selected */}
         {polylinePositions.length > 1 && (
           <Polyline
@@ -1205,7 +1137,7 @@ export const OceanMap: React.FC<OceanMapProps> = ({
             </div>
 
             <div className="pt-1.5 border-t border-slate-800 text-[10px] text-cyan-300/90 font-mono leading-tight">
-              Scientific Fusion: In-situ ARGO CTD + NOAA MUR SST + NASA Chlorophyll + Coastal Front Vectors.
+              Scientific Fusion: In-situ ARGO CTD + continuous NOAA & NASA satellite grids for high-yield fishing zones.
             </div>
           </div>
         )}
