@@ -28,8 +28,10 @@ backend/data/*.db-journal
 *.env.*
 !*.env.example
 
-# Custom IDE Agents & Metadata
+# Custom IDE Agents & Internal Pitch/Docs
 .agents/
+docs/
+pitch/
 .vscode/*
 !.vscode/extensions.json
 .idea/
