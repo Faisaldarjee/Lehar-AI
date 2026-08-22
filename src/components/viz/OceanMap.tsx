@@ -13,10 +13,57 @@ import {
   Info,
   ChevronUp,
   Sparkles,
+  Anchor,
   X 
 } from 'lucide-react';
 import type { FloatSummary, MapMarker, PFZAdvisory, SatelliteGridPoint } from '../../types';
 import { getPFZAdvisories, getSatelliteGrid } from '../../services/api';
+
+interface HarbourPoint {
+  harbour: string;
+  state: string;
+  latitude: number;
+  longitude: number;
+  type: string;
+}
+
+const INDIAN_HARBOURS: HarbourPoint[] = [
+  { harbour: 'Mumbai (Sassoon Dock)', state: 'Maharashtra', latitude: 18.91, longitude: 72.83, type: 'Major Commercial Deep-Sea & Trawler Port' },
+  { harbour: 'Mumbai (Versova Jetty)', state: 'Maharashtra', latitude: 19.13, longitude: 72.81, type: 'Artisanal Koli Fishermen Base' },
+  { harbour: 'Ratnagiri (Mirkarwada)', state: 'Maharashtra', latitude: 16.99, longitude: 73.30, type: 'Mechanized Trawler Base' },
+  { harbour: 'Veraval Port', state: 'Gujarat', latitude: 20.90, longitude: 70.37, type: "India's Largest Fish Landing Base" },
+  { harbour: 'Porbandar Harbour', state: 'Gujarat', latitude: 21.64, longitude: 69.61, type: 'Deep Sea Mechanized Base' },
+  { harbour: 'Goa (Panaji & Malim)', state: 'Goa', latitude: 15.50, longitude: 73.81, type: 'Purse-Seine Fishing Port' },
+  { harbour: 'Mangalore (Old Port)', state: 'Karnataka', latitude: 12.87, longitude: 74.84, type: 'Pelagic Fish Landing Base' },
+  { harbour: 'Kochi (Thoppumpady)', state: 'Kerala', latitude: 9.97, longitude: 76.27, type: 'Central Oceanic Tuna Hub' },
+  { harbour: 'Kollam (Neendakara)', state: 'Kerala', latitude: 8.94, longitude: 76.54, type: 'Major Trawler & Shrimp Port' },
+  { harbour: 'Tuticorin (Vembar)', state: 'Tamil Nadu', latitude: 8.76, longitude: 78.14, type: 'Gulf of Mannar Fishing Base' },
+  { harbour: 'Chennai (Kasimedu)', state: 'Tamil Nadu', latitude: 13.12, longitude: 80.30, type: 'East Coast Deep-Sea Trawler Hub' },
+  { harbour: 'Visakhapatnam Port', state: 'Andhra Pradesh', latitude: 17.69, longitude: 83.22, type: 'Bay of Bengal Commercial Base' },
+  { harbour: 'Paradip Harbour', state: 'Odisha', latitude: 20.32, longitude: 86.61, type: 'Deep Sea Mechanized Port' },
+  { harbour: 'Digha (Sankarpur)', state: 'West Bengal', latitude: 21.62, longitude: 87.51, type: 'Northern Bay Hilsa Landing Hub' },
+];
+
+const createHarbourIcon = () =>
+  L.divIcon({
+    className: 'custom-harbour-marker',
+    html: `<div style="
+      display: flex; 
+      align-items: center; 
+      justify-content: center; 
+      width: 26px; 
+      height: 26px; 
+      border-radius: 50%; 
+      background: rgba(15, 23, 42, 0.95); 
+      border: 2px solid #38bdf8; 
+      box-shadow: 0 0 14px rgba(56, 189, 248, 0.7);
+      font-size: 13px;
+      cursor: pointer;
+    ">⚓</div>`,
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+    popupAnchor: [0, -13],
+  });
 
 // Custom Map Auto-Focuser & Dynamic Bounds Fitter Component
 function MapBoundsController({
@@ -199,6 +246,7 @@ export const OceanMap: React.FC<OceanMapProps> = ({
   // Layer Toggle States
   const [showPFZ, setShowPFZ] = useState<boolean>(true);
   const [showFloats, setShowFloats] = useState<boolean>(true);
+  const [showHarbours, setShowHarbours] = useState<boolean>(true);
   const [showSatelliteSST, setShowSatelliteSST] = useState<boolean>(false);
   const [showChlorophyll, setShowChlorophyll] = useState<boolean>(false);
   
@@ -488,7 +536,22 @@ export const OceanMap: React.FC<OceanMapProps> = ({
             <span>PFZ Zones ({displayedPfzZones.length})</span>
           </button>
 
-          {/* 3. Grouped Satellite Layers Dropdown */}
+          {/* 3. Major Fishing Harbours / Ports Toggle */}
+          <button
+            type="button"
+            onClick={() => setShowHarbours(!showHarbours)}
+            title="Toggle 14 Major Indian Fishing Harbours & Jetties"
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold backdrop-blur-md shadow-xl transition cursor-pointer active:scale-95 ${
+              showHarbours
+                ? 'bg-sky-950/85 border-sky-500/60 text-sky-300 shadow-sky-950/40'
+                : 'bg-abyssal-950/90 border-abyssal-800 text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Anchor className={`w-3.5 h-3.5 ${showHarbours ? 'text-sky-400' : 'text-slate-400'}`} />
+            <span>Ports ({INDIAN_HARBOURS.length})</span>
+          </button>
+
+          {/* 4. Grouped Satellite Layers Dropdown */}
           <div className="relative">
             <button
               type="button"
@@ -801,6 +864,44 @@ export const OceanMap: React.FC<OceanMapProps> = ({
             }}
           />
         )}
+
+        {/* INDIAN FISHING HARBOURS / PORTS LAYER */}
+        {showHarbours &&
+          INDIAN_HARBOURS.map((h, idx) => (
+            <Marker
+              key={`harbour-${idx}`}
+              position={[h.latitude, h.longitude]}
+              icon={createHarbourIcon()}
+            >
+              <Popup>
+                <div className="p-1 space-y-1.5 text-slate-100 min-w-[220px] font-sans">
+                  <div className="flex items-center justify-between border-b border-abyssal-800 pb-1">
+                    <span className="font-bold text-sky-400 text-sm flex items-center gap-1 font-heading">
+                      ⚓ {h.harbour}
+                    </span>
+                    <span className="text-[10px] font-mono bg-sky-950 text-sky-300 px-1.5 py-0.5 rounded border border-sky-800">
+                      {h.state}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-300 leading-snug">{h.type}</div>
+                  <div className="text-[11px] font-mono text-slate-400">
+                    GPS: {h.latitude.toFixed(2)}°N, {h.longitude.toFixed(2)}°E
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserVesselPos([h.latitude, h.longitude]);
+                      setMapCenter([h.latitude, h.longitude]);
+                      setMapZoom(8);
+                    }}
+                    className="w-full mt-1.5 py-1 px-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs transition text-center cursor-pointer shadow-md flex items-center justify-center gap-1"
+                  >
+                    <Navigation className="w-3 h-3" /> Set Vessel Pos Here
+                  </button>
+                </div>
+              </Popup>
+            </Marker>
+          ))}
 
         {/* Argo Float Markers */}
         {showFloats &&
