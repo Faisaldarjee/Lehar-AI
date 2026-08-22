@@ -591,11 +591,11 @@ export const OceanMap: React.FC<OceanMapProps> = ({
             <span>PFZ Zones ({displayedPfzZones.length})</span>
           </button>
 
-          {/* 3. Major Fishing Harbours / Ports Toggle with Dynamic Zoom LOD */}
+          {/* 3. Major Fishing Harbours / Ports Toggle */}
           <button
             type="button"
             onClick={() => setShowHarbours(!showHarbours)}
-            title={`Toggle 150+ Indian Coastal Fishing Harbours & Jetties (Active in view: ${visiblePorts.length})`}
+            title="Toggle 150+ Indian Coastal Fishing Harbours & Jetties"
             className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold backdrop-blur-md shadow-xl transition cursor-pointer active:scale-95 ${
               showHarbours
                 ? 'bg-sky-950/85 border-sky-500/60 text-sky-300 shadow-sky-950/40'
@@ -604,11 +604,6 @@ export const OceanMap: React.FC<OceanMapProps> = ({
           >
             <Anchor className={`w-3.5 h-3.5 ${showHarbours ? 'text-sky-400' : 'text-slate-400'}`} />
             <span>Ports ({INDIAN_PORTS_DATABASE.length}+)</span>
-            {showHarbours && (
-              <span className="text-[9px] px-1.5 py-0.2 rounded bg-sky-900/90 text-sky-200 font-mono border border-sky-700/50">
-                {visiblePorts.length} in view
-              </span>
-            )}
           </button>
 
           {/* 4. Grouped Satellite Layers Dropdown */}
