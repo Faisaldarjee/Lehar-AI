@@ -29,18 +29,15 @@ interface HarbourPoint {
 
 const INDIAN_HARBOURS: HarbourPoint[] = [
   { harbour: 'Mumbai (Sassoon Dock)', state: 'Maharashtra', latitude: 18.91, longitude: 72.83, type: 'Major Commercial Deep-Sea & Trawler Port' },
-  { harbour: 'Mumbai (Versova Jetty)', state: 'Maharashtra', latitude: 19.13, longitude: 72.81, type: 'Artisanal Koli Fishermen Base' },
   { harbour: 'Ratnagiri (Mirkarwada)', state: 'Maharashtra', latitude: 16.99, longitude: 73.30, type: 'Mechanized Trawler Base' },
-  { harbour: 'Veraval Port', state: 'Gujarat', latitude: 20.90, longitude: 70.37, type: "India's Largest Fish Landing Base" },
-  { harbour: 'Porbandar Harbour', state: 'Gujarat', latitude: 21.64, longitude: 69.61, type: 'Deep Sea Mechanized Base' },
-  { harbour: 'Goa (Panaji & Malim)', state: 'Goa', latitude: 15.50, longitude: 73.81, type: 'Purse-Seine Fishing Port' },
+  { harbour: 'Veraval Port', state: 'Gujarat', latitude: 20.90, longitude: 70.37, type: "India's Largest Commercial Fish Landing Base" },
+  { harbour: 'Goa (Panaji & Malim)', state: 'Goa', latitude: 15.50, longitude: 73.81, type: 'Purse-Seine Marine Fishing Port' },
   { harbour: 'Mangalore (Old Port)', state: 'Karnataka', latitude: 12.87, longitude: 74.84, type: 'Pelagic Fish Landing Base' },
-  { harbour: 'Kochi (Thoppumpady)', state: 'Kerala', latitude: 9.97, longitude: 76.27, type: 'Central Oceanic Tuna Hub' },
-  { harbour: 'Kollam (Neendakara)', state: 'Kerala', latitude: 8.94, longitude: 76.54, type: 'Major Trawler & Shrimp Port' },
+  { harbour: 'Kochi (Thoppumpady)', state: 'Kerala', latitude: 9.97, longitude: 76.27, type: 'Central Oceanic Tuna & Deep-Sea Hub' },
   { harbour: 'Tuticorin (Vembar)', state: 'Tamil Nadu', latitude: 8.76, longitude: 78.14, type: 'Gulf of Mannar Fishing Base' },
   { harbour: 'Chennai (Kasimedu)', state: 'Tamil Nadu', latitude: 13.12, longitude: 80.30, type: 'East Coast Deep-Sea Trawler Hub' },
-  { harbour: 'Visakhapatnam Port', state: 'Andhra Pradesh', latitude: 17.69, longitude: 83.22, type: 'Bay of Bengal Commercial Base' },
-  { harbour: 'Paradip Harbour', state: 'Odisha', latitude: 20.32, longitude: 86.61, type: 'Deep Sea Mechanized Port' },
+  { harbour: 'Visakhapatnam Port', state: 'Andhra Pradesh', latitude: 17.69, longitude: 83.22, type: 'Bay of Bengal Commercial Fishing Base' },
+  { harbour: 'Paradip Harbour', state: 'Odisha', latitude: 20.32, longitude: 86.61, type: 'Deep Sea Mechanized Fishing Base' },
   { harbour: 'Digha (Sankarpur)', state: 'West Bengal', latitude: 21.62, longitude: 87.51, type: 'Northern Bay Hilsa Landing Hub' },
 ];
 
@@ -254,8 +251,8 @@ export const OceanMap: React.FC<OceanMapProps> = ({
   const [selectedSpecies, setSelectedSpecies] = useState<string>('all');
   const [speciesMenuOpen, setSpeciesMenuOpen] = useState<boolean>(false);
 
-  // Live Vessel GPS / NavIC Tracker State (Active by default for instant demo immersion)
-  const [userVesselPos, setUserVesselPos] = useState<[number, number] | null>([18.72, 72.45]);
+  // Live Vessel GPS / NavIC Tracker State (Off by default, toggled by user)
+  const [userVesselPos, setUserVesselPos] = useState<[number, number] | null>(null);
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [nearestPfzToVessel, setNearestPfzToVessel] = useState<{
     pfz: PFZAdvisory;
@@ -335,6 +332,10 @@ export const OceanMap: React.FC<OceanMapProps> = ({
 
   // Live GPS / NavIC Vessel Tracker Handler (Zero-Internet Edge Ready)
   const handleLocateVessel = () => {
+    if (userVesselPos) {
+      setUserVesselPos(null);
+      return;
+    }
     setIsLocating(true);
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
@@ -643,16 +644,16 @@ export const OceanMap: React.FC<OceanMapProps> = ({
             ) : (
               <Navigation className={`w-3.5 h-3.5 ${userVesselPos ? 'text-emerald-400 animate-pulse' : 'text-slate-400'}`} />
             )}
-            <span>{userVesselPos ? 'GPS Locked ⛵' : '📍 Vessel GPS'}</span>
+            <span>{userVesselPos ? 'GPS Active ⛵' : '📍 Vessel GPS'}</span>
           </button>
 
         </div>
 
       </div>
 
-      {/* Live Vessel GPS Telemetry HUD */}
+      {/* Live Vessel GPS Telemetry HUD (Clean Bottom-Left HUD) */}
       {userVesselPos && (
-        <div className="absolute top-14 right-3 z-[1000] max-w-xs sm:max-w-sm rounded-2xl border border-emerald-500/40 bg-abyssal-950/95 p-3 font-mono text-xs text-slate-200 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-1">
+        <div className="absolute bottom-6 left-6 z-[1000] max-w-xs sm:max-w-sm rounded-2xl border border-emerald-500/40 bg-abyssal-950/95 p-3 font-mono text-xs text-slate-200 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2">
           <div className="flex items-center justify-between border-b border-abyssal-800 pb-1.5 mb-1.5">
             <div className="flex items-center gap-1.5 font-bold text-emerald-300">
               <Navigation className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
