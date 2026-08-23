@@ -136,35 +136,17 @@ export const Navbar: React.FC<NavbarProps> = ({
           })}
         </nav>
 
-        {/* Right Section: Notification Bell, Edge Badge & Demonstrators Dropdown */}
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Right Section: Offline Readiness Badge & Demonstrators Dropdown */}
+        <div className="flex items-center gap-2.5 shrink-0">
 
           {/* Real-time Offline Edge Readiness Badge */}
           <div
-            className="hidden xl:flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl bg-teal-950/80 border border-teal-500/40 text-[11px] font-mono text-teal-300 shadow-sm select-none"
+            className="hidden lg:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-teal-950/80 border border-teal-500/40 text-[11px] font-mono text-teal-300 shadow-sm select-none"
             title="Lehar Edge Active: Local SQLite In-Situ DB + Cached NOAA Satellite Snapshot. 100% Offline Capable."
           >
             <span className="w-2 h-2 rounded-full bg-teal-400 shadow-glow-cyan-sm animate-pulse shrink-0" />
             <span className="font-bold">Offline-Ready Edge</span>
           </div>
-
-          {/* Live Guardian Notification Bell Icon with Sonar Pulse Badge */}
-          <button
-            type="button"
-            onClick={() => setNotificationOpen(true)}
-            className="relative flex items-center justify-center p-2 rounded-xl bg-[#091524] hover:bg-[#0e2238] border border-cyan-500/30 text-slate-300 hover:text-white transition cursor-pointer active:scale-95 group shadow-md"
-            title="Open Lehar Guardian Marine Alerts & Geo-Fence Watchdog"
-          >
-            <Bell className="w-4 h-4 text-cyan-400 group-hover:rotate-12 transition-transform duration-200" />
-            {alertCount > 0 && (
-              <>
-                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-mono font-black text-white shadow-lg shadow-rose-500/50">
-                  {alertCount}
-                </span>
-                <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-rose-500 animate-ping opacity-75" />
-              </>
-            )}
-          </button>
 
           {/* Demonstrators Dropdown Menu */}
           <div className="relative shrink-0" ref={dropdownRef}>
