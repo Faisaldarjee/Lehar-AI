@@ -32,11 +32,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   }, [messages, isLoading]);
 
   return (
-    <div className="flex flex-col h-full bg-abyssal-950/85 border border-abyssal-800/90 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-2xl relative glow-organism-cyan">
+    <div className="flex flex-col h-full min-h-0 bg-abyssal-950/85 border border-abyssal-800/90 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-2xl relative glow-organism-cyan">
       <HudCornerBrackets />
 
       {/* Top Chat Header */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-abyssal-800/80 bg-abyssal-900/60 shadow-inner">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-abyssal-800/80 bg-abyssal-900/60 shadow-inner shrink-0">
         <div className="flex items-center space-x-2.5">
           <div className="p-1.5 rounded-xl bg-ocean-cyan/10 text-ocean-cyan border border-ocean-cyan/25 shadow-glow-cyan-sm">
             <Waves className="w-4 h-4" />
@@ -50,8 +50,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         </div>
       </div>
 
-      {/* Messages Stream */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3">
+      {/* Messages Stream with isolated internal scroll */}
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 space-y-3 custom-scrollbar">
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center max-w-lg mx-auto py-8 space-y-4">
             <div className="relative ocean-breathing">

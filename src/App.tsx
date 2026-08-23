@@ -260,7 +260,7 @@ export default function App() {
   const isStageActive = hasEverQueried || messages.length > 0;
 
   return (
-    <div className="min-h-screen relative text-slate-100 flex flex-col font-sans selection:bg-ocean-cyan selection:text-abyssal-950">
+    <div className="h-screen w-screen overflow-hidden relative text-slate-100 flex flex-col font-sans selection:bg-ocean-cyan selection:text-abyssal-950">
       
       {/* Ambient Ocean Atmospheric Layer (Caustics & Bioluminescent Drift) */}
       <OceanAtmosphere />
@@ -287,14 +287,14 @@ export default function App() {
       />
 
       {/* Main Interactive Workspace */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-3 md:p-5 flex flex-col">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-2 sm:p-3 md:p-3.5 flex flex-col min-h-0 overflow-hidden">
         
         {/* VIEW 1: AI CONSOLE + SMART STAGE (DEFAULT CHAT) */}
         {currentMode === 'chat' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-[580px] h-[calc(100vh-80px)]">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 flex-1 h-full min-h-0 overflow-hidden">
             
             {/* Left Console: Chat Panel (5 Cols) */}
-            <div className="lg:col-span-5 h-full">
+            <div className="lg:col-span-5 h-full min-h-0 flex flex-col overflow-hidden">
               <ChatPanel
                 messages={messages}
                 isLoading={isChatLoading}
@@ -314,7 +314,7 @@ export default function App() {
             </div>
 
             {/* Right Smart Stage: Single Context-Aware Panel (7 Cols) */}
-            <div className="lg:col-span-7 flex flex-col h-full bg-abyssal-950/90 border border-abyssal-800/90 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-2xl relative glow-organism-cyan">
+            <div className="lg:col-span-7 flex flex-col h-full min-h-0 bg-abyssal-950/90 border border-abyssal-800/90 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-2xl relative glow-organism-cyan">
               <HudCornerBrackets />
               
               {/* Stage Top Dedicated Header Bar (Zero-Collision Layout) */}
@@ -338,122 +338,68 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Segmented Switcher (Docked in Header Bar) */}
+                  {/* Stage Dynamic View Controller */}
                   <div className="flex items-center gap-1 bg-abyssal-950 p-1 rounded-xl border border-abyssal-800 shrink-0 shadow-inner">
                     <button
                       type="button"
                       onClick={() => setStageView('map')}
-                      className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer active:scale-95 ${
+                      className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer active:scale-95 ${
                         stageView === 'map'
                           ? 'bg-gradient-to-r from-ocean-cyan to-teal-400 text-abyssal-950 font-bold shadow-md shadow-ocean-cyan/25'
-                          : 'text-slate-400 hover:text-slate-100 hover:bg-abyssal-850'
+                          : 'text-slate-400 hover:text-white'
                       }`}
                     >
-                      <MapPin className="w-3.5 h-3.5" />
-                      <span>Ocean Map</span>
+                      <Compass className="w-3 h-3" />
+                      <span className="hidden sm:inline">Fleet Map</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setStageView('chart')}
-                      className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer active:scale-95 ${
+                      className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer active:scale-95 ${
                         stageView === 'chart'
                           ? 'bg-gradient-to-r from-ocean-cyan to-teal-400 text-abyssal-950 font-bold shadow-md shadow-ocean-cyan/25'
-                          : 'text-slate-400 hover:text-slate-100 hover:bg-abyssal-850'
+                          : 'text-slate-400 hover:text-white'
                       }`}
                     >
-                      <LineChart className="w-3.5 h-3.5" />
-                      <span>CTD Profile</span>
+                      <LineChart className="w-3 h-3" />
+                      <span className="hidden sm:inline">CTD Chart</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setStageView('3d')}
-                      className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer active:scale-95 ${
+                      className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer active:scale-95 ${
                         stageView === '3d'
                           ? 'bg-gradient-to-r from-ocean-cyan to-teal-400 text-abyssal-950 font-bold shadow-md shadow-ocean-cyan/25'
-                          : 'text-slate-400 hover:text-slate-100 hover:bg-abyssal-850'
+                          : 'text-slate-400 hover:text-white'
                       }`}
                     >
-                      <Box className="w-3.5 h-3.5" />
-                      <span>3D Lens</span>
+                      <Box className="w-3 h-3" />
+                      <span className="hidden sm:inline">3D Lens</span>
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* Stage Content: Ambient Idle Placeholder vs Active Visual Stage */}
+              {/* Stage Dynamic Visualization Viewport */}
               {!isStageActive ? (
-                /* AMBIENT IDLE STATE (Before First Query) */
-                <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-8 text-center space-y-6 bg-gradient-to-b from-abyssal-950 via-abyssal-900/70 to-abyssal-950">
-                  
-                  {/* Subtle Branded Pulse Emblem */}
+                <div className="flex-1 flex flex-col items-center justify-center text-center p-6 space-y-4">
                   <div className="relative ocean-breathing">
-                    <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-ocean-cyan/20 via-teal-500/10 to-abyssal-900 border border-ocean-cyan/30 flex items-center justify-center text-ocean-cyan shadow-glow-cyan">
-                      <Waves className="w-10 h-10 animate-pulse" />
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-ocean-cyan/20 via-teal-500/10 to-abyssal-900 border border-ocean-cyan/30 flex items-center justify-center text-ocean-cyan shadow-glow-cyan">
+                      <Waves className="w-8 h-8 animate-pulse" />
                     </div>
-                    <span className="absolute -top-1 -right-1 flex h-4 w-4">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-ocean-cyan opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-4 w-4 bg-ocean-cyan"></span>
-                    </span>
                   </div>
-
-                  {/* Heading & Subtitle */}
-                  <div className="space-y-1.5 max-w-md">
-                    <h3 className="text-lg sm:text-xl font-black text-white tracking-tight font-heading">
+                  <div className="space-y-1 max-w-sm">
+                    <h4 className="text-sm font-bold text-white font-heading">
                       Interactive Ocean Discovery Stage
-                    </h3>
+                    </h4>
                     <p className="text-xs text-slate-400 leading-relaxed">
-                      Ask a query in the console or use your voice to activate live geospatial float trajectories, CTD depth curves, and 3D bathymetry.
+                      Ask any question on the left console to trigger dynamic in-situ float positions, depth charts, and 3D thermocline columns.
                     </p>
                   </div>
-
-                  {/* 3 Capabilities Preview Cards */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-lg text-left">
-                    <div className="p-3.5 rounded-xl bg-abyssal-900/80 border border-abyssal-800 space-y-1 hover:border-ocean-cyan/40 hover:shadow-glow-cyan-sm transition-all duration-200">
-                      <div className="p-1.5 rounded-lg bg-ocean-cyan/10 text-ocean-cyan w-fit">
-                        <MapPin className="w-3.5 h-3.5" />
-                      </div>
-                      <h4 className="text-xs font-bold text-slate-200 font-heading">Fleet Map & PFZ</h4>
-                      <p className="text-[10px] text-slate-400 leading-tight">97 active floats with thermal front fishing advisories</p>
-                    </div>
-
-                    <div className="p-3.5 rounded-xl bg-abyssal-900/80 border border-abyssal-800 space-y-1 hover:border-teal-400/40 hover:shadow-sm transition-all duration-200">
-                      <div className="p-1.5 rounded-lg bg-teal-500/10 text-teal-400 w-fit">
-                        <LineChart className="w-3.5 h-3.5" />
-                      </div>
-                      <h4 className="text-xs font-bold text-slate-200 font-heading">CTD Depth Curves</h4>
-                      <p className="text-[10px] text-slate-400 leading-tight">Temperature & salinity down to 2,000m depth</p>
-                    </div>
-
-                    <div className="p-3.5 rounded-xl bg-abyssal-900/80 border border-abyssal-800 space-y-1 hover:border-cyan-400/40 hover:shadow-glow-cyan-sm transition-all duration-200">
-                      <div className="p-1.5 rounded-lg bg-cyan-400/10 text-cyan-300 w-fit">
-                        <Box className="w-3.5 h-3.5" />
-                      </div>
-                      <h4 className="text-xs font-bold text-slate-200 font-heading">3D OceanLens</h4>
-                      <p className="text-[10px] text-slate-400 leading-tight">Interactive Three.js WebGL water columns</p>
-                    </div>
-                  </div>
-
-                  {/* Direct Browse Action */}
-                  <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setHasEverQueried(true);
-                        setStageView('map');
-                      }}
-                      className="flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-ocean-cyan to-teal-400 text-abyssal-950 font-bold text-xs shadow-lg shadow-ocean-cyan/20 transition cursor-pointer active:scale-95 hover:brightness-110"
-                    >
-                      <Compass className="w-4 h-4 text-abyssal-950" />
-                      <span>Browse Fleet Map Directly</span>
-                      <ArrowRight className="w-4 h-4 ml-0.5 text-abyssal-950" />
-                    </button>
-                  </div>
-
                 </div>
               ) : (
-                /* ACTIVE STAGE VIEW (After First Query) */
                 <div className="flex-1 w-full h-full relative overflow-hidden">
                   {stageView === 'map' && (
                     <OceanMap
@@ -466,7 +412,7 @@ export default function App() {
                   )}
 
                   {stageView === 'chart' && (
-                    <div className="w-full h-full p-3">
+                    <div className="w-full h-full p-4">
                       <DepthChart chart={activeChart} />
                     </div>
                   )}
@@ -487,7 +433,7 @@ export default function App() {
 
         {/* VIEW 2: OCEAN EXPLORER (MERGED MAP & 3D WITH INTERNAL TOGGLE) */}
         {(currentMode === 'map' || currentMode === '3d') && (
-          <div className="flex-1 min-h-[580px] h-[calc(100vh-80px)] flex flex-col relative rounded-2xl overflow-hidden shadow-2xl border border-cyan-500/20 glow-organism-cyan bg-abyssal-950">
+          <div className="flex-1 h-full min-h-0 flex flex-col relative rounded-2xl overflow-hidden shadow-2xl border border-cyan-500/20 glow-organism-cyan bg-abyssal-950">
             <HudCornerBrackets />
             
             {/* Dedicated Top Explorer Header Bar (Zero-Collision Dock) */}
@@ -557,8 +503,8 @@ export default function App() {
 
         {/* VIEW 3: PROACTIVE ANOMALY RADAR WATCHDOG */}
         {currentMode === 'anomaly' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-[580px] h-[calc(100vh-80px)]">
-            <div className="lg:col-span-6 h-full">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 flex-1 h-full min-h-0 overflow-hidden">
+            <div className="lg:col-span-6 h-full min-h-0 flex flex-col overflow-hidden">
               <AnomalyRadar
                 anomalies={anomalies}
                 onSelectAnomaly={handleSelectAnomaly}
@@ -579,7 +525,7 @@ export default function App() {
                 isScanning={isScanningAnomalies}
               />
             </div>
-            <div className="lg:col-span-6 h-full rounded-2xl overflow-hidden shadow-2xl">
+            <div className="lg:col-span-6 h-full min-h-0 rounded-2xl overflow-hidden shadow-2xl">
               <OceanMap
                 floats={floats}
                 highlightMarkers={
@@ -602,14 +548,14 @@ export default function App() {
 
         {/* VIEW 4: WHATSAPP COASTAL BOT SIMULATOR */}
         {currentMode === 'whatsapp' && (
-          <div className="flex-1 min-h-[580px] h-[calc(100vh-80px)] flex flex-col">
+          <div className="flex-1 h-full min-h-0 overflow-y-auto custom-scrollbar">
             <WhatsAppSimulator selectedLanguage={selectedLanguage} />
           </div>
         )}
 
         {/* VIEW 5: SYSTEM ARCHITECTURE PIPELINE */}
         {currentMode === 'pipeline' && (
-          <div className="flex-1 min-h-[580px] h-[calc(100vh-80px)] flex flex-col">
+          <div className="flex-1 h-full min-h-0 overflow-y-auto custom-scrollbar">
             <ArchitecturePipeline />
           </div>
         )}
@@ -617,7 +563,7 @@ export default function App() {
       </main>
 
       {/* Clean Footer Bar */}
-      <footer className="border-t border-abyssal-900 bg-abyssal-950/90 px-4 py-2 text-center text-[10px] text-slate-500">
+      <footer className="border-t border-abyssal-900 bg-abyssal-950/90 px-4 py-1.5 text-center text-[10px] text-slate-500 shrink-0">
         <p>Lehar AI 1.0 • Know the Sea. Know the Way. • Developed for INCOIS & Ministry of Earth Sciences (SIH26040)</p>
       </footer>
 
