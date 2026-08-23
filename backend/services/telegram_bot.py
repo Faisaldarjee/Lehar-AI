@@ -217,16 +217,19 @@ async def _telegram_request(client: httpx.AsyncClient, method: str, payload: dic
             logger.info("[Telegram API] Duplicate polling instance detected (409 Conflict). Waiting 6s for single-instance sync...")
             await asyncio.sleep(6)
             return None
+        elif method == "answerCallbackQuery" and resp.status_code == 400:
+            # Expired query ID from before restart (>20s old), safe to ignore silently
+            return None
         else:
             logger.warning(f"[Telegram API] {method} returned {resp.status_code}: {resp.text}")
             return None
     except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as e:
-        logger.warning(f"[Telegram API] Network connectivity notice in {method}: {e}")
-        await asyncio.sleep(3)
+        logger.debug(f"[Telegram API] Transient network notice in {method}: {e}")
+        await asyncio.sleep(2)
         return None
     except Exception as e:
-        logger.error(f"[Telegram API] Error in {method}: {e}")
-        await asyncio.sleep(3)
+        logger.debug(f"[Telegram API] Non-critical exception in {method}: {e}")
+        await asyncio.sleep(2)
         return None
 
 
@@ -340,10 +343,17 @@ def _transcribe_audio_groq(audio_bytes: bytes) -> str:
 
 async def _synthesize_voice_audio(text: str, lang: str = "en") -> bytes:
     """Synthesizes human-like neural voice audio note using Edge-TTS."""
-    clean_text = text.replace("*", "").replace("`", "").replace("_", "").replace("#", "")
-    clean_text = "\n".join([line for line in clean_text.split("\n") if not line.startswith("http") and not line.startswith("👉")])
-    if len(clean_text) > 450:
-        clean_text = clean_text[:450] + "..."
+    if not text or not text.strip():
+        return b""
+    # Clean text: strip URLs, markdown formatting, emojis and unsupported symbols
+    clean = re.sub(r'https?://\S+', '', text)
+    clean = re.sub(r'[*_`#~\[\]()><|]', ' ', clean)
+    clean = re.sub(r'[^\w\s.,?!;:।\'"\-°%]', ' ', clean, flags=re.UNICODE)
+    clean = ' '.join(clean.split())
+    if not clean:
+        return b""
+    if len(clean) > 350:
+        clean = clean[:350] + "."
 
     # Select optimal Indian regional voice
     voice_map = {
@@ -360,14 +370,14 @@ async def _synthesize_voice_audio(text: str, lang: str = "en") -> bytes:
     voice_id = voice_map.get(lang.lower()[:2], "en-IN-NeerjaNeural")
 
     try:
-        communicate = edge_tts.Communicate(clean_text, voice_id)
+        communicate = edge_tts.Communicate(clean, voice_id)
         audio_data = bytearray()
         async for chunk in communicate.stream():
             if chunk["type"] == "audio":
                 audio_data.extend(chunk["data"])
         return bytes(audio_data)
     except Exception as e:
-        logger.error(f"[Edge-TTS] Synthesis error: {e}")
+        logger.debug(f"[Edge-TTS] Synthesis transient notice: {e}")
         return b""
 
 
