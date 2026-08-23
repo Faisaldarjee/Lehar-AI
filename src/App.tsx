@@ -257,10 +257,11 @@ export default function App() {
     }
   };
 
-  const isStageActive = hasEverQueried || messages.length > 0;
+  // Always show the map on Smart Stage — better for presentations
+  const isStageActive = true;
 
   return (
-    <div className="min-h-screen w-full relative text-slate-100 flex flex-col font-sans selection:bg-ocean-cyan selection:text-abyssal-950 bg-abyssal-950 overflow-y-auto custom-scrollbar">
+    <div className="h-screen w-full relative text-slate-100 flex flex-col font-sans selection:bg-ocean-cyan selection:text-abyssal-950 bg-abyssal-950 overflow-hidden">
       
       {/* Ambient Ocean Atmospheric Layer (Caustics & Bioluminescent Drift) */}
       <OceanAtmosphere />
@@ -286,15 +287,15 @@ export default function App() {
         onClose={() => setIsTelegramModalOpen(false)}
       />
 
-      {/* Main Interactive Workspace */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-2 sm:p-3 md:p-3.5 flex flex-col">
+      {/* Main Interactive Workspace (Pinned Dashboard Layout — Zero Page Drift) */}
+      <main className="flex-1 min-h-0 max-w-7xl w-full mx-auto p-2 sm:p-3 md:p-3.5 flex flex-col overflow-hidden">
         
         {/* VIEW 1: AI CONSOLE + SMART STAGE (DEFAULT CHAT) */}
         {currentMode === 'chat' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 flex-1 min-h-[580px] lg:h-[calc(100vh-100px)]">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 flex-1 min-h-0 h-full overflow-hidden">
             
             {/* Left Console: Chat Panel (5 Cols) */}
-            <div className="lg:col-span-5 h-[520px] lg:h-full flex flex-col overflow-hidden">
+            <div className="lg:col-span-5 h-full min-h-0 flex flex-col overflow-hidden">
               <ChatPanel
                 messages={messages}
                 isLoading={isChatLoading}
@@ -314,7 +315,7 @@ export default function App() {
             </div>
 
             {/* Right Smart Stage: Single Context-Aware Panel (7 Cols) */}
-            <div className="lg:col-span-7 flex flex-col min-h-[520px] lg:h-full bg-abyssal-950/90 border border-abyssal-800/90 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-2xl relative glow-organism-cyan">
+            <div className="lg:col-span-7 h-full min-h-0 flex flex-col bg-abyssal-950/90 border border-abyssal-800/90 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-2xl relative glow-organism-cyan">
               <HudCornerBrackets />
               
               {/* Stage Top Dedicated Header Bar (Zero-Collision Layout) */}
@@ -412,7 +413,7 @@ export default function App() {
                   )}
 
                   {stageView === 'chart' && (
-                    <div className="w-full h-full p-4">
+                    <div className="w-full h-full p-2 sm:p-3 overflow-hidden min-h-0 flex flex-col">
                       <DepthChart chart={activeChart} />
                     </div>
                   )}
@@ -503,7 +504,7 @@ export default function App() {
 
         {/* VIEW 3: PROACTIVE ANOMALY RADAR WATCHDOG */}
         {currentMode === 'anomaly' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 flex-1 h-full min-h-0 overflow-hidden">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 flex-1 h-full min-h-0 overflow-y-auto custom-scrollbar">
             <div className="lg:col-span-6 h-full min-h-0 flex flex-col overflow-hidden">
               <AnomalyRadar
                 anomalies={anomalies}
@@ -564,7 +565,7 @@ export default function App() {
 
       {/* Clean Footer Bar */}
       <footer className="border-t border-abyssal-900 bg-abyssal-950/90 px-4 py-1.5 text-center text-[10px] text-slate-500 shrink-0">
-        <p>Lehar AI 1.0 • Know the Sea. Know the Way. • Developed for INCOIS & Ministry of Earth Sciences (SIH26040)</p>
+        <p>Lehar AI 1.0 • Know the Sea. Know the Way. • Team Ctrl Alt Elites • Developed for INCOIS & Ministry of Earth Sciences (SIH26040)</p>
       </footer>
 
     </div>

@@ -24,10 +24,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   onView3D,
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Smooth scroll to bottom whenever messages or loading state changes
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, isLoading]);
 
@@ -50,8 +52,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         </div>
       </div>
 
-      {/* Messages Stream with isolated internal scroll */}
-      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 space-y-3 custom-scrollbar">
+      {/* Messages Stream with isolated internal scroll & overscroll containment */}
+      <div
+        ref={scrollRef}
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-4 space-y-3 custom-scrollbar"
+        style={{ scrollBehavior: 'smooth' }}
+      >
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center max-w-lg mx-auto py-8 space-y-4">
             <div className="relative ocean-breathing">
@@ -91,6 +97,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             <span>Analyzing ARGO profiles & computing telemetry...</span>
           </div>
         )}
+
+        {/* Bottom Anchor to ensure smooth auto-scroll */}
+        <div ref={messagesEndRef} className="h-1 shrink-0" />
       </div>
 
       {/* Input Composer Bar */}

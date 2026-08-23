@@ -90,13 +90,36 @@ export const DepthChart: React.FC<DepthChartProps> = ({ chart, title }) => {
   }
 
   const validTemps = sortedData.map((d) => d.temperature).filter((t): t is number => typeof t === 'number');
+  const validSals = sortedData.map((d) => d.salinity).filter((s): s is number => typeof s === 'number');
+
+  const minTemp = validTemps.length ? Math.min(...validTemps) : 2.0;
+  const maxTemp = validTemps.length ? Math.max(...validTemps) : 30.0;
+  const minSal = validSals.length ? Math.min(...validSals) : 32.0;
+  const maxSal = validSals.length ? Math.max(...validSals) : 37.0;
+
+  // Dynamic Temperature X-Axis Domain (Prevents flat collapsed vertical lines)
+  let tempDomain: [number, number];
+  if (maxTemp - minTemp < 4) {
+    tempDomain = [Math.max(0, Math.floor(minTemp - 2)), Math.ceil(maxTemp + 2)];
+  } else {
+    tempDomain = [Math.max(0, Math.floor(minTemp / 5) * 5), Math.ceil((maxTemp + 2) / 5) * 5];
+  }
+
+  // Dynamic Salinity X-Axis Domain
+  let salDomain: [number, number];
+  if (maxSal - minSal < 4) {
+    salDomain = [Math.max(10, Math.floor(minSal - 2)), Math.ceil(maxSal + 2)];
+  } else {
+    salDomain = [Math.max(15, Math.floor(minSal / 5) * 5), Math.ceil((maxSal + 2) / 5) * 5];
+  }
+
   const surfaceTemp = validTemps.length ? validTemps[0].toFixed(1) : '28.6';
   const deepTemp = validTemps.length ? validTemps[validTemps.length - 1].toFixed(1) : '3.7';
 
   return (
-    <div className="flex flex-col h-full bg-abyssal-950/90 border border-abyssal-800/90 rounded-2xl p-4 shadow-2xl backdrop-blur-xl font-sans">
+    <div className="flex flex-col h-full min-h-0 bg-abyssal-950/90 border border-abyssal-800/90 rounded-2xl p-3 sm:p-4 shadow-2xl backdrop-blur-xl font-sans overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between pb-2.5 mb-2 border-b border-abyssal-800/80">
+      <div className="flex items-center justify-between pb-2.5 mb-2 border-b border-abyssal-800/80 shrink-0">
         <div>
           <h3 className="text-sm font-bold text-white flex items-center gap-1.5 font-heading">
             <Thermometer className="w-4 h-4 text-ocean-cyan" />
@@ -106,19 +129,20 @@ export const DepthChart: React.FC<DepthChartProps> = ({ chart, title }) => {
         </div>
 
         {/* Top Right Measurement Badges */}
-        <div className="flex items-center gap-2 text-xs">
-          <span className="flex items-center gap-1.5 text-slate-300 font-mono text-[11px] bg-abyssal-900/90 px-3 py-1 rounded-xl border border-slate-700/80 shadow-inner">
-            <span>Temp (°C)</span>
+        <div className="flex items-center gap-2 text-xs shrink-0">
+          <span className="flex items-center gap-1.5 text-ocean-cyan font-mono text-[11px] bg-cyan-950/40 px-3 py-1 rounded-xl border border-ocean-cyan/40 shadow-inner">
+            <span className="w-2 h-2 rounded-full bg-ocean-cyan shadow-glow-cyan-sm"></span>
+            <span>Temp ({tempDomain[0]}–{tempDomain[1]}°C)</span>
           </span>
           <span className="flex items-center gap-1.5 text-emerald-400 font-mono text-[11px] bg-emerald-950/40 px-3 py-1 rounded-xl border border-emerald-500/40 shadow-inner">
             <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-glow-emerald-sm"></span>
-            <span>Salinity (PSU)</span>
+            <span>Salinity ({salDomain[0]}–{salDomain[1]} PSU)</span>
           </span>
         </div>
       </div>
 
       {/* Depth Zones Pill Badges */}
-      <div className="flex items-center gap-2 mb-2 px-1 text-[11px] font-mono overflow-x-auto no-scrollbar">
+      <div className="flex items-center gap-2 mb-2 px-1 text-[11px] font-mono overflow-x-auto no-scrollbar shrink-0">
         <span className="text-slate-400 flex items-center gap-1 shrink-0 font-sans font-semibold text-xs">
           <Layers className="w-3.5 h-3.5 text-ocean-cyan" /> Zones:
         </span>
@@ -134,7 +158,7 @@ export const DepthChart: React.FC<DepthChartProps> = ({ chart, title }) => {
       </div>
 
       {/* Recharts Clean Canvas Area */}
-      <div className="flex-1 w-full min-h-[260px]">
+      <div className="flex-1 min-h-0 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={sortedData}
@@ -143,14 +167,26 @@ export const DepthChart: React.FC<DepthChartProps> = ({ chart, title }) => {
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#0e2338" />
             
-            {/* X Axis: Measurements (0.0 to 40.0) */}
+            {/* Top X Axis: Temperature (°C) — Cyan */}
             <XAxis
+              xAxisId="temp"
               type="number"
-              domain={[0, 40]}
-              ticks={[0, 10, 20, 30, 40]}
-              stroke="#475569"
-              tick={{ fill: '#94a3b8', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }}
-              tickFormatter={(v) => v.toFixed(1)}
+              orientation="top"
+              domain={tempDomain}
+              stroke="#20d6c7"
+              tick={{ fill: '#20d6c7', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }}
+              tickFormatter={(v) => `${v}°C`}
+            />
+
+            {/* Bottom X Axis: Salinity (PSU) — Emerald */}
+            <XAxis
+              xAxisId="sal"
+              type="number"
+              orientation="bottom"
+              domain={salDomain}
+              stroke="#10b981"
+              tick={{ fill: '#10b981', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }}
+              tickFormatter={(v) => `${v} PSU`}
             />
 
             {/* Y Axis: Dynamic Depth (0m to maxMeasuredDepth, 0m at top for vertical CTD profile) */}
@@ -177,13 +213,14 @@ export const DepthChart: React.FC<DepthChartProps> = ({ chart, title }) => {
               }}
               formatter={(value: any, name: any) => [
                 typeof value === 'number' ? value.toFixed(2) : value,
-                name === 'temperature' ? 'Temperature (°C)' : name === 'salinity' ? 'Salinity (PSU)' : name
+                name === 'temperature' || name === 'Temperature (°C)' ? 'Temperature (°C)' : 'Salinity (PSU)'
               ]}
               labelFormatter={(depth) => `Depth: ${depth} meters`}
             />
 
             {/* Temperature Smooth Line (Cyan) */}
             <Line
+              xAxisId="temp"
               type="monotone"
               dataKey="temperature"
               name="Temperature (°C)"
@@ -196,6 +233,7 @@ export const DepthChart: React.FC<DepthChartProps> = ({ chart, title }) => {
 
             {/* Salinity Smooth Line (Emerald) */}
             <Line
+              xAxisId="sal"
               type="monotone"
               dataKey="salinity"
               name="Salinity (PSU)"

@@ -20,6 +20,121 @@ import type { FloatSummary, MapMarker, PFZAdvisory, SatelliteGridPoint } from '.
 import { getPFZAdvisories, getSatelliteGrid } from '../../services/api';
 import { INDIAN_PORTS_DATABASE, type IndianPort } from '../../data/indianPorts';
 
+// Coastal Clustered Port Representation for National & Regional Overview (Zoom <= 7)
+export interface CoastalPortCluster {
+  id: string;
+  name: string;
+  state: string;
+  count: number;
+  lat: number;
+  lng: number;
+  zoom: number;
+  majorHarbours: string[];
+}
+
+export const COASTAL_PORT_CLUSTERS: CoastalPortCluster[] = [
+  { id: 'cl-gj-kutch', name: 'Kutch & North Saurashtra Coast', state: 'Gujarat', count: 34, lat: 22.8, lng: 69.3, zoom: 8, majorHarbours: ['Jakhau Port', 'Mandvi Port', 'Okha Port', 'Bedi Port'] },
+  { id: 'cl-gj-saurashtra', name: 'Saurashtra Oceanic Fisheries Base', state: 'Gujarat', count: 46, lat: 21.6, lng: 69.6, zoom: 8, majorHarbours: ['Veraval Port', 'Porbandar Fishing Harbour', 'Mangrol Harbour', 'Jafrabad'] },
+  { id: 'cl-gj-south', name: 'Gulf of Khambhat & South Gujarat', state: 'Gujarat', count: 75, lat: 20.8, lng: 72.8, zoom: 8, majorHarbours: ['Dholai Port', 'Pipavav', 'Umargam Port', 'Hazira Fishery Jetty'] },
+  { id: 'cl-mh-mumbai', name: 'Mumbai Metropolitan & Sassoon Dock', state: 'Maharashtra', count: 142, lat: 18.915, lng: 72.828, zoom: 8, majorHarbours: ['Sassoon Dock', 'Versova Jetty', 'Bhaucha Dhakka', 'Worli Koliwada', 'Uttan', 'Satpati'] },
+  { id: 'cl-mh-konkan', name: 'Konkan Coast & Ratnagiri Deep Sea', state: 'Maharashtra', count: 95, lat: 16.85, lng: 73.35, zoom: 8, majorHarbours: ['Mirkarwada (Ratnagiri)', 'Malvan Harbour', 'Harnai Harbour', 'Devgad', 'Vengurla'] },
+  { id: 'cl-ga-north', name: 'North Goa Purse Seine Fleet', state: 'Goa', count: 24, lat: 15.55, lng: 73.78, zoom: 9, majorHarbours: ['Panaji & Malim Jetty', 'Chapora Fishing Jetty', 'Arambol'] },
+  { id: 'cl-ga-south', name: 'South Goa Sal River Marine Base', state: 'Goa', count: 6, lat: 15.15, lng: 73.95, zoom: 9, majorHarbours: ['Cutbona Fishing Harbour', 'Betul Harbour', 'Vasco (Cortalim)'] },
+  { id: 'cl-ka-coast', name: 'Karnataka Coastal Trawler Belt', state: 'Karnataka', count: 32, lat: 13.85, lng: 74.55, zoom: 8, majorHarbours: ['Mangalore (Old Port)', 'Malpe Fishing Harbour', 'Karwar (Baithkol)', 'Honnavar', 'Bhatkal'] },
+  { id: 'cl-kl-coast', name: 'Kerala Oceanic Tuna & Pelagic Hub', state: 'Kerala', count: 32, lat: 10.0, lng: 76.15, zoom: 8, majorHarbours: ['Kochi (Thoppumpady)', 'Neendakara (Kollam)', 'Munambam Harbour', 'Beypore (Kozhikode)', 'Vizhinjam'] },
+  { id: 'cl-tn-south', name: 'Cape Comorin & Gulf of Mannar', state: 'Tamil Nadu', count: 32, lat: 8.45, lng: 77.85, zoom: 8, majorHarbours: ['Tuticorin (VOC)', 'Colachel Fishing Harbour', 'Chinnamuttom Harbour', 'Thengapattinam'] },
+  { id: 'cl-tn-palk', name: 'Palk Bay & Coromandel South', state: 'Tamil Nadu', count: 22, lat: 9.65, lng: 79.25, zoom: 8, majorHarbours: ['Rameswaram / Mandapam', 'Nagapattinam Harbour', 'Mallipattinam', 'Jagathapattinam'] },
+  { id: 'cl-tn-north', name: 'Chennai & Northern Coromandel', state: 'Tamil Nadu', count: 13, lat: 13.12, lng: 80.30, zoom: 8, majorHarbours: ['Kasimedu (Chennai)', 'Cuddalore Fishing Harbour', 'Puducherry Harbour', 'Pazhaiyar'] },
+  { id: 'cl-ap-south', name: 'Krishna-Godavari Delta Front', state: 'Andhra Pradesh', count: 7, lat: 16.0, lng: 80.9, zoom: 8, majorHarbours: ['Machilipatnam (Gilakaladindi)', 'Nizampatnam Harbour', 'Krishnapatnam', 'Vodarevu'] },
+  { id: 'cl-ap-north', name: 'Visakhapatnam Deep Sea Port', state: 'Andhra Pradesh', count: 9, lat: 17.7, lng: 83.25, zoom: 8, majorHarbours: ['Visakhapatnam Harbour', 'Kakinada Fishing Harbour', 'Bhavanapadu', 'Bheemunipatnam'] },
+  { id: 'cl-od-coast', name: 'Odisha Marine & Mahanadi Delta', state: 'Odisha', count: 10, lat: 20.35, lng: 86.65, zoom: 8, majorHarbours: ['Paradip Fishing Harbour', 'Dhamra Harbour', 'Gopalpur / Aryapalli', 'Balramgadi (Chandipur)'] },
+  { id: 'cl-wb-digha', name: 'Northern Bay of Bengal Hilsa Hub', state: 'West Bengal', count: 23, lat: 21.65, lng: 87.6, zoom: 8, majorHarbours: ['Digha (Sankarpur Harbour)', 'Petuaghat Fishing Harbour', 'Junput'] },
+  { id: 'cl-wb-sundarbans', name: 'Sundarbans Estuarine Marine Base', state: 'West Bengal', count: 4, lat: 21.9, lng: 88.2, zoom: 8, majorHarbours: ['Kakdwip / Frasergunj', 'Sultanpur (Diamond Harbour)', 'Namkhana'] },
+  { id: 'cl-an-islands', name: 'Andaman Oceanic Tuna Base', state: 'Andaman & Nicobar', count: 9, lat: 11.66, lng: 92.73, zoom: 7, majorHarbours: ['Port Blair (Junglighat)', 'Diglipur Fishery Harbour', 'Hut Bay'] },
+];
+
+// Unified Coastal PFZ Thermal & Chlorophyll-a Front Corridor Line (Yellow Dashed)
+export const COASTAL_PFZ_CORRIDOR_LINE: [number, number][] = [
+  // West Coast Saurashtra -> Konkan -> Malabar
+  [22.45, 68.65],
+  [21.65, 69.15],
+  [20.90, 69.85],
+  [20.72, 70.65],
+  [20.85, 71.35],
+  [20.45, 72.45],
+  [19.45, 72.35],
+  [19.12, 72.42],
+  [18.72, 72.48],
+  [17.85, 72.75],
+  [16.98, 73.02],
+  [16.05, 73.18],
+  [15.50, 73.65],
+  [14.80, 74.05],
+  [13.85, 74.35],
+  [12.85, 74.55],
+  [11.85, 75.05],
+  [11.15, 75.45],
+  [10.15, 75.85],
+  [9.25, 76.15],
+  [8.35, 76.65],
+  [8.05, 77.55],
+  // East Coast Gulf of Mannar -> Coromandel -> AP -> Odisha -> Bengal
+  [8.75, 78.45],
+  [9.28, 79.35],
+  [10.25, 79.85],
+  [10.75, 80.15],
+  [11.75, 80.05],
+  [13.15, 80.45],
+  [14.25, 80.35],
+  [15.85, 80.95],
+  [16.25, 81.45],
+  [16.95, 82.45],
+  [17.65, 83.45],
+  [18.55, 84.45],
+  [19.25, 85.25],
+  [20.30, 86.85],
+  [20.80, 87.15],
+  [21.45, 87.45],
+  [21.65, 88.05],
+  [21.85, 88.65],
+];
+
+// Clean Coastal Cluster Marker Icon (Navy circle with cyan/sky border & glow)
+const createClusterIcon = (count: number, isHighlighted?: boolean) => {
+  const isLarge = count >= 50;
+  const size = isLarge ? 34 : 30;
+  return L.divIcon({
+    className: 'custom-harbour-cluster',
+    html: `
+      <div style="
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 2.5px;
+        min-width: ${size}px;
+        height: ${size}px;
+        padding: 0 6px;
+        border-radius: 50%;
+        background: ${isHighlighted ? 'rgba(6, 78, 59, 0.95)' : 'rgba(9, 24, 41, 0.94)'};
+        border: 2px solid ${isHighlighted ? '#34d399' : '#38bdf8'};
+        box-shadow: 0 0 14px ${isHighlighted ? 'rgba(52, 211, 153, 0.7)' : 'rgba(56, 189, 248, 0.65)'};
+        color: #ffffff;
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 700;
+        font-size: 11px;
+        cursor: pointer;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+      ">
+        <span style="font-size: 11px; color: ${isHighlighted ? '#6ee7b7' : '#7dd3fc'};">⚓</span>
+        <span>${count}</span>
+      </div>
+    `,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -size / 2],
+  });
+};
+
 // Dynamic Multi-Tier Port Marker Icon Generator based on Zoom & Tier
 const createPortIcon = (tier: 1 | 2 | 3) => {
   if (tier === 1) {
@@ -84,6 +199,7 @@ const createPortIcon = (tier: 1 | 2 | 3) => {
     popupAnchor: [0, -7],
   });
 };
+
 
 // Custom Map Auto-Focuser & Dynamic Bounds Fitter Component
 function MapBoundsController({
@@ -1157,6 +1273,26 @@ export const OceanMap: React.FC<OceanMapProps> = ({
             );
           })}
 
+        {/* COASTAL PFZ THERMAL & CHLOROPHYLL-A FRONT CORRIDOR (GOLDEN DASHED LINE) */}
+        {(showPFZ || showHarbours) && (
+          <Polyline
+            positions={COASTAL_PFZ_CORRIDOR_LINE}
+            pathOptions={{
+              color: '#fbbf24',
+              weight: 3.5,
+              dashArray: '8, 8',
+              opacity: 0.85,
+            }}
+          >
+            <Tooltip sticky direction="top">
+              <span className="font-sans text-[11px] font-bold text-amber-300 bg-abyssal-950 px-2 py-1 rounded-lg border border-amber-500/50 shadow-xl flex items-center gap-1">
+                <span>🌊</span>
+                <span>Coastal PFZ Front Corridor (Thermal & Chlorophyll Boundary)</span>
+              </span>
+            </Tooltip>
+          </Polyline>
+        )}
+
         {/* Trajectory Polyline if selected */}
         {polylinePositions.length > 1 && (
           <Polyline
@@ -1170,60 +1306,131 @@ export const OceanMap: React.FC<OceanMapProps> = ({
           />
         )}
 
-        {/* 150+ INDIAN FISHING HARBOURS & JETTIES LAYER (DYNAMIC ZOOM-ADAPTIVE LOD) */}
-        {showHarbours &&
-          visiblePorts.map((h) => (
-            <Marker
-              key={`harbour-${h.id}`}
-              position={[h.lat, h.lng]}
-              icon={createPortIcon(h.tier)}
-            >
-              <Tooltip direction="top" offset={[0, h.tier === 1 ? -12 : h.tier === 2 ? -10 : -8]}>
-                <div className="text-[11px] font-sans font-semibold text-sky-200 bg-abyssal-950 px-2 py-0.5 rounded border border-sky-500/50 shadow-xl flex items-center gap-1">
-                  <span>⚓</span>
-                  <span>{h.name}</span>
-                  <span className="text-[9px] text-sky-400/80">({h.state})</span>
-                </div>
-              </Tooltip>
-              <Popup>
-                <div className="p-1 min-w-[260px] max-w-[300px] text-slate-100 space-y-2 font-sans">
-                  <div className="flex items-center justify-between border-b border-sky-500/20 pb-1.5">
-                    <span className="font-bold text-sky-400 text-sm flex items-center gap-1.5 font-heading">
-                      ⚓ {h.name}
-                    </span>
-                    <span className="text-[9px] font-mono bg-sky-950 text-sky-300 px-2 py-0.5 rounded border border-sky-600/50 font-bold">
-                      {h.tier === 1 ? 'Tier-1 Hub' : h.tier === 2 ? 'Mechanized' : 'FLC Jetty'}
-                    </span>
-                  </div>
+        {/* 150+ INDIAN FISHING HARBOURS & JETTIES LAYER */}
+        {showHarbours && (
+          currentZoom <= 7 ? (
+            /* REGIONAL CLUSTERED COASTAL BADGES (ZOOM <= 7) — Matches Clean Overview */
+            COASTAL_PORT_CLUSTERS.map((cl) => {
+              const isHighlighted = selectedHarbourId === cl.id || (dockedPortName && dockedPortName.includes(cl.state));
+              return (
+                <Marker
+                  key={`cluster-${cl.id}`}
+                  position={[cl.lat, cl.lng]}
+                  icon={createClusterIcon(cl.count, isHighlighted)}
+                  eventHandlers={{
+                    click: () => {
+                      setTargetSector({ center: [cl.lat, cl.lng], zoom: cl.zoom });
+                      setSelectedHarbourId(cl.id);
+                      setDockedPortName(cl.name);
+                    },
+                  }}
+                >
+                  <Tooltip direction="top" offset={[0, -18]}>
+                    <div className="text-[11px] font-sans font-bold text-sky-200 bg-abyssal-950 px-2.5 py-1 rounded-xl border border-sky-500/50 shadow-2xl flex items-center gap-1.5">
+                      <span>⚓</span>
+                      <span>{cl.name}</span>
+                      <span className="text-amber-300 font-mono">({cl.count} Ports)</span>
+                    </div>
+                  </Tooltip>
+                  <Popup>
+                    <div className="p-1 min-w-[260px] max-w-[300px] text-slate-100 space-y-2 font-sans">
+                      <div className="flex items-center justify-between border-b border-sky-500/20 pb-1.5">
+                        <span className="font-bold text-sky-400 text-sm flex items-center gap-1.5 font-heading">
+                          ⚓ {cl.name}
+                        </span>
+                        <span className="text-[10px] font-mono bg-sky-950 text-sky-300 px-2 py-0.5 rounded border border-sky-600/50 font-bold">
+                          {cl.count} Harbours
+                        </span>
+                      </div>
 
-                  <div className="p-2 rounded-xl bg-[#091e34]/80 border border-sky-500/30 text-xs space-y-1">
-                    <div className="text-slate-200 font-medium">{h.type}</div>
-                    <div className="text-[10px] text-sky-300 font-mono">State: {h.state} {h.district ? `• ${h.district}` : ''}</div>
-                  </div>
+                      <div className="p-2 rounded-xl bg-[#091e34]/80 border border-sky-500/30 text-xs space-y-1">
+                        <div className="text-[10px] uppercase font-mono text-slate-400 font-bold">Key Coastal Landing Hubs:</div>
+                        <div className="text-slate-200 font-medium text-xs leading-relaxed">
+                          {cl.majorHarbours.join(' • ')}
+                        </div>
+                      </div>
 
-                  <div className="text-[10px] font-mono text-slate-400 flex items-center justify-between px-1">
-                    <span>Coordinates:</span>
-                    <span className="text-sky-300 font-bold">{h.lat.toFixed(3)}°N, {h.lng.toFixed(3)}°E</span>
-                  </div>
+                      <div className="text-[10px] font-mono text-slate-400 flex items-center justify-between px-1">
+                        <span>Coastal Sector:</span>
+                        <span className="text-sky-300 font-bold">{cl.state} Coast</span>
+                      </div>
 
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      setUserVesselPos([h.lat, h.lng]);
-                      setDockedPortName(h.name);
-                      setSelectedHarbourId(h.id);
-                    }}
-                    className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-sky-500 to-teal-400 hover:from-sky-400 hover:to-teal-300 text-abyssal-950 font-bold text-xs shadow-md shadow-sky-500/20 transition cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
-                  >
-                    <Anchor className="w-3.5 h-3.5 text-abyssal-950" />
-                    <span>⚓ Focus Coast & Set Dock Here</span>
-                  </button>
-                </div>
-              </Popup>
-            </Marker>
-          ))}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          setTargetSector({ center: [cl.lat, cl.lng], zoom: cl.zoom });
+                          setUserVesselPos([cl.lat, cl.lng]);
+                          setDockedPortName(cl.name);
+                          setSelectedHarbourId(cl.id);
+                        }}
+                        className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-sky-500 to-teal-400 hover:from-sky-400 hover:to-teal-300 text-abyssal-950 font-bold text-xs shadow-md shadow-sky-500/20 transition cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
+                      >
+                        <Anchor className="w-3.5 h-3.5 text-abyssal-950" />
+                        <span>Zoom In & Inspect {cl.count} Harbours</span>
+                      </button>
+                    </div>
+                  </Popup>
+                </Marker>
+              );
+            })
+          ) : (
+            /* DETAILED INDIVIDUAL HARBOURS (ZOOM > 7) */
+            visiblePorts.map((h) => (
+              <Marker
+                key={`harbour-${h.id}`}
+                position={[h.lat, h.lng]}
+                icon={createPortIcon(h.tier)}
+              >
+                <Tooltip direction="top" offset={[0, h.tier === 1 ? -12 : h.tier === 2 ? -10 : -8]}>
+                  <div className="text-[11px] font-sans font-semibold text-sky-200 bg-abyssal-950 px-2 py-0.5 rounded border border-sky-500/50 shadow-xl flex items-center gap-1">
+                    <span>⚓</span>
+                    <span>{h.name}</span>
+                    <span className="text-[9px] text-sky-400/80">({h.state})</span>
+                  </div>
+                </Tooltip>
+                <Popup>
+                  <div className="p-1 min-w-[260px] max-w-[300px] text-slate-100 space-y-2 font-sans">
+                    <div className="flex items-center justify-between border-b border-sky-500/20 pb-1.5">
+                      <span className="font-bold text-sky-400 text-sm flex items-center gap-1.5 font-heading">
+                        ⚓ {h.name}
+                      </span>
+                      <span className="text-[9px] font-mono bg-sky-950 text-sky-300 px-2 py-0.5 rounded border border-sky-600/50 font-bold">
+                        {h.tier === 1 ? 'Tier-1 Hub' : h.tier === 2 ? 'Mechanized' : 'FLC Jetty'}
+                      </span>
+                    </div>
+
+                    <div className="p-2 rounded-xl bg-[#091e34]/80 border border-sky-500/30 text-xs space-y-1">
+                      <div className="text-slate-200 font-medium">{h.type}</div>
+                      <div className="text-[10px] text-sky-300 font-mono">State: {h.state} {h.district ? `• ${h.district}` : ''}</div>
+                    </div>
+
+                    <div className="text-[10px] font-mono text-slate-400 flex items-center justify-between px-1">
+                      <span>Coordinates:</span>
+                      <span className="text-sky-300 font-bold">{h.lat.toFixed(3)}°N, {h.lng.toFixed(3)}°E</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        setUserVesselPos([h.lat, h.lng]);
+                        setDockedPortName(h.name);
+                        setSelectedHarbourId(h.id);
+                      }}
+                      className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-sky-500 to-teal-400 hover:from-sky-400 hover:to-teal-300 text-abyssal-950 font-bold text-xs shadow-md shadow-sky-500/20 transition cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
+                    >
+                      <Anchor className="w-3.5 h-3.5 text-abyssal-950" />
+                      <span>⚓ Focus Coast & Set Dock Here</span>
+                    </button>
+                  </div>
+                </Popup>
+              </Marker>
+            ))
+          )
+        )}
 
         {/* Argo Float Markers */}
         {showFloats &&

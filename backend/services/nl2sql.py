@@ -221,7 +221,7 @@ def generate_sql(user_query: str) -> str:
     if sector:
         lat_min, lat_max = sector["lat_min"], sector["lat_max"]
         lon_min, lon_max = sector["lon_min"], sector["lon_max"]
-        return f"SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN {lat_min} AND {lat_max} AND p.longitude BETWEEN {lon_min} AND {lon_max} AND (m.temperature > 1.0 OR m.salinity > 10.0) AND m.depth IS NOT NULL ORDER BY p.date DESC, m.depth ASC LIMIT 100"
+        return f"SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.id = (SELECT id FROM argo_profiles WHERE latitude BETWEEN {lat_min} AND {lat_max} AND longitude BETWEEN {lon_min} AND {lon_max} ORDER BY date DESC LIMIT 1) AND m.temperature > 1.0 AND m.depth IS NOT NULL ORDER BY m.depth ASC LIMIT 200"
 
     schema_text = get_db_schema_text()
     system_prompt = SYSTEM_PROMPT.format(schema=schema_text)
@@ -250,7 +250,7 @@ def generate_sql(user_query: str) -> str:
         except Exception:
             continue
 
-    return "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 5.0 AND 25.0 AND p.longitude BETWEEN 55.0 AND 80.0 AND (m.temperature > 1.0 OR m.salinity > 10.0) AND m.depth IS NOT NULL ORDER BY p.date DESC, m.depth ASC LIMIT 100"
+    return "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.id = (SELECT id FROM argo_profiles WHERE latitude BETWEEN 5.0 AND 25.0 AND longitude BETWEEN 55.0 AND 80.0 ORDER BY date DESC LIMIT 1) AND m.temperature > 1.0 AND m.depth IS NOT NULL ORDER BY m.depth ASC LIMIT 200"
 
 
 def repair_and_execute_sql(sql: str, user_query: str) -> tuple[str, list[dict]]:
@@ -272,7 +272,7 @@ def repair_and_execute_sql(sql: str, user_query: str) -> tuple[str, list[dict]]:
     if sector:
         lat_min, lat_max = sector["lat_min"], sector["lat_max"]
         lon_min, lon_max = sector["lon_min"], sector["lon_max"]
-        fallback_sql = f"SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN {lat_min} AND {lat_max} AND p.longitude BETWEEN {lon_min} AND {lon_max} AND (m.temperature > 1.0 OR m.salinity > 10.0) AND m.depth IS NOT NULL ORDER BY p.date DESC, m.depth ASC LIMIT 100"
+        fallback_sql = f"SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.id = (SELECT id FROM argo_profiles WHERE latitude BETWEEN {lat_min} AND {lat_max} AND longitude BETWEEN {lon_min} AND {lon_max} ORDER BY date DESC LIMIT 1) AND m.temperature > 1.0 AND m.depth IS NOT NULL ORDER BY m.depth ASC LIMIT 200"
         try:
             fb_results = execute_readonly_sql(fallback_sql)
             if fb_results:
@@ -281,7 +281,7 @@ def repair_and_execute_sql(sql: str, user_query: str) -> tuple[str, list[dict]]:
             pass
 
     # Global basin fallback
-    global_sql = "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 5.0 AND 25.0 AND p.longitude BETWEEN 55.0 AND 85.0 AND (m.temperature > 1.0 OR m.salinity > 10.0) AND m.depth IS NOT NULL ORDER BY p.date DESC, m.depth ASC LIMIT 100"
+    global_sql = "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.id = (SELECT id FROM argo_profiles WHERE latitude BETWEEN 5.0 AND 25.0 AND longitude BETWEEN 55.0 AND 85.0 ORDER BY date DESC LIMIT 1) AND m.temperature > 1.0 AND m.depth IS NOT NULL ORDER BY m.depth ASC LIMIT 200"
     return global_sql, execute_readonly_sql(global_sql)
 
 
