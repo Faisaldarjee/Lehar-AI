@@ -284,6 +284,20 @@ const TARGET_SPECIES_OPTIONS = [
 let globalPfzCache: PFZAdvisory[] | null = null;
 let globalSatGridCache: SatelliteGridPoint[] | null = null;
 
+// Major Indian Coastal Fishing Ports & Harbours for Coast-Specific PFZ Advisory Focus
+const COASTAL_HARBOURS_PRESETS = [
+  { id: 'all', name: 'All India Coastline', state: 'National', lat: 14.0, lng: 75.0, zoom: 5 },
+  { id: 'GJ-01', name: 'Veraval Port (GJ)', state: 'Gujarat', lat: 20.902, lng: 70.368, zoom: 7.5 },
+  { id: 'GJ-02', name: 'Porbandar Harbour (GJ)', state: 'Gujarat', lat: 21.641, lng: 69.605, zoom: 7.5 },
+  { id: 'MH-01', name: 'Sassoon Dock / Mumbai (MH)', state: 'Maharashtra', lat: 18.915, lng: 72.828, zoom: 7.5 },
+  { id: 'MH-03', name: 'Mirkarwada / Ratnagiri (MH)', state: 'Maharashtra', lat: 16.990, lng: 73.300, zoom: 7.5 },
+  { id: 'KA-01', name: 'Mangalore Old Port (KA)', state: 'Karnataka', lat: 12.860, lng: 74.840, zoom: 7.5 },
+  { id: 'KL-01', name: 'Cochin / Kochi Harbour (KL)', state: 'Kerala', lat: 9.970, lng: 76.270, zoom: 7.5 },
+  { id: 'TN-01', name: 'Royapuram / Kasimedu (TN)', state: 'Tamil Nadu', lat: 13.120, lng: 80.300, zoom: 7.5 },
+  { id: 'AP-01', name: 'Visakhapatnam Harbour (AP)', state: 'Andhra Pradesh', lat: 17.690, lng: 83.220, zoom: 7.5 },
+  { id: 'OD-01', name: 'Paradip Fishing Base (OD)', state: 'Odisha', lat: 20.320, lng: 86.610, zoom: 7.5 },
+];
+
 export const OceanMap: React.FC<OceanMapProps> = ({
   floats,
   highlightMarkers,
@@ -316,9 +330,11 @@ export const OceanMap: React.FC<OceanMapProps> = ({
   const [showSatelliteSST, setShowSatelliteSST] = useState<boolean>(false);
   const [showChlorophyll, setShowChlorophyll] = useState<boolean>(false);
   
-  // Target Species Filter State
+  // Target Species & Coastal Port Filter States
   const [selectedSpecies, setSelectedSpecies] = useState<string>('all');
   const [speciesMenuOpen, setSpeciesMenuOpen] = useState<boolean>(false);
+  const [selectedHarbourId, setSelectedHarbourId] = useState<string>('all');
+  const [harbourMenuOpen, setHarbourMenuOpen] = useState<boolean>(false);
 
   // Live Vessel GPS / NavIC Tracker State & Active Route Target
   const [userVesselPos, setUserVesselPos] = useState<[number, number] | null>(null);
@@ -326,6 +342,7 @@ export const OceanMap: React.FC<OceanMapProps> = ({
   const [activeRoutePfz, setActiveRoutePfz] = useState<PFZAdvisory | null>(null);
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [targetSector, setTargetSector] = useState<{ center: [number, number]; zoom: number } | null>(null);
+  const [isNavicMinimized, setIsNavicMinimized] = useState<boolean>(false);
 
   // UI Dropdowns & Collapsible Legend
   const [sectorMenuOpen, setSectorMenuOpen] = useState<boolean>(false);
@@ -419,12 +436,49 @@ export const OceanMap: React.FC<OceanMapProps> = ({
     }
   };
 
+  // Determine active coastal reference coordinates (either live GPS, docked port, or selected coastal preset)
+  const activeDockCoords = useMemo<[number, number] | null>(() => {
+    if (userVesselPos) return userVesselPos;
+    if (selectedHarbourId !== 'all') {
+      const preset = COASTAL_HARBOURS_PRESETS.find((h) => h.id === selectedHarbourId);
+      if (preset) return [preset.lat, preset.lng];
+      const customPort = INDIAN_PORTS_DATABASE.find((p) => p.id === selectedHarbourId || p.name === selectedHarbourId);
+      if (customPort) return [customPort.lat, customPort.lng];
+    }
+    return null;
+  }, [userVesselPos, selectedHarbourId]);
+
   const activeSpecies = TARGET_SPECIES_OPTIONS.find((s) => s.id === selectedSpecies);
-  const displayedPfzZones = pfzZones.filter((zone) => {
-    if (selectedSpecies === 'all' || !activeSpecies) return true;
-    const sst = zone.sst_celsius ?? 28.0;
-    return sst >= activeSpecies.minSST && sst <= activeSpecies.maxSST;
-  });
+  const activeHarbourPreset = COASTAL_HARBOURS_PRESETS.find((h) => h.id === selectedHarbourId);
+
+  // Filter & Sort PFZs by Target Species AND Coastal Port Proximity
+  const displayedPfzZones = useMemo(() => {
+    let zones = pfzZones.filter((zone) => {
+      if (selectedSpecies === 'all' || !activeSpecies) return true;
+      const sst = zone.sst_celsius ?? 28.0;
+      return sst >= activeSpecies.minSST && sst <= activeSpecies.maxSST;
+    });
+
+    if (activeDockCoords) {
+      // Annotate each zone with distance to the active dock
+      const withDistance = zones.map((z) => ({
+        ...z,
+        dockDistKm: haversineDistKm(activeDockCoords[0], activeDockCoords[1], z.latitude, z.longitude),
+      }));
+
+      // Sort by closest distance to the dock
+      withDistance.sort((a, b) => (a.dockDistKm ?? 9999) - (b.dockDistKm ?? 9999));
+
+      // If specific harbour is selected, filter to zones within ~280km or top 8 nearest
+      if (selectedHarbourId !== 'all') {
+        const coastalClose = withDistance.filter((z) => (z.dockDistKm ?? 9999) <= 280);
+        return coastalClose.length >= 3 ? coastalClose : withDistance.slice(0, 8);
+      }
+      return withDistance;
+    }
+
+    return zones;
+  }, [pfzZones, selectedSpecies, activeSpecies, activeDockCoords, selectedHarbourId]);
 
   const polylinePositions: [number, number][] =
     trajectory?.map((t) => [t.latitude, t.longitude] as [number, number]) || [];
@@ -435,28 +489,29 @@ export const OceanMap: React.FC<OceanMapProps> = ({
       {/* Map Floating Control Header (Elevated to z-[1000] above Leaflet tiles) */}
       <div className="absolute top-3 left-3 right-3 z-[1000] flex flex-wrap items-center justify-between gap-2 pointer-events-none">
         
-        {/* Left: Sector Selector, Target Species & Vessel GPS Button */}
-        <div className="flex flex-wrap items-center gap-2 pointer-events-auto ml-11 sm:ml-12">
+        {/* Left: Sector Selector, Coastal Harbour & Target Species Filter Controls */}
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 pointer-events-auto ml-11 sm:ml-12">
           
-          {/* Sector Selector */}
+          {/* 1. Sector Selector */}
           <div className="relative">
             <button
               type="button"
               onClick={() => {
                 setSectorMenuOpen(!sectorMenuOpen);
+                setHarbourMenuOpen(false);
                 setSpeciesMenuOpen(false);
                 setSatLayersMenuOpen(false);
               }}
-              className="flex items-center space-x-2 bg-abyssal-950/98 backdrop-blur-md px-3 py-1.5 rounded-xl border border-cyan-500/30 text-xs font-bold text-slate-200 hover:text-white shadow-xl transition cursor-pointer active:scale-95"
+              className="flex items-center space-x-1.5 bg-abyssal-950/98 backdrop-blur-md px-2.5 sm:px-3 py-1.5 rounded-xl border border-cyan-500/30 text-xs font-bold text-slate-200 hover:text-white shadow-xl transition cursor-pointer active:scale-95"
             >
               <Compass className="w-3.5 h-3.5 text-ocean-cyan" />
-              <span>Jump to sector</span>
+              <span>Sector</span>
               <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${sectorMenuOpen ? 'rotate-180 text-ocean-cyan' : ''}`} />
             </button>
 
             {/* Sector Menu Popover */}
             {sectorMenuOpen && (
-              <div className="absolute left-0 mt-1.5 w-52 bg-[#071322] border border-cyan-500/30 rounded-xl shadow-2xl p-1.5 z-[1100] space-y-1 animate-in fade-in zoom-in-95 duration-100 ring-1 ring-cyan-500/20">
+              <div className="absolute left-0 mt-1.5 w-56 bg-[#071322] border border-cyan-500/30 rounded-xl shadow-2xl p-1.5 z-[1200] space-y-1 animate-in fade-in zoom-in-95 duration-100 ring-1 ring-cyan-500/20 max-h-60 overflow-y-auto custom-scrollbar">
                 <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono border-b border-slate-800">
                   Indian Ocean Sectors
                 </div>
@@ -481,16 +536,80 @@ export const OceanMap: React.FC<OceanMapProps> = ({
             )}
           </div>
 
-          {/* Target Species Filter Dropdown */}
+          {/* 2. Coastal Harbour / Port Proximity Filter */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setHarbourMenuOpen(!harbourMenuOpen);
+                setSectorMenuOpen(false);
+                setSpeciesMenuOpen(false);
+                setSatLayersMenuOpen(false);
+              }}
+              className={`flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-bold transition shadow-xl cursor-pointer active:scale-95 ${
+                selectedHarbourId !== 'all' || dockedPortName
+                  ? 'bg-sky-500/25 border-sky-500/60 text-sky-200 shadow-glow-cyan-sm'
+                  : 'bg-abyssal-950/98 backdrop-blur-md border-cyan-500/30 text-slate-200 hover:text-white'
+              }`}
+            >
+              <Anchor className="w-3.5 h-3.5 text-sky-400" />
+              <span>{dockedPortName ? dockedPortName.split('(')[0].trim() : selectedHarbourId !== 'all' ? activeHarbourPreset?.name.split('(')[0].trim() : 'Coastal Port'}</span>
+              <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${harbourMenuOpen ? 'rotate-180 text-sky-400' : ''}`} />
+            </button>
+
+            {/* Harbour Filter Popover */}
+            {harbourMenuOpen && (
+              <div className="absolute left-0 mt-1.5 w-64 bg-[#071322] border border-sky-500/30 rounded-xl shadow-2xl p-1.5 z-[1200] space-y-1 animate-in fade-in zoom-in-95 duration-100 ring-1 ring-sky-500/20 max-h-60 overflow-y-auto custom-scrollbar">
+                <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono border-b border-slate-800 flex items-center justify-between">
+                  <span>Focus Coast & Harbours</span>
+                  <span className="text-[9px] text-sky-400">INCOIS Coast</span>
+                </div>
+                {COASTAL_HARBOURS_PRESETS.map((h) => (
+                  <button
+                    key={h.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedHarbourId(h.id);
+                      setHarbourMenuOpen(false);
+                      if (h.id === 'all') {
+                        setDockedPortName(null);
+                        setUserVesselPos(null);
+                        setTargetSector({ center: [14.0, 75.0], zoom: 5 });
+                      } else {
+                        setDockedPortName(h.name);
+                        setUserVesselPos([h.lat, h.lng]);
+                        setTargetSector({ center: [h.lat, h.lng], zoom: h.zoom });
+                      }
+                    }}
+                    className={`w-full text-left px-2.5 py-1.5 text-xs rounded-lg transition font-medium flex items-center justify-between cursor-pointer ${
+                      selectedHarbourId === h.id || (dockedPortName === h.name && h.id !== 'all')
+                        ? 'bg-sky-500/25 text-sky-200 border border-sky-500/40 font-bold'
+                        : 'text-slate-300 hover:bg-[#0c1e34] hover:text-white'
+                    }`}
+                  >
+                    <div className="truncate pr-2">
+                      <span className="font-semibold">{h.name}</span>
+                    </div>
+                    <span className="text-[10px] text-sky-400 font-mono shrink-0">
+                      {h.state}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 3. Target Species Filter Dropdown */}
           <div className="relative">
             <button
               type="button"
               onClick={() => {
                 setSpeciesMenuOpen(!speciesMenuOpen);
+                setHarbourMenuOpen(false);
                 setSectorMenuOpen(false);
                 setSatLayersMenuOpen(false);
               }}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition shadow-xl cursor-pointer active:scale-95 ${
+              className={`flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-bold transition shadow-xl cursor-pointer active:scale-95 ${
                 selectedSpecies !== 'all'
                   ? 'bg-amber-500/25 border-amber-500/60 text-amber-300 shadow-glow-amber-sm'
                   : 'bg-abyssal-950/98 backdrop-blur-md border-cyan-500/30 text-slate-200 hover:text-white'
@@ -502,7 +621,7 @@ export const OceanMap: React.FC<OceanMapProps> = ({
             </button>
 
             {speciesMenuOpen && (
-              <div className="absolute left-0 mt-1.5 w-60 bg-[#071322] border border-cyan-500/30 rounded-xl shadow-2xl p-1.5 z-[1100] space-y-1 animate-in fade-in zoom-in-95 duration-100 ring-1 ring-cyan-500/20">
+              <div className="absolute left-0 mt-1.5 w-60 bg-[#071322] border border-cyan-500/30 rounded-xl shadow-2xl p-1.5 z-[1200] space-y-1 animate-in fade-in zoom-in-95 duration-100 ring-1 ring-cyan-500/20 max-h-60 overflow-y-auto custom-scrollbar">
                 <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono border-b border-slate-800">
                   Filter PFZ by Marine Species
                 </div>
@@ -541,7 +660,7 @@ export const OceanMap: React.FC<OceanMapProps> = ({
             type="button"
             onClick={() => setShowFloats(!showFloats)}
             title="Toggle 97 Active ARGO Subsurface Floats"
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold backdrop-blur-md shadow-xl transition cursor-pointer active:scale-95 ${
+            className={`flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold backdrop-blur-md shadow-xl transition cursor-pointer active:scale-95 ${
               showFloats
                 ? 'bg-cyan-950/85 border-cyan-500/50 text-cyan-300 shadow-cyan-950/40'
                 : 'bg-abyssal-950/90 border-abyssal-800 text-slate-400 hover:text-slate-200'
@@ -556,14 +675,14 @@ export const OceanMap: React.FC<OceanMapProps> = ({
             type="button"
             onClick={() => setShowPFZ(!showPFZ)}
             title="Toggle Multi-Sensor Potential Fishing Zones"
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold backdrop-blur-md shadow-xl transition cursor-pointer active:scale-95 ${
+            className={`flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold backdrop-blur-md shadow-xl transition cursor-pointer active:scale-95 ${
               showPFZ
                 ? 'bg-amber-950/85 border-amber-500/60 text-amber-300 shadow-amber-950/40'
                 : 'bg-abyssal-950/90 border-abyssal-800 text-slate-400 hover:text-slate-200'
             }`}
           >
             <Fish className={`w-3.5 h-3.5 ${showPFZ ? 'text-amber-400' : 'text-slate-400'}`} />
-            <span>PFZ Zones ({displayedPfzZones.length})</span>
+            <span>PFZ ({displayedPfzZones.length})</span>
           </button>
 
           {/* 3. Major Fishing Harbours / Ports Toggle */}
@@ -571,7 +690,7 @@ export const OceanMap: React.FC<OceanMapProps> = ({
             type="button"
             onClick={() => setShowHarbours(!showHarbours)}
             title="Toggle 150+ Indian Coastal Fishing Harbours & Jetties"
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold backdrop-blur-md shadow-xl transition cursor-pointer active:scale-95 ${
+            className={`flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold backdrop-blur-md shadow-xl transition cursor-pointer active:scale-95 ${
               showHarbours
                 ? 'bg-sky-950/85 border-sky-500/60 text-sky-300 shadow-sky-950/40'
                 : 'bg-abyssal-950/90 border-abyssal-800 text-slate-400 hover:text-slate-200'
@@ -588,22 +707,24 @@ export const OceanMap: React.FC<OceanMapProps> = ({
               onClick={() => {
                 setSatLayersMenuOpen(!satLayersMenuOpen);
                 setSectorMenuOpen(false);
+                setHarbourMenuOpen(false);
+                setSpeciesMenuOpen(false);
               }}
               title="Toggle continuous NOAA & NASA satellite layers"
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold backdrop-blur-md shadow-xl transition cursor-pointer active:scale-95 ${
+              className={`flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold backdrop-blur-md shadow-xl transition cursor-pointer active:scale-95 ${
                 showSatelliteSST || showChlorophyll
                   ? 'bg-ocean-cyan/15 border-ocean-cyan/50 text-ocean-cyan shadow-glow-cyan-sm'
                   : 'bg-abyssal-950/90 border-abyssal-800 text-slate-300 hover:text-white'
               }`}
             >
               <Layers className="w-3.5 h-3.5 text-ocean-cyan" />
-              <span>Satellite Layers</span>
+              <span className="hidden sm:inline">Satellite</span>
               <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${satLayersMenuOpen ? 'rotate-180 text-ocean-cyan' : ''}`} />
             </button>
 
             {/* Satellite Layers Popover */}
             {satLayersMenuOpen && (
-              <div className="absolute right-0 mt-1.5 w-60 bg-abyssal-950 border border-abyssal-800 rounded-xl shadow-2xl p-2 z-50 space-y-1.5 animate-in fade-in zoom-in-95 duration-100">
+              <div className="absolute right-0 mt-1.5 w-60 bg-abyssal-950 border border-abyssal-800 rounded-xl shadow-2xl p-2 z-[1200] space-y-1.5 animate-in fade-in zoom-in-95 duration-100">
                 <div className="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-500 font-mono flex items-center justify-between">
                   <span>Continuous Satellite Coverage</span>
                   <Satellite className="w-3 h-3 text-ocean-cyan" />
@@ -656,13 +777,13 @@ export const OceanMap: React.FC<OceanMapProps> = ({
             )}
           </div>
 
-          {/* 4. Live GPS Vessel Tracker Button */}
+          {/* 5. Live GPS Vessel Tracker Button */}
           <button
             type="button"
             onClick={handleLocateVessel}
             disabled={isLocating}
             title="Acquire live GPS / NavIC hardware coordinates or simulate deep-sea fishing trawler"
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold backdrop-blur-md shadow-xl transition cursor-pointer active:scale-95 ${
+            className={`flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold backdrop-blur-md shadow-xl transition cursor-pointer active:scale-95 ${
               userVesselPos
                 ? 'bg-emerald-950/90 border-emerald-500/60 text-emerald-300 shadow-glow-emerald-sm ring-1 ring-emerald-500/40 font-bold'
                 : 'bg-abyssal-950/90 border-abyssal-800 text-slate-300 hover:text-white'
@@ -673,16 +794,39 @@ export const OceanMap: React.FC<OceanMapProps> = ({
             ) : (
               <Navigation className={`w-3.5 h-3.5 ${userVesselPos ? 'text-emerald-400 animate-pulse' : 'text-slate-400'}`} />
             )}
-            <span>{userVesselPos ? 'GPS Active ⛵' : '📍 Vessel GPS'}</span>
+            <span className="hidden sm:inline">{userVesselPos ? 'GPS Active ⛵' : '📍 Vessel GPS'}</span>
           </button>
 
         </div>
 
       </div>
 
-      {/* Live Vessel GPS Telemetry HUD (Clean Bottom-Left HUD) */}
+      {/* Coastal Harbour Active Banner (Top Left Context Pill) */}
+      {(selectedHarbourId !== 'all' || dockedPortName) && (
+        <div className="absolute top-14 left-4 z-20 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-sky-950/95 border border-sky-500/50 text-sky-200 text-xs font-mono shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-1">
+          <Anchor className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+          <span className="truncate">
+            Coast Focus: <strong>{dockedPortName || activeHarbourPreset?.name}</strong> • {displayedPfzZones.length} Reachable PFZs
+          </span>
+          <button 
+            type="button" 
+            onClick={() => {
+              setSelectedHarbourId('all');
+              setDockedPortName(null);
+              setUserVesselPos(null);
+              setActiveRoutePfz(null);
+            }}
+            className="ml-1 text-slate-400 hover:text-white p-0.5 rounded cursor-pointer transition hover:bg-sky-800/40"
+            title="Reset to All India coastline"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Live Vessel GPS Telemetry HUD (Clean Bottom-Right HUD to avoid collision with top-left dropdowns) */}
       {userVesselPos && (
-        <div className="absolute bottom-6 left-6 z-[1000] max-w-xs sm:max-w-sm rounded-2xl border border-emerald-500/40 bg-[#071322]/98 p-3 font-mono text-xs text-slate-200 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 ring-1 ring-emerald-500/20">
+        <div className="absolute bottom-4 right-4 z-[1000] max-w-xs sm:max-w-sm rounded-2xl border border-emerald-500/40 bg-[#071322]/98 p-3 font-mono text-xs text-slate-200 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 ring-1 ring-emerald-500/20">
           <div className="flex items-center justify-between border-b border-slate-800 pb-1.5 mb-1.5">
             <div className="flex items-center gap-1.5 font-bold text-emerald-300">
               <Navigation className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
@@ -692,6 +836,14 @@ export const OceanMap: React.FC<OceanMapProps> = ({
               <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
                 100% Offline Edge
               </span>
+              <button
+                type="button"
+                onClick={() => setIsNavicMinimized(!isNavicMinimized)}
+                className="text-slate-400 hover:text-white p-0.5 cursor-pointer rounded"
+                title={isNavicMinimized ? "Expand NavIC HUD" : "Minimize NavIC HUD"}
+              >
+                {isNavicMinimized ? '＋' : '–'}
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -707,56 +859,58 @@ export const OceanMap: React.FC<OceanMapProps> = ({
             </div>
           </div>
 
-          <div className="space-y-1.5 text-[11px]">
-            <div className="flex items-center justify-between">
-              <span className="text-slate-400">Position:</span>
-              <strong className="text-white">{userVesselPos[0].toFixed(3)}°N, {userVesselPos[1].toFixed(3)}°E</strong>
-            </div>
-
-            {dockedPortName && (
-              <div className="text-[10px] text-sky-300 bg-sky-950/70 px-2 py-0.5 rounded border border-sky-500/30">
-                ⚓ Docked at: <strong>{dockedPortName}</strong>
+          {!isNavicMinimized && (
+            <div className="space-y-1.5 text-[11px]">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Position:</span>
+                <strong className="text-white">{userVesselPos[0].toFixed(3)}°N, {userVesselPos[1].toFixed(3)}°E</strong>
               </div>
-            )}
 
-            {activeRoutePfz ? (() => {
-              const dist = haversineDistKm(userVesselPos[0], userVesselPos[1], activeRoutePfz.latitude, activeRoutePfz.longitude);
-              return (
-                <div className="pt-1.5 border-t border-slate-800 space-y-1">
-                  <div className="flex items-center justify-between text-amber-300 font-bold">
-                    <span>📍 Active Course Lock:</span>
-                    <span>{dist.toFixed(1)} km (~{(dist / 16.5).toFixed(1)}h)</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[10px] text-slate-300">
-                    <span>Fuel: ~{Math.round(dist * 1.85)} L</span>
-                    <span className="text-cyan-300">{activeRoutePfz.sst_celsius}°C (Score {activeRoutePfz.pfz_score}/100)</span>
-                  </div>
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-[10px] text-emerald-300 font-sans">
-                      Target: {activeRoutePfz.target_species[0] || 'Tuna'}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setActiveRoutePfz(null)}
-                      className="text-[9px] px-1.5 py-0.5 rounded bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-600/50 cursor-pointer font-bold transition"
-                    >
-                      Clear Route
-                    </button>
-                  </div>
+              {dockedPortName && (
+                <div className="text-[10px] text-sky-300 bg-sky-950/70 px-2 py-0.5 rounded border border-sky-500/30">
+                  ⚓ Docked at: <strong>{dockedPortName}</strong>
                 </div>
-              );
-            })() : (
-              <div className="text-[10px] text-slate-400 italic pt-1 border-t border-slate-800">
-                Click any PFZ dot on map and press &quot;Plot Route&quot; to calculate voyage course.
-              </div>
-            )}
-          </div>
+              )}
+
+              {activeRoutePfz ? (() => {
+                const dist = haversineDistKm(userVesselPos[0], userVesselPos[1], activeRoutePfz.latitude, activeRoutePfz.longitude);
+                return (
+                  <div className="pt-1.5 border-t border-slate-800 space-y-1">
+                    <div className="flex items-center justify-between text-amber-300 font-bold">
+                      <span>📍 Active Course Lock:</span>
+                      <span>{dist.toFixed(1)} km (~{(dist / 16.5).toFixed(1)}h)</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-slate-300">
+                      <span>Fuel: ~{Math.round(dist * 1.85)} L</span>
+                      <span className="text-cyan-300">{activeRoutePfz.sst_celsius}°C (Score {activeRoutePfz.pfz_score}/100)</span>
+                    </div>
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-[10px] text-emerald-300 font-sans">
+                        Target: {activeRoutePfz.target_species[0] || 'Tuna'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setActiveRoutePfz(null)}
+                        className="text-[9px] px-1.5 py-0.5 rounded bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-600/50 cursor-pointer font-bold transition"
+                      >
+                        Clear Route
+                      </button>
+                    </div>
+                  </div>
+                );
+              })() : (
+                <div className="text-[10px] text-slate-400 italic pt-1 border-t border-slate-800">
+                  Click any PFZ dot on map and press &quot;Plot Route&quot; to calculate voyage course.
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
       {/* Active Species Filter Banner */}
       {selectedSpecies !== 'all' && activeSpecies && (
-        <div className="absolute top-14 left-14 z-20 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-950/90 border border-amber-500/40 text-amber-300 text-xs font-mono shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-1">
+        <div className="absolute top-24 left-4 z-20 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-950/90 border border-amber-500/40 text-amber-300 text-xs font-mono shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-1">
           <Fish className="w-3.5 h-3.5 text-amber-400 shrink-0" />
           <span>
             Target Filter: <strong>{activeSpecies.label}</strong> ({activeSpecies.minSST}–{activeSpecies.maxSST}°C) • {displayedPfzZones.length} Matching PFZs
@@ -1059,11 +1213,12 @@ export const OceanMap: React.FC<OceanMapProps> = ({
                       e.preventDefault();
                       setUserVesselPos([h.lat, h.lng]);
                       setDockedPortName(h.name);
+                      setSelectedHarbourId(h.id);
                     }}
                     className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-sky-500 to-teal-400 hover:from-sky-400 hover:to-teal-300 text-abyssal-950 font-bold text-xs shadow-md shadow-sky-500/20 transition cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
                   >
-                    <Navigation className="w-3.5 h-3.5 text-abyssal-950" />
-                    <span>Set Vessel GPS Dock Here</span>
+                    <Anchor className="w-3.5 h-3.5 text-abyssal-950" />
+                    <span>⚓ Focus Coast & Set Dock Here</span>
                   </button>
                 </div>
               </Popup>
