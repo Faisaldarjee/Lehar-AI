@@ -4,10 +4,24 @@ Provides safety warnings and high-yield opportunity alerts pushed to registered 
 """
 
 from fastapi import APIRouter
-from ..services.guardian_engine import scan_for_guardian_alerts, get_guardian_status, REGISTERED_FISHERMEN
+from ..services.guardian_engine import (
+    scan_for_guardian_alerts,
+    get_guardian_status,
+    generate_dawn_cast_briefing,
+    REGISTERED_FISHERMEN
+)
 from ..models.schemas import GuardianStatusResponse, GuardianAlert
 
 router = APIRouter(prefix="/api/guardian", tags=["guardian"])
+
+
+@router.get("/dawn-cast")
+async def get_dawn_cast(harbour: str = "Mumbai (Sassoon Dock)", lat: float = 18.91, lon: float = 72.83, lang: str = "hi"):
+    """
+    Get the 04:30 AM pre-departure Dawn Cast advisory combining wave physics,
+    Solunar feeding peak, top 2 high-yield PFZ targets, and NavIC fuel estimation.
+    """
+    return generate_dawn_cast_briefing(harbour_name=harbour, lat=lat, lon=lon, lang=lang)
 
 
 @router.get("/alerts", response_model=GuardianStatusResponse)
