@@ -60,9 +60,130 @@ def get_bot_username() -> str:
 
 # Global state for bot health status
 _bot_task: Optional[asyncio.Task] = None
+_watchdog_task: Optional[asyncio.Task] = None
 _bot_running = False
 _last_update_id = 0
 _total_messages_handled = 0
+_sent_proactive_alert_ids: set[str] = set()
+
+
+def register_or_update_subscriber(
+    chat_id: int,
+    first_name: str = "",
+    username: str = "",
+    lat: Optional[float] = None,
+    lon: Optional[float] = None,
+    harbour: Optional[str] = None,
+    language: str = "hi"
+):
+    """Save or update active Telegram subscriber in SQLite database for proactive watchdog notifications."""
+    try:
+        with get_connection() as conn:
+            row = conn.execute("SELECT * FROM telegram_subscribers WHERE chat_id = ?", (chat_id,)).fetchone()
+            if row:
+                new_lat = lat if lat is not None else row["latitude"]
+                new_lon = lon if lon is not None else row["longitude"]
+                new_harbour = harbour if harbour is not None else row["harbour"]
+                new_fname = first_name if first_name else row["first_name"]
+                new_uname = username if username else row["username"]
+                conn.execute(
+                    """
+                    UPDATE telegram_subscribers
+                    SET first_name = ?, username = ?, latitude = ?, longitude = ?, harbour = ?, last_active = datetime('now')
+                    WHERE chat_id = ?
+                    """,
+                    (new_fname, new_uname, new_lat, new_lon, new_harbour, chat_id)
+                )
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO telegram_subscribers (chat_id, first_name, username, latitude, longitude, harbour, language, last_active)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                    """,
+                    (chat_id, first_name, username, lat or 18.915, lon or 72.828, harbour or "Mumbai (Sassoon Dock)", language)
+                )
+            conn.commit()
+    except Exception as e:
+        logger.warning(f"[Telegram DB] Error updating subscriber #{chat_id}: {e}")
+
+
+def get_all_subscribers() -> list[dict]:
+    """Retrieve all registered Telegram subscribers for proactive alert delivery."""
+    try:
+        with get_connection() as conn:
+            rows = conn.execute("SELECT * FROM telegram_subscribers WHERE notifications_enabled = 1").fetchall()
+            return [dict(r) for r in rows]
+    except Exception:
+        return []
+
+
+async def send_proactive_guardian_alert(subscriber: dict, alert: dict) -> bool:
+    """Dispatches a real-time proactive Guardian alert card + spoken voice note to a specific Telegram subscriber."""
+    chat_id = subscriber["chat_id"]
+    first_name = subscriber.get("first_name", "Captain")
+    is_safety = alert.get("type") == "safety"
+    harbour = subscriber.get("harbour", "Coast")
+
+    lat = alert["location"]["latitude"]
+    lon = alert["location"]["longitude"]
+    dist_km = alert["location"]["distance_km"]
+
+    # Header and Title
+    badge = "🚨 *LEHAR GUARDIAN — MARINE SAFETY WARNING*" if is_safety else "🐟 *LEHAR GUARDIAN — HIGH-YIELD FISHING OPPORTUNITY*"
+    
+    clean_msg = alert["message"].replace("*", "").replace("`", "")
+
+    # Build clean markdown
+    msg_text = (
+        f"{badge}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 *Subscriber:* `{first_name}` ({harbour})\n"
+        f"📍 *Sector Vector:* *{dist_km} km offshore* (`{lat:.3f}°N, {lon:.3f}°E`)\n\n"
+        f"{alert['message']}\n\n"
+        f"⚡ *Multi-Sensor Verification:* INCOIS ARGO CTD + NOAA Satellite SST\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+    # Interactive Action Buttons
+    maps_url = f"https://maps.google.com/?q={lat:.4f},{lon:.4f}"
+    buttons = [
+        [{"text": "🗺️ Open Incident Coordinates in Maps", "url": maps_url}],
+        [
+            {"text": "🐟 Find Safe Fishing Zones", "callback_data": "cmd_pfz"},
+            {"text": "🌊 Check Sea Status", "callback_data": "cmd_temp"}
+        ]
+    ]
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        # 1. Send Text Card
+        await _telegram_request(client, "sendMessage", {
+            "chat_id": chat_id,
+            "text": msg_text,
+            "parse_mode": "Markdown",
+            "reply_markup": {"inline_keyboard": buttons},
+            "disable_web_page_preview": False
+        })
+
+        # 2. Synthesize Personalized Voice Note
+        if is_safety:
+            voice_script = (
+                f"Namaste {first_name}! Yeh Lehar Guardian ka zaroori ocean safety alert hai. "
+                f"Aapke harbour {harbour} se {int(dist_km)} kilometer door samundar me severe temperature anomaly detect hui hai. "
+                f"Chhoti naav samundar me savdhani bartein."
+            )
+        else:
+            sp_name = alert.get("species") or "machhli"
+            voice_script = (
+                f"Namaste {first_name}! Yeh Lehar Guardian fishing opportunity alert hai. "
+                f"Aapke dock se {int(dist_km)} kilometer door {sp_name} ke liye high-yield zone bana hai. "
+                f"Pani ka taapman aur thermocline depth anukool hai."
+            )
+
+        voice_bytes = await _synthesize_voice_audio(voice_script, lang="hi")
+        if voice_bytes:
+            await send_telegram_voice(chat_id, voice_bytes, caption=f"🔊 *Lehar Guardian Voice Advisory for {first_name}*")
+
+    return True
 
 
 def get_telegram_status() -> Dict[str, Any]:
@@ -75,6 +196,7 @@ def get_telegram_status() -> Dict[str, Any]:
         "bot_username": f"@{username}",
         "token_configured": is_token_configured,
         "active_worker": _bot_running,
+        "subscribers_count": len(get_all_subscribers()),
         "messages_handled": _total_messages_handled,
         "polling_mode": "async_long_polling",
         "qr_url": f"https://t.me/{username}",
@@ -630,9 +752,22 @@ async def run_telegram_bot():
                         chat_id = message["chat"]["id"]
                         first_name = message["chat"].get("first_name", "Captain")
 
+                        # Auto-Register / Update Subscriber
+                        username_val = message["chat"].get("username", "")
+                        register_or_update_subscriber(chat_id, first_name=first_name, username=username_val)
+
                         # Location Message
                         if "location" in message:
                             loc = message["location"]
+                            h_info = nearest_harbour(loc["latitude"], loc["longitude"])
+                            register_or_update_subscriber(
+                                chat_id,
+                                first_name=first_name,
+                                username=username_val,
+                                lat=loc["latitude"],
+                                lon=loc["longitude"],
+                                harbour=h_info["name"]
+                            )
                             asyncio.create_task(_handle_location(client, chat_id, loc["latitude"], loc["longitude"]))
                             continue
 
@@ -671,17 +806,68 @@ async def run_telegram_bot():
     logger.info("[Telegram Bot] Gateway shutdown complete.")
 
 
+async def run_guardian_proactive_watchdog():
+    """
+    Autonomous ocean watchdog loop that periodically inspects real-time
+    ARGO in-situ and NOAA satellite anomalies and pushes proactive alerts directly
+    to all registered Telegram fishermen & fleet operators in that coastal geo-fence.
+    """
+    global _sent_proactive_alert_ids
+    from .guardian_engine import scan_for_guardian_alerts
+
+    logger.info("[Guardian Watchdog] Autonomous ocean watchdog loop initiated.")
+    while _bot_running:
+        try:
+            await asyncio.sleep(60)  # Check ocean state every 60 seconds
+            subscribers = get_all_subscribers()
+            if not subscribers:
+                continue
+
+            alerts = scan_for_guardian_alerts()
+            for alert in alerts:
+                alert_id = alert.get("id")
+                if not alert_id or alert_id in _sent_proactive_alert_ids:
+                    continue
+
+                for sub in subscribers:
+                    sub_lat = sub.get("latitude", 18.915)
+                    sub_lon = sub.get("longitude", 72.828)
+                    alert_lat = alert["location"]["latitude"]
+                    alert_lon = alert["location"]["longitude"]
+                    
+                    dist = haversine_km(sub_lat, sub_lon, alert_lat, alert_lon)
+                    # If within 150km operational radius of the fisherman
+                    if dist <= 150.0:
+                        logger.info(f"[Guardian Watchdog] Pushing proactive alert '{alert['title']}' to {sub.get('first_name')} (#{sub['chat_id']})")
+                        try:
+                            await send_proactive_guardian_alert(sub, alert)
+                        except Exception as ex:
+                            logger.warning(f"[Guardian Watchdog] Failed to push alert to #{sub['chat_id']}: {ex}")
+
+                _sent_proactive_alert_ids.add(alert_id)
+
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.warning(f"[Guardian Watchdog] Error in watchdog loop: {e}")
+            await asyncio.sleep(15)
+
+
 def start_telegram_bot_task():
-    """Starts the Telegram bot background worker task."""
-    global _bot_task
+    """Starts the Telegram bot background worker task and autonomous guardian watchdog."""
+    global _bot_task, _watchdog_task
     if _bot_task is None or _bot_task.done():
         _bot_task = asyncio.create_task(run_telegram_bot())
+    if _watchdog_task is None or _watchdog_task.done():
+        _watchdog_task = asyncio.create_task(run_guardian_proactive_watchdog())
     return _bot_task
 
 
 def stop_telegram_bot_task():
-    """Stops the Telegram bot worker."""
-    global _bot_running, _bot_task
+    """Stops the Telegram bot worker and watchdog."""
+    global _bot_running, _bot_task, _watchdog_task
     _bot_running = False
     if _bot_task and not _bot_task.done():
         _bot_task.cancel()
+    if _watchdog_task and not _watchdog_task.done():
+        _watchdog_task.cancel()

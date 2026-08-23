@@ -72,11 +72,24 @@ def init_db():
                 created_at TEXT DEFAULT (datetime('now'))
             );
 
+            CREATE TABLE IF NOT EXISTS telegram_subscribers (
+                chat_id INTEGER PRIMARY KEY,
+                first_name TEXT,
+                username TEXT,
+                latitude REAL DEFAULT 18.915,
+                longitude REAL DEFAULT 72.828,
+                harbour TEXT DEFAULT 'Mumbai (Sassoon Dock)',
+                language TEXT DEFAULT 'hi',
+                last_active TEXT DEFAULT (datetime('now')),
+                notifications_enabled INTEGER DEFAULT 1
+            );
+
             CREATE INDEX IF NOT EXISTS idx_profiles_float_id ON argo_profiles(float_id);
             CREATE INDEX IF NOT EXISTS idx_profiles_location ON argo_profiles(latitude, longitude);
             CREATE INDEX IF NOT EXISTS idx_profiles_date ON argo_profiles(date);
             CREATE INDEX IF NOT EXISTS idx_measurements_profile ON argo_measurements(profile_id);
             CREATE INDEX IF NOT EXISTS idx_anomalies_date ON anomaly_alerts(date);
+            CREATE INDEX IF NOT EXISTS idx_telegram_active ON telegram_subscribers(last_active);
         """)
         conn.commit()
     print(f"[DB] Database initialized at {get_db_path()}")

@@ -8,49 +8,24 @@ import {
   GitBranch,
   Sparkles,
   Activity,
-  Send,
-  Bell,
-  ShieldAlert
+  Send
 } from 'lucide-react';
 import type { AppMode } from '../../types';
-import { NotificationDrawer } from '../common/NotificationDrawer';
-import { getGuardianAlerts } from '../../services/api';
 
 interface NavbarProps {
   currentMode: AppMode;
   onSelectMode: (mode: AppMode) => void;
   backendOnline?: boolean;
   onOpenTelegramModal?: () => void;
-  onFocusMapLocation?: (lat: number, lon: number) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentMode,
   onSelectMode,
   onOpenTelegramModal,
-  onFocusMapLocation,
 }) => {
   const [demoOpen, setDemoOpen] = useState(false);
-  const [notificationOpen, setNotificationOpen] = useState(false);
-  const [alertCount, setAlertCount] = useState<number>(3);
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Poll for proactive Guardian alerts
-  useEffect(() => {
-    const fetchAlertCount = async () => {
-      try {
-        const data = await getGuardianAlerts();
-        if (data && typeof data.total_active_alerts === 'number') {
-          setAlertCount(data.total_active_alerts);
-        }
-      } catch {
-        // Fallback to default canonical count
-      }
-    };
-    fetchAlertCount();
-    const interval = setInterval(fetchAlertCount, 30000);
-    return () => clearInterval(interval);
-  }, []);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -254,15 +229,6 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
       </div>
-
-      {/* Slide-out Lehar Guardian Notification Center with Smart Geo-Fencing */}
-      <NotificationDrawer
-        isOpen={notificationOpen}
-        onClose={() => setNotificationOpen(false)}
-        onSelectMode={onSelectMode}
-        onOpenTelegramModal={onOpenTelegramModal}
-        onFocusMapLocation={onFocusMapLocation}
-      />
     </header>
   );
 };
