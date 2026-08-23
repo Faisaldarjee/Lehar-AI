@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, AlertTriangle, Thermometer, Fish, Waves, Sunrise } from 'lucide-react';
+import { Sparkles, AlertTriangle, Thermometer, Fish, Waves } from 'lucide-react';
 
 interface QueryChipsProps {
   onSelectQuery: (query: string) => void;
@@ -7,12 +7,6 @@ interface QueryChipsProps {
 
 export const QueryChips: React.FC<QueryChipsProps> = ({ onSelectQuery }) => {
   const suggestions = [
-    {
-      label: '🌅 04:30 AM Dawn Cast',
-      icon: Sunrise,
-      query: 'Generate today\'s 04:30 AM Dawn Cast morning departure advisory for Sassoon Dock Mumbai with wave height, tide times, top 2 PFZs, and fuel estimate.',
-      tag: 'Morning Briefing',
-    },
     {
       label: 'Surmai / Seer Fish Advisory',
       icon: Fish,

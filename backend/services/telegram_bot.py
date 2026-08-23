@@ -39,7 +39,6 @@ from .pfz_engine import (
 )
 from .db import get_connection
 from .lang_detect import detect_script_language
-from .guardian_engine import generate_dawn_cast_briefing
 
 # Load from backend/.env
 backend_env = Path(__file__).resolve().parent.parent / '.env'
@@ -295,67 +294,19 @@ def _get_start_keyboard() -> dict:
     return {
         "inline_keyboard": [
             [
-                {"text": "🌅 04:30 AM Dawn Cast Briefing", "callback_data": "cmd_dawn"},
-                {"text": "🐟 Find Nearest Fish (PFZ)", "callback_data": "cmd_pfz"}
+                {"text": "🐟 Find Nearest Fish Zone (PFZ)", "callback_data": "cmd_pfz"},
+                {"text": "🌊 Sea Temp & Currents", "callback_data": "cmd_temp"}
             ],
             [
-                {"text": "🌊 Sea Temp & Currents", "callback_data": "cmd_temp"},
-                {"text": "🚨 Storm & Heatwave Warnings", "callback_data": "cmd_storm"}
+                {"text": "🚨 Storm & Heatwave Warnings", "callback_data": "cmd_storm"},
+                {"text": "📍 Nearest ARGO Float", "callback_data": "cmd_nearest_float"}
             ],
             [
-                {"text": "📍 Nearest ARGO Float", "callback_data": "cmd_nearest_float"},
-                {"text": "🇮🇳 हिंदी एडवाइजरी", "callback_data": "cmd_lang_hi"}
-            ],
-            [
+                {"text": "🇮🇳 हिंदी एडवाइजरी", "callback_data": "cmd_lang_hi"},
                 {"text": "🌐 Project Details", "callback_data": "cmd_about"}
             ]
         ]
     }
-
-
-async def _handle_dawn_cast(client: httpx.AsyncClient, chat_id: int, lat: float = 18.91, lon: float = 72.83):
-    """Generates and delivers the 04:30 AM Dawn Cast Morning Departure Advisory with interactive action buttons & voice note."""
-    nearest_h = nearest_harbour(lat, lon)
-    harbour_name = nearest_h.get("harbour", "Mumbai (Sassoon Dock)")
-
-    # Send typing action
-    await _telegram_request(client, "sendChatAction", {"chat_id": chat_id, "action": "typing"})
-
-    briefing = generate_dawn_cast_briefing(harbour_name=harbour_name, lat=lat, lon=lon)
-
-    # Build interactive buttons for targets
-    buttons = []
-    targets = briefing.get("top_targets", [])
-    if len(targets) > 0 and "latitude" in targets[0]:
-        t1 = targets[0]
-        sp1 = t1["target_species"][0] if t1.get("target_species") else "Target 1"
-        url1 = f"https://maps.google.com/?q={t1['latitude']:.4f},{t1['longitude']:.4f}"
-        buttons.append([{"text": f"🗺️ Open {sp1} Course in Maps", "url": url1}])
-    if len(targets) > 1 and "latitude" in targets[1]:
-        t2 = targets[1]
-        sp2 = t2["target_species"][0] if t2.get("target_species") else "Target 2"
-        url2 = f"https://maps.google.com/?q={t2['latitude']:.4f},{t2['longitude']:.4f}"
-        buttons.append([{"text": f"🗺️ Open {sp2} Course in Maps", "url": url2}])
-
-    buttons.append([
-        {"text": "🔄 Refresh Dawn Cast", "callback_data": "cmd_dawn"},
-        {"text": "🐟 All Fishing Zones", "callback_data": "cmd_pfz"}
-    ])
-
-    reply_markup = {"inline_keyboard": buttons}
-
-    await _telegram_request(client, "sendMessage", {
-        "chat_id": chat_id,
-        "text": briefing["markdown_text"],
-        "parse_mode": "Markdown",
-        "reply_markup": reply_markup,
-        "disable_web_page_preview": False
-    })
-
-    # Synthesize crisp spoken voice note
-    voice_bytes = await _synthesize_voice_audio(briefing["voice_script"], lang="hi")
-    if voice_bytes:
-        await send_telegram_voice(chat_id, voice_bytes, caption="🔊 *04:30 AM Dawn Cast Voice Note*")
 
 
 async def _handle_start_command(client: httpx.AsyncClient, chat_id: int, first_name: str):
@@ -500,9 +451,7 @@ async def _handle_callback_query(client: httpx.AsyncClient, callback_query: dict
     # Acknowledge callback immediately
     await _telegram_request(client, "answerCallbackQuery", {"callback_query_id": cb_id})
 
-    if data == "cmd_dawn":
-        await _handle_dawn_cast(client, chat_id)
-    elif data == "cmd_pfz":
+    if data == "cmd_pfz":
         query = "Where are the top 3 potential fishing zones near the Indian coast with optimal SST and chlorophyll?"
         await _handle_text_query(client, chat_id, query, send_voice=True)
     elif data == "cmd_temp":
@@ -569,25 +518,18 @@ async def _handle_text_query(
         target_lat, target_lon = None, None
         if markers and len(markers) > 0:
             first_m = markers[0]
-            target_lat, target_lon = first_m.get("lat"), first_m.get("lon")
-
-        buttons = []
-        if target_lat and target_lon:
-            maps_url = f"https://maps.google.com/?q={target_lat:.4f},{target_lon:.4f}"
-            buttons.append([{"text": "🗺️ Open Navigation Route in Maps", "url": maps_url}])
-
-        buttons.append([
-            {"text": "🌅 04:30 AM Dawn Cast", "callback_data": "cmd_dawn"},
-            {"text": "🐟 Refresh Zones", "callback_data": "cmd_pfz"}
-        ])
-
-        reply_markup = {"inline_keyboard": buttons}
+            lat = first_m.get("lat")
+            lon = first_m.get("lon")
+            if lat and lon:
+                target_lat, target_lon = lat, lon
+                maps_url = f"https://maps.google.com/?q={lat:.4f},{lon:.4f}"
+                response_text += f"\n\n📍 *Target Coordinates:* `{lat:.3f}°N, {lon:.3f}°E`\n👉 [Open Navigation in Google Maps]({maps_url})"
 
         await _telegram_request(client, "sendMessage", {
             "chat_id": chat_id,
             "text": response_text,
             "parse_mode": "Markdown",
-            "reply_markup": reply_markup,
+            "reply_markup": _get_start_keyboard(),
             "disable_web_page_preview": False
         })
 
@@ -604,11 +546,9 @@ async def _handle_text_query(
 
         # Generate voice note if requested in the exact user language
         if send_voice:
-            voice_script = answer[:350].replace("*", "").replace("`", "").replace("#", "")
-            voice_lang = detect_script_language(voice_script)
-            voice_bytes = await _synthesize_voice_audio(voice_script, lang=voice_lang)
+            voice_bytes = await _synthesize_voice_audio(answer, lang=detected_lang)
             if voice_bytes:
-                await send_telegram_voice(chat_id, voice_bytes, caption="🔊 *Lehar AI Voice Briefing*")
+                await send_telegram_voice(chat_id, voice_bytes, caption="🔊 *Lehar AI Spoken Summary*")
 
     except Exception as err:
         logger.error(f"Error processing Telegram query: {err}")
@@ -642,7 +582,6 @@ async def run_telegram_bot():
             await _telegram_request(client, "setMyCommands", {
                 "commands": [
                     {"command": "start", "description": "🌊 Open Lehar AI Main Menu & Advisories"},
-                    {"command": "dawn", "description": "🌅 04:30 AM Pre-Departure Morning Briefing"},
                     {"command": "pfz", "description": "🐟 Find Nearest Potential Fishing Zone"},
                     {"command": "temp", "description": "🌊 Check Ocean Temperature & MLD"},
                     {"command": "storm", "description": "🚨 Marine Heatwave & Storm Alerts"},
@@ -716,8 +655,6 @@ async def run_telegram_bot():
 
                         if text.startswith("/start"):
                             asyncio.create_task(_handle_start_command(client, chat_id, first_name))
-                        elif text.startswith("/dawn") or text.lower() in ["dawn", "dawn cast", "morning advisory", "subah", "briefing"]:
-                            asyncio.create_task(_handle_dawn_cast(client, chat_id))
                         elif text.startswith("/help"):
                             asyncio.create_task(_handle_start_command(client, chat_id, first_name))
                         else:

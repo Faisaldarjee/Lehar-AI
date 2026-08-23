@@ -12,7 +12,7 @@ import math
 import uuid
 from datetime import datetime, timezone
 from .db import get_connection
-from .pfz_engine import get_pfz_advisories, nearest_harbour, haversine_km, bearing_degrees, bearing_to_compass
+from .pfz_engine import get_pfz_advisories, nearest_harbour, haversine_km
 from .satellite_client import get_nearest_satellite_data
 from .species_dict import SPECIES_REGISTRY, evaluate_species_viability
 
@@ -306,119 +306,4 @@ def get_guardian_status() -> dict:
         "active_opportunity_alerts": opportunity_count,
         "total_active_alerts": len(alerts),
         "last_scan_utc": datetime.now(timezone.utc).isoformat(),
-    }
-
-
-def generate_dawn_cast_briefing(
-    harbour_name: str = "Mumbai (Sassoon Dock)",
-    lat: float = 18.91,
-    lon: float = 72.83,
-    lang: str = "hi"
-) -> dict:
-    """
-    Generates the official 04:30 AM 'Dawn Cast' Morning Departure Advisory.
-    Combines:
-    1. Real-time Marine Waves, Beaufort Wind Scale & Go/No-Go Safety Status.
-    2. Solunar Tidal Feeding Index & Dawn High-Tide Influx Peak.
-    3. Top 2 Prime Fishing Targets with exact Compass Heading, Distance, Thermocline Net Depth.
-    4. NavIC Diesel Litres & Voyage Return Planning.
-    5. Spoken Voice Audio Script.
-    """
-    from .marine_weather import get_live_marine_weather, calculate_solunar_activity
-
-    weather = get_live_marine_weather(lat, lon)
-    solunar = calculate_solunar_activity()
-
-    pfz_list = get_pfz_advisories("all", limit=50)
-    nearby_pfzs = []
-    for p in pfz_list:
-        d = haversine_km(lat, lon, p["latitude"], p["longitude"])
-        if d <= 150:
-            brg = bearing_degrees(lat, lon, p["latitude"], p["longitude"])
-            nearby_pfzs.append({
-                **p,
-                "distance_km": round(d, 1),
-                "bearing_deg": round(brg, 1),
-                "compass": bearing_to_compass(brg),
-            })
-
-    nearby_pfzs.sort(key=lambda x: (-x["pfz_score"], x["distance_km"]))
-    top_targets = nearby_pfzs[:2] if len(nearby_pfzs) >= 2 else (nearby_pfzs if nearby_pfzs else pfz_list[:2])
-
-    target1 = top_targets[0] if len(top_targets) > 0 else None
-    target2 = top_targets[1] if len(top_targets) > 1 else None
-
-    target1_dist = target1["distance_km"] if target1 and "distance_km" in target1 else 24.5
-    target1_compass = target1["compass"] if target1 and "compass" in target1 else "WSW"
-    target1_brg = target1["bearing_deg"] if target1 and "bearing_deg" in target1 else 245
-    target1_species = (target1["target_species"][0] if target1 and target1.get("target_species") else "Surmai (King Mackerel)")
-    target1_score = target1["pfz_score"] if target1 else 94
-    mld_val = target1.get("mld_meters", 35.0) if target1 else 35.0
-    target1_depth = f"{int(mld_val)}m - {int(mld_val + 20)}m"
-
-    est_fuel = int(target1_dist * 2 * 0.95)
-    transit_hrs = round(target1_dist / 16.5, 1)
-
-    wave_h = weather.get("wave_height_m", 1.1)
-    wind_kn = weather.get("wind_speed_knots", 10.5)
-    beaufort = weather.get("beaufort_description", "Gentle Breeze")
-    safety_badge = weather.get("safety_status_badge", "🟢 GO FOR VOYAGE")
-    solunar_rating = solunar.get("solunar_rating", "Peak Feeding Activity")
-
-    markdown = (
-        f"🌅 *LEHAR AI — 04:30 AM DAWN CAST ADVISORY* 🇮🇳\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"⚓ *Departure Port:* `{harbour_name}`\n"
-        f"⏰ *Departure Window:* `04:30 AM – 06:00 AM`\n"
-        f"🛡️ *Safety Status:* {safety_badge}\n\n"
-        f"🌊 *HYDRODYNAMIC SEA STATE:*\n"
-        f"• 🌊 *Significant Wave Height:* `{wave_h} m` ({weather.get('wave_period_s', 7.0)}s period)\n"
-        f"• 💨 *Wind Vectors:* `{wind_kn} knots` ({beaufort})\n"
-        f"• 🌓 *Solunar Feeding Index:* `{solunar['solunar_score']}%` ({solunar_rating})\n"
-        f"• ⏰ *Peak Dawn Influx Window:* `{solunar['major_window_morning']}`\n\n"
-        f"🎯 *TOP FISHING ZONES TODAY:*\n"
-        f"1. 🐟 *{target1_species}*\n"
-        f"   └ Heading: *{target1_compass} ({target1_brg}°)* | Dist: *{target1_dist} km* (~{transit_hrs}h)\n"
-        f"   └ Optimal Net Depth: `{target1_depth}` (Score: {target1_score}/100)\n"
-    )
-
-    if target2:
-        target2_dist = target2.get("distance_km", 18.2)
-        target2_compass = target2.get("compass", "NW")
-        target2_species = (target2["target_species"][0] if target2.get("target_species") else "Bangda (Mackerel)")
-        target2_score = target2["pfz_score"]
-        markdown += (
-            f"2. 🐟 *{target2_species}*\n"
-            f"   └ Heading: *{target2_compass}* | Dist: *{target2_dist} km* | Score: *{target2_score}/100*\n"
-        )
-
-    markdown += (
-        f"\n⛽ *VOYAGE FUEL ESTIMATE:*\n"
-        f"• Round-trip Diesel Required: *~{est_fuel} Litres*\n"
-        f"• Recommended Return Docking: *~04:30 PM (Before Dusk Tide Drop)*\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    )
-
-    voice_script = (
-        f"Subah ka pranam! Yeh Lehar AI ka 4:30 AM Dawn Cast advisory hai {harbour_name} ke liye. "
-        f"Samundar me wave height {wave_h} meter hai aur hawa {wind_kn} knots hai, jo safe hai. "
-        f"Aaj ka best fishing zone {target1_dist} kilometer door {target1_compass} direction me hai. "
-        f"{target1_species} ke liye net ko {target1_depth} depth par deploy karein. Shubh yatra!"
-    )
-
-    return {
-        "harbour": harbour_name,
-        "coordinates": [lat, lon],
-        "departure_window": "04:30 AM – 06:00 AM",
-        "safety_status": safety_badge,
-        "wave_height_m": wave_h,
-        "wind_knots": wind_kn,
-        "beaufort": beaufort,
-        "solunar_score": solunar["solunar_score"],
-        "solunar_rating": solunar_rating,
-        "peak_window": solunar["major_window_morning"],
-        "top_targets": top_targets,
-        "estimated_fuel_litres": est_fuel,
-        "markdown_text": markdown,
-        "voice_script": voice_script,
     }
