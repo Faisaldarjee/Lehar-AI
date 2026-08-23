@@ -869,54 +869,122 @@ export const OceanMap: React.FC<OceanMapProps> = ({
                   </span>
                 </Tooltip>
                 <Popup>
-                  <div className="p-1 space-y-2 text-slate-100 min-w-[240px]">
-                    <div className="flex items-center justify-between border-b border-abyssal-800 pb-1">
-                      <span className="font-bold text-amber-400 text-sm flex items-center gap-1 font-heading">
-                        <Fish className="w-3.5 h-3.5" /> PFZ: {pfz.pfz_rating} ({pfz.pfz_score}/100)
-                      </span>
-                      <span className="text-[10px] font-mono bg-amber-950 text-amber-300 px-1.5 py-0.5 rounded border border-amber-700">
+                  <div className="p-1 min-w-[280px] max-w-[310px] text-slate-100 space-y-2 font-sans">
+                    {/* Header */}
+                    <div className="flex items-center justify-between border-b border-cyan-500/20 pb-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <Fish className="w-4 h-4 text-amber-400" />
+                        <span className="font-bold text-amber-400 text-sm font-heading tracking-wide">
+                          PFZ: {pfz.pfz_rating} ({pfz.pfz_score}/100)
+                        </span>
+                        <Info className="w-3.5 h-3.5 text-slate-400 cursor-pointer" />
+                      </div>
+                      <span className="text-xs font-bold font-mono px-2 py-0.5 rounded-md bg-amber-950/90 border border-amber-500/50 text-amber-300 shadow-sm">
                         {pfz.sst_celsius}°C
                       </span>
                     </div>
 
-                    <p className="text-xs text-slate-200 leading-relaxed">{pfz.advisory}</p>
-
-                    {/* Multi-sensor metrics comparison */}
-                    <div className="grid grid-cols-3 gap-1 text-[10px] font-mono text-slate-300 pt-1 border-t border-abyssal-800">
-                      <div>
-                        <span className="text-slate-500 block text-[9px]">Argo SST</span>
-                        {pfz.sst_celsius}°C
+                    {/* Target Pelagic Species Banner */}
+                    <div className="p-2.5 rounded-xl bg-[#091e34]/90 border border-cyan-500/30 space-y-1">
+                      <div className="flex items-center justify-between text-[9px] font-mono tracking-wider">
+                        <span className="text-slate-400 uppercase font-semibold">TARGET PELAGIC SPECIES</span>
+                        <span className="px-1.5 py-0.2 rounded bg-cyan-950 border border-cyan-500/40 text-cyan-300 font-bold text-[9px] flex items-center gap-0.5">
+                          🛡️ HIGH DENSITY
+                        </span>
                       </div>
-                      <div>
-                        <span className="text-slate-500 block text-[9px]">Sat SST</span>
-                        {pfz.satellite_sst ? `${pfz.satellite_sst}°C` : `${pfz.sst_celsius}°C`}
+                      <div className="text-sm font-bold text-white font-heading">
+                        {(pfz.target_species && pfz.target_species.length > 0)
+                          ? pfz.target_species.slice(0, 2).join(' / ')
+                          : (pfz as any).species_likely?.length > 0
+                          ? (pfz as any).species_likely.slice(0, 2).join(' / ')
+                          : 'Tuna / Yellowfin'}
                       </div>
-                      <div>
-                        <span className="text-slate-500 block text-[9px]">Chl-a</span>
-                        {pfz.chlorophyll_mg_m3 ? `${pfz.chlorophyll_mg_m3} mg/m³` : '0.45 mg/m³'}
-                      </div>
-                      <div className="col-span-3 pt-0.5">
-                        <span className="text-slate-500 block text-[9px]">Nearest Harbour</span>
-                        {pfz.nearest_harbour.distance_km}km {pfz.nearest_harbour.compass} of {pfz.nearest_harbour.harbour}
+                      <div className="flex items-center justify-between text-xs text-cyan-300 font-mono pt-0.5">
+                        <span className="flex items-center gap-1">
+                          <Layers className="w-3.5 h-3.5 text-cyan-400" />
+                          <span>Thermocline Layer:</span>
+                        </span>
+                        <strong className="text-white">
+                          {pfz.mld_meters ? `${Math.round(pfz.mld_meters)}m - ${Math.round(pfz.mld_meters + 25)}m Depth` : '35m - 60m Depth'}
+                        </strong>
                       </div>
                     </div>
 
-                    {/* Multi-Sensor Fusion Contribution Tags */}
-                    <div className="pt-1.5 border-t border-abyssal-800">
-                      <span className="text-[9px] font-mono text-slate-400 block mb-1">Fused Data Sources:</span>
-                      <div className="flex flex-wrap gap-1">
-                        <span className="px-1.5 py-0.2 rounded bg-cyan-950/80 border border-cyan-700/60 text-cyan-300 text-[8px] font-mono">
-                          ARGO Subsurface #{pfz.float_id}
-                        </span>
-                        <span className="px-1.5 py-0.2 rounded bg-amber-950/80 border border-amber-700/60 text-amber-300 text-[8px] font-mono">
-                          NOAA MUR SST
-                        </span>
-                        <span className="px-1.5 py-0.2 rounded bg-emerald-950/80 border border-emerald-700/60 text-emerald-300 text-[8px] font-mono">
-                          NASA VIIRS Chlorophyll
-                        </span>
+                    {/* 3 Data Tiles Grid */}
+                    <div className="grid grid-cols-3 gap-1.5 text-center">
+                      <div className="p-1.5 rounded-lg bg-[#0a1b2d] border border-cyan-500/20 space-y-0.5">
+                        <div className="text-[9px] font-mono text-slate-400 flex items-center justify-center gap-0.5">
+                          Argo SST <Info className="w-2.5 h-2.5 text-slate-500" />
+                        </div>
+                        <div className="text-xs font-bold text-white font-mono">{pfz.sst_celsius}°C</div>
+                      </div>
+
+                      <div className="p-1.5 rounded-lg bg-[#0a1b2d] border border-cyan-500/20 space-y-0.5">
+                        <div className="text-[9px] font-mono text-slate-400 flex items-center justify-center gap-0.5">
+                          Sat SST <Info className="w-2.5 h-2.5 text-slate-500" />
+                        </div>
+                        <div className="text-xs font-bold text-white font-mono">
+                          {pfz.satellite_sst ? `${pfz.satellite_sst}°C` : `${pfz.sst_celsius}°C`}
+                        </div>
+                      </div>
+
+                      <div className="p-1.5 rounded-lg bg-[#0a1b2d] border border-cyan-500/20 space-y-0.5">
+                        <div className="text-[9px] font-mono text-slate-400 flex items-center justify-center gap-0.5">
+                          Chlorophyll <Info className="w-2.5 h-2.5 text-slate-500" />
+                        </div>
+                        <div className="text-xs font-bold text-cyan-300 font-mono">
+                          {pfz.chlorophyll_mg_m3 ? `${pfz.chlorophyll_mg_m3} mg/m³` : '0.69 mg/m³'}
+                        </div>
                       </div>
                     </div>
 
+                    {/* Navigation Telemetry Section */}
+                    {(() => {
+                      const distKm = userVesselPos
+                        ? haversineDistKm(userVesselPos[0], userVesselPos[1], pfz.latitude, pfz.longitude)
+                        : (pfz.nearest_harbour?.distance_km || 48.5);
+                      const voyageHours = (distKm / 16.5).toFixed(1);
+                      const fuelLitres = Math.round(distKm * 1.85);
+
+                      return (
+                        <div className="p-2 rounded-xl bg-[#091b2c]/80 border border-slate-800 space-y-1 text-[11px] font-mono">
+                          <div className="flex items-center justify-between text-cyan-300">
+                            <span className="flex items-center gap-1">
+                              <Navigation className="w-3 h-3 text-cyan-400" />
+                              {userVesselPos ? 'Direct from Your Vessel' : `From ${pfz.nearest_harbour?.harbour || 'Coast'}`}
+                            </span>
+                            <strong className="text-white text-xs">{distKm.toFixed(1)} km</strong>
+                          </div>
+
+                          <div className="flex items-center justify-between text-slate-300">
+                            <span>⏱️ Voyage: ~{voyageHours} hrs</span>
+                            <span>⛽ Fuel: ~{fuelLitres} L</span>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-800/80">
+                            <span className="text-teal-300">🌊 Sea State: Moderate</span>
+                            <span className="text-slate-500">Valid: 36h</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Plot Route CTA Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const startPos: [number, number] = userVesselPos || [18.915, 72.828];
+                        setUserVesselPos(startPos);
+                        const dist = haversineDistKm(startPos[0], startPos[1], pfz.latitude, pfz.longitude);
+                        setNearestPfzToVessel({ pfz, distKm: Math.round(dist * 10) / 10 });
+                        setMapCenter([(startPos[0] + pfz.latitude) / 2, (startPos[1] + pfz.longitude) / 2]);
+                        setMapZoom(7);
+                      }}
+                      className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-500 text-abyssal-950 font-bold text-xs shadow-lg shadow-orange-500/25 transition cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
+                    >
+                      <Navigation className="w-3.5 h-3.5 text-abyssal-950" />
+                      <span>Plot Route from Vessel</span>
+                    </button>
                   </div>
                 </Popup>
               </CircleMarker>
@@ -952,40 +1020,38 @@ export const OceanMap: React.FC<OceanMapProps> = ({
                 </div>
               </Tooltip>
               <Popup>
-                <div className="p-1 space-y-1.5 text-slate-100 min-w-[230px] font-sans">
-                  <div className="flex items-center justify-between border-b border-abyssal-800 pb-1">
-                    <span className="font-bold text-sky-400 text-xs flex items-center gap-1 font-heading">
+                <div className="p-1 min-w-[260px] max-w-[300px] text-slate-100 space-y-2 font-sans">
+                  <div className="flex items-center justify-between border-b border-sky-500/20 pb-1.5">
+                    <span className="font-bold text-sky-400 text-sm flex items-center gap-1.5 font-heading">
                       ⚓ {h.name}
                     </span>
-                    <span className="text-[9px] font-mono bg-sky-950 text-sky-300 px-1.5 py-0.5 rounded border border-sky-700">
-                      {h.state}
+                    <span className="text-[9px] font-mono bg-sky-950 text-sky-300 px-2 py-0.5 rounded border border-sky-600/50 font-bold">
+                      {h.tier === 1 ? 'Tier-1 Hub' : h.tier === 2 ? 'Mechanized' : 'FLC Jetty'}
                     </span>
                   </div>
 
-                  <p className="text-[11px] text-slate-300 leading-snug">
-                    {h.type}
-                    {h.district && <span className="block text-[10px] text-slate-400 mt-0.5 font-mono">District: {h.district}</span>}
-                  </p>
+                  <div className="p-2 rounded-xl bg-[#091e34]/80 border border-sky-500/30 text-xs space-y-1">
+                    <div className="text-slate-200 font-medium">{h.type}</div>
+                    <div className="text-[10px] text-sky-300 font-mono">State: {h.state} {h.district ? `• ${h.district}` : ''}</div>
+                  </div>
 
-                  <div className="text-[10px] font-mono text-slate-400 pt-1 border-t border-abyssal-800 flex items-center justify-between">
+                  <div className="text-[10px] font-mono text-slate-400 flex items-center justify-between px-1">
                     <span>Coordinates:</span>
                     <span className="text-sky-300 font-bold">{h.lat.toFixed(3)}°N, {h.lng.toFixed(3)}°E</span>
                   </div>
 
-                  <div className="pt-1.5 border-t border-abyssal-800 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setUserVesselPos([h.lat, h.lng]);
-                        setMapCenter([h.lat, h.lng]);
-                        setMapZoom(9);
-                      }}
-                      className="text-[10px] font-mono bg-emerald-950 hover:bg-emerald-900 border border-emerald-500/50 text-emerald-300 px-2 py-1 rounded cursor-pointer transition flex items-center gap-1 font-bold shadow-md"
-                    >
-                      <Navigation className="w-3 h-3" />
-                      <span>Set Vessel Pos Here</span>
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserVesselPos([h.lat, h.lng]);
+                      setMapCenter([h.lat, h.lng]);
+                      setMapZoom(9);
+                    }}
+                    className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-sky-500 to-teal-400 hover:from-sky-400 hover:to-teal-300 text-abyssal-950 font-bold text-xs shadow-md shadow-sky-500/20 transition cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
+                  >
+                    <Navigation className="w-3.5 h-3.5 text-abyssal-950" />
+                    <span>Set Vessel GPS Dock Here</span>
+                  </button>
                 </div>
               </Popup>
             </Marker>
@@ -1008,39 +1074,41 @@ export const OceanMap: React.FC<OceanMapProps> = ({
                 }}
               >
                 <Popup>
-                  <div className="p-1 space-y-2 text-slate-100 min-w-[200px]">
-                    <div className="flex items-center justify-between border-b border-abyssal-800 pb-1">
-                      <span className="font-bold text-ocean-cyan text-sm font-heading">Float #{f.float_id}</span>
-                      <span className="text-[10px] font-mono bg-abyssal-900 text-ocean-cyan px-1.5 py-0.5 rounded border border-abyssal-800">
-                        Active
+                  <div className="p-1 min-w-[260px] max-w-[290px] text-slate-100 space-y-2 font-sans">
+                    <div className="flex items-center justify-between border-b border-cyan-500/20 pb-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-glow-cyan"></span>
+                        <span className="font-bold text-ocean-cyan text-sm font-heading">Float #{f.float_id}</span>
+                      </div>
+                      <span className="text-[9px] font-mono bg-cyan-950 text-cyan-300 px-2 py-0.5 rounded border border-cyan-600/50 font-bold">
+                        ACTIVE CTD
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 text-xs font-mono text-slate-300">
-                      <div>
-                        <span className="text-slate-500 block text-[10px]">Latitude</span>
-                        {f.latitude.toFixed(3)}°
+                    {/* 4 Data Tiles */}
+                    <div className="grid grid-cols-2 gap-1.5 text-xs font-mono">
+                      <div className="p-2 rounded-lg bg-[#0a1b2d] border border-cyan-500/20">
+                        <span className="text-slate-400 block text-[9px] uppercase">Profiling Depth</span>
+                        <strong className="text-white text-xs">{f.max_depth ? `${f.max_depth.toFixed(0)}m` : '2000m'}</strong>
                       </div>
-                      <div>
-                        <span className="text-slate-500 block text-[10px]">Longitude</span>
-                        {f.longitude.toFixed(3)}°
+                      <div className="p-2 rounded-lg bg-[#0a1b2d] border border-cyan-500/20">
+                        <span className="text-slate-400 block text-[9px] uppercase">Observation Date</span>
+                        <strong className="text-cyan-300 text-xs">{new Date(f.date).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</strong>
                       </div>
-                      <div>
-                        <span className="text-slate-500 block text-[10px]">Max Depth</span>
-                        {f.max_depth ? `${f.max_depth.toFixed(0)}m` : '2000m'}
-                      </div>
-                      <div>
-                        <span className="text-slate-500 block text-[10px]">Date</span>
-                        {new Date(f.date).toLocaleDateString()}
+                      <div className="p-2 rounded-lg bg-[#0a1b2d] border border-cyan-500/20 col-span-2 flex items-center justify-between">
+                        <span className="text-slate-400 text-[10px]">Position:</span>
+                        <span className="text-white font-bold">{f.latitude.toFixed(3)}°N, {f.longitude.toFixed(3)}°E</span>
                       </div>
                     </div>
 
                     {onSelectFloat && (
                       <button
+                        type="button"
                         onClick={() => onSelectFloat(f.float_id)}
-                        className="w-full mt-2 py-1.5 px-3 rounded-lg bg-gradient-to-r from-ocean-cyan to-teal-400 text-abyssal-950 font-bold text-xs transition text-center cursor-pointer shadow-md"
+                        className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-ocean-cyan to-teal-400 hover:from-cyan-300 hover:to-teal-300 text-abyssal-950 font-bold text-xs shadow-md shadow-ocean-cyan/20 transition text-center cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
                       >
-                        Inspect CTD Depth Profile
+                        <Layers className="w-3.5 h-3.5 text-abyssal-950" />
+                        <span>Inspect CTD Depth Profile</span>
                       </button>
                     )}
                   </div>
