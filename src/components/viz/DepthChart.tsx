@@ -32,11 +32,33 @@ export const DepthChart: React.FC<DepthChartProps> = ({ chart, title }) => {
     );
   }
 
-  // Ensure depth is sorted ascending
-  const sortedData = [...chart.data].sort((a: any, b: any) => (a.depth ?? 0) - (b.depth ?? 0));
+  // Robustly deduplicate and average multiple profile casts by unique depth level
+  const depthMap = new Map<number, { depth: number; temps: number[]; sals: number[] }>();
+  for (const d of chart.data) {
+    if (d.depth === undefined || d.depth === null || isNaN(Number(d.depth))) continue;
+    const depthVal = Math.round(Number(d.depth) * 10) / 10;
+    if (!depthMap.has(depthVal)) {
+      depthMap.set(depthVal, { depth: depthVal, temps: [], sals: [] });
+    }
+    const bucket = depthMap.get(depthVal)!;
+    if (d.temperature !== undefined && !isNaN(Number(d.temperature))) {
+      bucket.temps.push(Number(d.temperature));
+    }
+    if (d.salinity !== undefined && !isNaN(Number(d.salinity))) {
+      bucket.sals.push(Number(d.salinity));
+    }
+  }
 
-  const hasTemp = chart.y_keys.includes('temperature') || chart.data.some((d: any) => d.temperature !== undefined);
-  const hasSal = chart.y_keys.includes('salinity') || chart.data.some((d: any) => d.salinity !== undefined);
+  const sortedData = Array.from(depthMap.values())
+    .map((b) => ({
+      depth: b.depth,
+      temperature: b.temps.length ? Math.round((b.temps.reduce((acc, v) => acc + v, 0) / b.temps.length) * 100) / 100 : undefined,
+      salinity: b.sals.length ? Math.round((b.sals.reduce((acc, v) => acc + v, 0) / b.sals.length) * 100) / 100 : undefined,
+    }))
+    .sort((a, b) => a.depth - b.depth);
+
+  const hasTemp = chart.y_keys.includes('temperature') || sortedData.some((d: any) => d.temperature !== undefined);
+  const hasSal = chart.y_keys.includes('salinity') || sortedData.some((d: any) => d.salinity !== undefined);
 
   // Compute stats
   const temps = sortedData.map((d: any) => d.temperature).filter((t: any) => typeof t === 'number');
@@ -143,6 +165,7 @@ export const DepthChart: React.FC<DepthChartProps> = ({ chart, title }) => {
                 stroke="#2dd4bf"
                 strokeWidth={2.5}
                 dot={false}
+                connectNulls={true}
                 activeDot={{ r: 5, fill: '#2dd4bf' }}
               />
             )}
@@ -156,6 +179,7 @@ export const DepthChart: React.FC<DepthChartProps> = ({ chart, title }) => {
                 stroke="#10b981"
                 strokeWidth={2}
                 dot={false}
+                connectNulls={true}
                 activeDot={{ r: 5, fill: '#10b981' }}
               />
             )}

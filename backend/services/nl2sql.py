@@ -486,22 +486,51 @@ def detect_chart_type(query: str, results: list[dict]) -> dict | None:
 
     # 1. Depth Profile Chart (depth + temperature/salinity)
     if "depth" in columns and ("temperature" in columns or "salinity" in columns):
-        sorted_data = sorted(
-            [r for r in results if r.get("depth") is not None],
-            key=lambda x: float(x["depth"])
-        )
+        # Group by depth level to guarantee a clean monotonic vertical CTD curve
+        depth_buckets = {}
+        for r in results:
+            d = r.get("depth")
+            if d is None:
+                continue
+            try:
+                d_val = round(float(d), 1)
+            except (ValueError, TypeError):
+                continue
+            if d_val not in depth_buckets:
+                depth_buckets[d_val] = {"depth": d_val, "temps": [], "sals": []}
+            if r.get("temperature") is not None:
+                try:
+                    depth_buckets[d_val]["temps"].append(float(r["temperature"]))
+                except (ValueError, TypeError):
+                    pass
+            if r.get("salinity") is not None:
+                try:
+                    depth_buckets[d_val]["sals"].append(float(r["salinity"]))
+                except (ValueError, TypeError):
+                    pass
+
+        cleaned_data = []
+        for d_key in sorted(depth_buckets.keys()):
+            b = depth_buckets[d_key]
+            row = {"depth": d_key}
+            if b["temps"]:
+                row["temperature"] = round(sum(b["temps"]) / len(b["temps"]), 2)
+            if b["sals"]:
+                row["salinity"] = round(sum(b["sals"]) / len(b["sals"]), 2)
+            cleaned_data.append(row)
+
         y_keys = []
-        if "temperature" in columns:
+        if any("temperature" in row for row in cleaned_data):
             y_keys.append("temperature")
-        if "salinity" in columns:
+        if any("salinity" in row for row in cleaned_data):
             y_keys.append("salinity")
 
         return {
             "chart_type": "depth_profile",
-            "data": sorted_data[:100],
+            "data": cleaned_data[:100],
             "x_key": "depth",
             "y_keys": y_keys,
-            "title": f"Vertical Water Column CTD Profile ({len(sorted_data)} Levels)"
+            "title": f"Vertical Water Column CTD Profile ({len(cleaned_data)} Depth Levels)"
         }
 
     # 2. Time Series Chart (date + numeric parameter)
