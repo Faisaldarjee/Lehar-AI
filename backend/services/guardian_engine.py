@@ -103,12 +103,18 @@ def _match_nearest_fisherman(lat: float, lon: float) -> tuple[dict, float]:
     return best_f, round(min_d, 1)
 
 
-def scan_for_guardian_alerts() -> list[dict]:
+def scan_for_guardian_alerts(
+    harbour: str | None = None,
+    lat: float | None = None,
+    lon: float | None = None,
+    max_radius_km: float | None = None,
+) -> list[dict]:
     """
     Scans the multi-sensor ocean environment for:
     1. Safety Alerts (Active thermal & salinity anomaly breaches).
     2. Opportunity Alerts (High-yield PFZ zones with score >= 80).
     Matches them to registered fishermen and formats human-readable notifications.
+    Supports smart Geo-Fencing (filters alerts within max_radius_km of given harbour/coords).
     """
     alerts = []
 
@@ -286,14 +292,57 @@ def scan_for_guardian_alerts() -> list[dict]:
             "timestamp": datetime.now(timezone.utc).strftime("%I:%M %p"),
         })
 
-    # Sort so safety alerts appear first, then highest opportunity scores
-    alerts.sort(key=lambda x: (0 if x["type"] == "safety" else 1, x["location"]["distance_km"]))
+    # Apply Geo-Fencing if harbour or coordinates are provided
+    ref_lat, ref_lon = lat, lon
+    if harbour and (ref_lat is None or ref_lon is None):
+        harbour_lower = harbour.lower()
+        for f in REGISTERED_FISHERMEN:
+            if (
+                harbour_lower in f["harbour"].lower()
+                or harbour_lower in f["home_sector"].lower()
+            ):
+                ref_lat, ref_lon = f["lat"], f["lon"]
+                break
+
+    if ref_lat is not None and ref_lon is not None:
+        for a in alerts:
+            a_lat = a["location"]["latitude"]
+            a_lon = a["location"]["longitude"]
+            d_km = haversine_km(ref_lat, ref_lon, a_lat, a_lon)
+            a["geofence_distance_km"] = round(d_km, 1)
+            a["geofence_reference"] = harbour or f"{ref_lat:.2f}°N, {ref_lon:.2f}°E"
+            a["in_geofence_radius"] = bool(max_radius_km is None or d_km <= max_radius_km)
+
+        if max_radius_km is not None:
+            filtered = [a for a in alerts if a.get("in_geofence_radius", True)]
+            if filtered:
+                alerts = filtered
+            else:
+                # If no alerts strictly within radius, sort by distance so closest are on top
+                alerts.sort(key=lambda x: x.get("geofence_distance_km", 999))
+                for a in alerts:
+                    a["geofence_radius_notice"] = f"Extended beyond {max_radius_km}km radius"
+
+    # Sort so safety alerts appear first, then closest distance
+    alerts.sort(
+        key=lambda x: (
+            0 if x["type"] == "safety" else 1,
+            x.get("geofence_distance_km", x["location"]["distance_km"]),
+        )
+    )
     return alerts
 
 
-def get_guardian_status() -> dict:
-    """Return live watchdog metrics for header telemetry."""
-    alerts = scan_for_guardian_alerts()
+def get_guardian_status(
+    harbour: str | None = None,
+    lat: float | None = None,
+    lon: float | None = None,
+    max_radius_km: float | None = None,
+) -> dict:
+    """Return live watchdog metrics for header telemetry with optional geo-fenced metrics."""
+    alerts = scan_for_guardian_alerts(
+        harbour=harbour, lat=lat, lon=lon, max_radius_km=max_radius_km
+    )
     safety_count = sum(1 for a in alerts if a["type"] == "safety")
     opportunity_count = sum(1 for a in alerts if a["type"] == "opportunity")
 
@@ -305,5 +354,8 @@ def get_guardian_status() -> dict:
         "active_safety_alerts": safety_count,
         "active_opportunity_alerts": opportunity_count,
         "total_active_alerts": len(alerts),
+        "geofence_active": bool(harbour or (lat is not None and lon is not None)),
+        "geofence_filter": harbour or ("Coordinates" if lat is not None else "All India Coast"),
+        "geofence_radius_km": max_radius_km or 80.0,
         "last_scan_utc": datetime.now(timezone.utc).isoformat(),
     }

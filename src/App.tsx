@@ -265,7 +265,7 @@ export default function App() {
       {/* Ambient Ocean Atmospheric Layer (Caustics & Bioluminescent Drift) */}
       <OceanAtmosphere />
 
-      {/* Top Main Navigation */}
+      {/* Top Main Navigation with Proactive Alert Center & Geo-Fencing */}
       <Navbar
         currentMode={currentMode}
         onSelectMode={(mode) => {
@@ -278,6 +278,19 @@ export default function App() {
         }}
         backendOnline={backendOnline}
         onOpenTelegramModal={() => setIsTelegramModalOpen(true)}
+        onFocusMapLocation={(lat, lon) => {
+          setCurrentMode('map');
+          setExplorerView('map');
+          setHighlightMarkers([
+            {
+              lat,
+              lon,
+              float_id: 'GUARDIAN_ALERT',
+              date: new Date().toISOString(),
+              label: 'Guardian Alert Coordinate',
+            },
+          ]);
+        }}
       />
 
       {/* Live Telegram Bot QR Modal for Judges & Field Demos */}

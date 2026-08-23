@@ -11,10 +11,19 @@ router = APIRouter(prefix="/api/guardian", tags=["guardian"])
 
 
 @router.get("/alerts", response_model=GuardianStatusResponse)
-async def get_alerts():
-    """Get active proactive alerts and current Guardian watchdog metrics."""
-    status = get_guardian_status()
-    alerts = scan_for_guardian_alerts()
+async def get_alerts(
+    harbour: str | None = None,
+    lat: float | None = None,
+    lon: float | None = None,
+    radius_km: float | None = None,
+):
+    """
+    Get active proactive alerts and current Guardian watchdog metrics.
+    Supports smart Geo-Fencing by coastal harbour (e.g. 'Mumbai', 'Kochi', 'Veraval')
+    or coordinates [lat, lon] with configurable radius (default 80km).
+    """
+    status = get_guardian_status(harbour=harbour, lat=lat, lon=lon, max_radius_km=radius_km)
+    alerts = scan_for_guardian_alerts(harbour=harbour, lat=lat, lon=lon, max_radius_km=radius_km)
     return {
         **status,
         "alerts": alerts,

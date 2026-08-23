@@ -217,9 +217,14 @@ export async function getSatelliteGrid(downsample = 2): Promise<SatelliteGridRes
   return data;
 }
 
-/** Get proactive Guardian ocean alerts & watchdog metrics */
-export async function getGuardianAlerts(): Promise<GuardianStatusResponse> {
-  const { data } = await api.get<GuardianStatusResponse>('/api/guardian/alerts');
+/** Get proactive Guardian ocean alerts & watchdog metrics (with optional geo-fencing) */
+export async function getGuardianAlerts(params?: {
+  harbour?: string;
+  lat?: number;
+  lon?: number;
+  radius_km?: number;
+}): Promise<GuardianStatusResponse> {
+  const { data } = await api.get<GuardianStatusResponse>('/api/guardian/alerts', { params });
   return data;
 }
 
