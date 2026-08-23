@@ -169,10 +169,10 @@ def get_float_trajectory(float_id: str) -> list[dict]:
 
 
 def get_depth_profile(profile_id: int) -> list[dict]:
-    """Get depth measurements for a specific profile."""
+    """Get depth measurements for a specific profile, filtering out missing/zero sensor placeholders."""
     with get_connection() as conn:
         cursor = conn.execute(
-            "SELECT depth, pressure, temperature, salinity FROM argo_measurements WHERE profile_id = ? ORDER BY depth",
+            "SELECT depth, pressure, temperature, salinity FROM argo_measurements WHERE profile_id = ? AND (temperature > 1.0 OR salinity > 10.0) AND depth IS NOT NULL ORDER BY depth ASC",
             (profile_id,)
         )
         return [dict(row) for row in cursor.fetchall()]

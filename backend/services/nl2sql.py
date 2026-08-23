@@ -500,18 +500,24 @@ def detect_chart_type(query: str, results: list[dict]) -> dict | None:
                 depth_buckets[d_val] = {"depth": d_val, "temps": [], "sals": []}
             if r.get("temperature") is not None:
                 try:
-                    depth_buckets[d_val]["temps"].append(float(r["temperature"]))
+                    t_val = float(r["temperature"])
+                    if 2.0 <= t_val <= 38.0:
+                        depth_buckets[d_val]["temps"].append(t_val)
                 except (ValueError, TypeError):
                     pass
             if r.get("salinity") is not None:
                 try:
-                    depth_buckets[d_val]["sals"].append(float(r["salinity"]))
+                    s_val = float(r["salinity"])
+                    if 15.0 <= s_val <= 42.0:
+                        depth_buckets[d_val]["sals"].append(s_val)
                 except (ValueError, TypeError):
                     pass
 
         cleaned_data = []
         for d_key in sorted(depth_buckets.keys()):
             b = depth_buckets[d_key]
+            if not b["temps"] and not b["sals"]:
+                continue
             row = {"depth": d_key}
             if b["temps"]:
                 row["temperature"] = round(sum(b["temps"]) / len(b["temps"]), 2)
