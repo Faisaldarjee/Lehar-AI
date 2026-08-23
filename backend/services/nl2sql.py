@@ -208,6 +208,12 @@ def clean_llm_response(text: str) -> str:
 
 def generate_sql(user_query: str) -> str:
     """Generate a safe, read-only SQL query from natural language with model fallback and exact coastal bounds."""
+    # 1. Direct Float ID lookup for vertical CTD profile
+    float_match = re.search(r"\b(190\d{4}|290\d{4}|490\d{4}|590\d{4}|690\d{4}|790\d{4})\b", user_query)
+    if float_match:
+        fid = float_match.group(1)
+        return f"SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.float_id = '{fid}' AND (m.temperature > 1.0 OR m.salinity > 10.0) AND m.depth IS NOT NULL ORDER BY p.date DESC, m.depth ASC LIMIT 100"
+
     lang_info = detect_script_language(user_query)
     sector = detect_coastal_sector(user_query, lang_info.get("code", "en"))
 
@@ -215,7 +221,7 @@ def generate_sql(user_query: str) -> str:
     if sector:
         lat_min, lat_max = sector["lat_min"], sector["lat_max"]
         lon_min, lon_max = sector["lon_min"], sector["lon_max"]
-        return f"SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN {lat_min} AND {lat_max} AND p.longitude BETWEEN {lon_min} AND {lon_max} AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
+        return f"SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN {lat_min} AND {lat_max} AND p.longitude BETWEEN {lon_min} AND {lon_max} AND (m.temperature > 1.0 OR m.salinity > 10.0) AND m.depth IS NOT NULL ORDER BY p.date DESC, m.depth ASC LIMIT 100"
 
     schema_text = get_db_schema_text()
     system_prompt = SYSTEM_PROMPT.format(schema=schema_text)
@@ -244,7 +250,7 @@ def generate_sql(user_query: str) -> str:
         except Exception:
             continue
 
-    return "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 5.0 AND 25.0 AND p.longitude BETWEEN 55.0 AND 80.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
+    return "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 5.0 AND 25.0 AND p.longitude BETWEEN 55.0 AND 80.0 AND (m.temperature > 1.0 OR m.salinity > 10.0) AND m.depth IS NOT NULL ORDER BY p.date DESC, m.depth ASC LIMIT 100"
 
 
 def repair_and_execute_sql(sql: str, user_query: str) -> tuple[str, list[dict]]:
@@ -266,7 +272,7 @@ def repair_and_execute_sql(sql: str, user_query: str) -> tuple[str, list[dict]]:
     if sector:
         lat_min, lat_max = sector["lat_min"], sector["lat_max"]
         lon_min, lon_max = sector["lon_min"], sector["lon_max"]
-        fallback_sql = f"SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN {lat_min} AND {lat_max} AND p.longitude BETWEEN {lon_min} AND {lon_max} AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
+        fallback_sql = f"SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN {lat_min} AND {lat_max} AND p.longitude BETWEEN {lon_min} AND {lon_max} AND (m.temperature > 1.0 OR m.salinity > 10.0) AND m.depth IS NOT NULL ORDER BY p.date DESC, m.depth ASC LIMIT 100"
         try:
             fb_results = execute_readonly_sql(fallback_sql)
             if fb_results:
@@ -275,7 +281,7 @@ def repair_and_execute_sql(sql: str, user_query: str) -> tuple[str, list[dict]]:
             pass
 
     # Global basin fallback
-    global_sql = "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 5.0 AND 25.0 AND p.longitude BETWEEN 55.0 AND 85.0 AND m.depth <= 50 ORDER BY p.date DESC, m.depth ASC LIMIT 50"
+    global_sql = "SELECT p.id, p.float_id, p.latitude, p.longitude, p.date, m.depth, m.temperature, m.salinity FROM argo_profiles p JOIN argo_measurements m ON p.id = m.profile_id WHERE p.latitude BETWEEN 5.0 AND 25.0 AND p.longitude BETWEEN 55.0 AND 85.0 AND (m.temperature > 1.0 OR m.salinity > 10.0) AND m.depth IS NOT NULL ORDER BY p.date DESC, m.depth ASC LIMIT 100"
     return global_sql, execute_readonly_sql(global_sql)
 
 

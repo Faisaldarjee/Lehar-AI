@@ -64,6 +64,31 @@ export const DepthChart: React.FC<DepthChartProps> = ({ chart, title }) => {
     .filter((row) => row.temperature !== undefined || row.salinity !== undefined)
     .sort((a, b) => a.depth - b.depth);
 
+  const depths = sortedData.map((d) => d.depth);
+  const maxMeasuredDepth = depths.length ? Math.max(...depths) : 2000;
+
+  // Calculate dynamic vertical depth domain & ticks based on actual cast depth
+  let yDomain: [number, number];
+  let yTicks: number[];
+
+  if (maxMeasuredDepth <= 60) {
+    const topCap = Math.max(50, Math.ceil(maxMeasuredDepth / 10) * 10);
+    yDomain = [0, topCap];
+    yTicks = [0, Math.round(topCap * 0.25), Math.round(topCap * 0.5), Math.round(topCap * 0.75), topCap];
+  } else if (maxMeasuredDepth <= 250) {
+    const topCap = Math.max(100, Math.ceil(maxMeasuredDepth / 25) * 25);
+    yDomain = [0, topCap];
+    yTicks = [0, Math.round(topCap * 0.25), Math.round(topCap * 0.5), Math.round(topCap * 0.75), topCap];
+  } else if (maxMeasuredDepth <= 1000) {
+    const topCap = Math.max(500, Math.ceil(maxMeasuredDepth / 100) * 100);
+    yDomain = [0, topCap];
+    yTicks = [0, 250, 500, 750, topCap];
+  } else {
+    const topCap = Math.max(1500, Math.ceil(maxMeasuredDepth / 500) * 500);
+    yDomain = [0, topCap];
+    yTicks = [0, 500, 1000, 1500, topCap];
+  }
+
   const validTemps = sortedData.map((d) => d.temperature).filter((t): t is number => typeof t === 'number');
   const surfaceTemp = validTemps.length ? validTemps[0].toFixed(1) : '28.6';
   const deepTemp = validTemps.length ? validTemps[validTemps.length - 1].toFixed(1) : '3.7';
@@ -75,9 +100,9 @@ export const DepthChart: React.FC<DepthChartProps> = ({ chart, title }) => {
         <div>
           <h3 className="text-sm font-bold text-white flex items-center gap-1.5 font-heading">
             <Thermometer className="w-4 h-4 text-ocean-cyan" />
-            <span>{title || chart.title || 'Argo Float Hydrographic Depth Profile (50 Levels)'}</span>
+            <span>{title || chart.title || 'Argo Float Hydrographic Depth Profile'}</span>
           </h3>
-          <p className="text-[10px] text-slate-400">Vertical Hydrographic CTD Water Column Curves</p>
+          <p className="text-[10px] text-slate-400">Vertical Hydrographic CTD Water Column Curves ({Math.round(maxMeasuredDepth)}m Range)</p>
         </div>
 
         {/* Top Right Measurement Badges */}
@@ -128,13 +153,13 @@ export const DepthChart: React.FC<DepthChartProps> = ({ chart, title }) => {
               tickFormatter={(v) => v.toFixed(1)}
             />
 
-            {/* Y Axis: Depth (0m to 2000m, 0m at bottom) */}
+            {/* Y Axis: Dynamic Depth (0m to maxMeasuredDepth, 0m at top for vertical CTD profile) */}
             <YAxis
               type="number"
               dataKey="depth"
-              reversed={false}
-              domain={[0, 2000]}
-              ticks={[0, 500, 1000, 1500, 2000]}
+              reversed={true}
+              domain={yDomain}
+              ticks={yTicks}
               stroke="#475569"
               tick={{ fill: '#94a3b8', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }}
               tickFormatter={(v) => `${v}m`}

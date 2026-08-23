@@ -260,7 +260,7 @@ export default function App() {
   const isStageActive = hasEverQueried || messages.length > 0;
 
   return (
-    <div className="h-screen w-screen overflow-hidden relative text-slate-100 flex flex-col font-sans selection:bg-ocean-cyan selection:text-abyssal-950">
+    <div className="min-h-screen w-full relative text-slate-100 flex flex-col font-sans selection:bg-ocean-cyan selection:text-abyssal-950 bg-abyssal-950 overflow-y-auto custom-scrollbar">
       
       {/* Ambient Ocean Atmospheric Layer (Caustics & Bioluminescent Drift) */}
       <OceanAtmosphere />
@@ -287,14 +287,14 @@ export default function App() {
       />
 
       {/* Main Interactive Workspace */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-2 sm:p-3 md:p-3.5 flex flex-col min-h-0 overflow-hidden">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-2 sm:p-3 md:p-3.5 flex flex-col">
         
         {/* VIEW 1: AI CONSOLE + SMART STAGE (DEFAULT CHAT) */}
         {currentMode === 'chat' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 flex-1 h-full min-h-0 overflow-hidden">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 flex-1 min-h-[580px] lg:h-[calc(100vh-100px)]">
             
             {/* Left Console: Chat Panel (5 Cols) */}
-            <div className="lg:col-span-5 h-full min-h-0 flex flex-col overflow-hidden">
+            <div className="lg:col-span-5 h-[520px] lg:h-full flex flex-col overflow-hidden">
               <ChatPanel
                 messages={messages}
                 isLoading={isChatLoading}
@@ -314,7 +314,7 @@ export default function App() {
             </div>
 
             {/* Right Smart Stage: Single Context-Aware Panel (7 Cols) */}
-            <div className="lg:col-span-7 flex flex-col h-full min-h-0 bg-abyssal-950/90 border border-abyssal-800/90 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-2xl relative glow-organism-cyan">
+            <div className="lg:col-span-7 flex flex-col min-h-[520px] lg:h-full bg-abyssal-950/90 border border-abyssal-800/90 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-2xl relative glow-organism-cyan">
               <HudCornerBrackets />
               
               {/* Stage Top Dedicated Header Bar (Zero-Collision Layout) */}
