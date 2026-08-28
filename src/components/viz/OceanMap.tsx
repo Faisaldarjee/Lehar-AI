@@ -16,8 +16,8 @@ import {
   Anchor,
   X 
 } from 'lucide-react';
-import type { FloatSummary, MapMarker, PFZAdvisory, SatelliteGridPoint } from '../../types';
-import { getPFZAdvisories, getSatelliteGrid } from '../../services/api';
+import type { FloatSummary, MapMarker, PFZAdvisory, SatelliteGridPoint, FishermanReport } from '../../types';
+import { getPFZAdvisories, getSatelliteGrid, fetchFishermenReports } from '../../services/api';
 import { INDIAN_PORTS_DATABASE } from '../../data/indianPorts';
 
 // Coastal Clustered Port Representation for National & Regional Overview (Zoom <= 7)
@@ -197,6 +197,31 @@ const createPortIcon = (tier: 1 | 2 | 3) => {
     iconSize: [13, 13],
     iconAnchor: [6.5, 6.5],
     popupAnchor: [0, -7],
+  });
+};
+
+// Citizen Science Verified Catch Report Marker Icon
+const createCatchReportIcon = () => {
+  return L.divIcon({
+    className: 'custom-catch-report-marker',
+    html: `
+      <div style="
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: rgba(6, 78, 59, 0.95);
+        border: 2px solid #34d399;
+        box-shadow: 0 0 12px rgba(52, 211, 153, 0.85);
+        font-size: 13px;
+        cursor: pointer;
+      ">🎣</div>
+    `,
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+    popupAnchor: [0, -13],
   });
 };
 
@@ -443,6 +468,7 @@ export const OceanMap: React.FC<OceanMapProps> = ({
   const [showPFZ, setShowPFZ] = useState<boolean>(true);
   const [showFloats, setShowFloats] = useState<boolean>(true);
   const [showHarbours, setShowHarbours] = useState<boolean>(true);
+  const [showCatchReports, setShowCatchReports] = useState<boolean>(true);
   const [showSatelliteSST, setShowSatelliteSST] = useState<boolean>(false);
   const [showChlorophyll, setShowChlorophyll] = useState<boolean>(false);
   
@@ -467,14 +493,16 @@ export const OceanMap: React.FC<OceanMapProps> = ({
 
   const [pfzZones, setPfzZones] = useState<PFZAdvisory[]>(() => globalPfzCache || []);
   const [satelliteGrid, setSatelliteGrid] = useState<SatelliteGridPoint[]>(() => globalSatGridCache || []);
+  const [catchReports, setCatchReports] = useState<FishermanReport[]>([]);
 
-  // Load PFZ advisories & Satellite grid on mount (Zero flicker if already cached)
+  // Load PFZ advisories, Satellite grid & Catch Reports on mount
   useEffect(() => {
     async function loadData() {
       try {
-        const [pfzRes, satRes] = await Promise.all([
+        const [pfzRes, satRes, catchRes] = await Promise.all([
           globalPfzCache ? { advisories: globalPfzCache } : getPFZAdvisories('all', 50).catch(() => ({ advisories: [] })),
           globalSatGridCache ? { points: globalSatGridCache } : getSatelliteGrid(2).catch(() => ({ points: [] })),
+          fetchFishermenReports(30).catch(() => ({ reports: [] })),
         ]);
         if (pfzRes && pfzRes.advisories && !globalPfzCache) {
           globalPfzCache = pfzRes.advisories;
@@ -483,6 +511,9 @@ export const OceanMap: React.FC<OceanMapProps> = ({
         if (satRes && satRes.points && !globalSatGridCache) {
           globalSatGridCache = satRes.points;
           setSatelliteGrid(satRes.points);
+        }
+        if (catchRes && catchRes.reports) {
+          setCatchReports(catchRes.reports);
         }
       } catch (err) {
         console.warn('Map data fetch warning:', err);
@@ -816,7 +847,22 @@ export const OceanMap: React.FC<OceanMapProps> = ({
             <span>PFZ ({displayedPfzZones.length})</span>
           </button>
 
-          {/* 3. Major Fishing Harbours / Ports Toggle */}
+          {/* 3. Verified Citizen Catch Reports Toggle */}
+          <button
+            type="button"
+            onClick={() => setShowCatchReports(!showCatchReports)}
+            title="Toggle Crowdsourced & Verified Coastal Catch Observations"
+            className={`flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold backdrop-blur-md shadow-xl transition cursor-pointer active:scale-95 ${
+              showCatchReports
+                ? 'bg-emerald-950/85 border-emerald-500/60 text-emerald-300 shadow-emerald-950/40'
+                : 'bg-abyssal-950/90 border-abyssal-800 text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <span className="text-xs">🎣</span>
+            <span>Catches ({catchReports.length})</span>
+          </button>
+
+          {/* 4. Major Fishing Harbours / Ports Toggle */}
           <button
             type="button"
             onClick={() => setShowHarbours(!showHarbours)}
@@ -1234,6 +1280,54 @@ export const OceanMap: React.FC<OceanMapProps> = ({
                       </div>
                     </div>
 
+                    {/* Explainable AI (XAI) Factor Attribution Breakdown */}
+                    {pfz.xai_attribution && (
+                      <div className="p-2.5 rounded-xl bg-abyssal-950/90 border border-ocean-cyan/30 space-y-1.5 text-xs">
+                        <div className="flex items-center justify-between text-[10px] font-mono font-bold text-ocean-cyan">
+                          <span>AI FACTOR ATTRIBUTION (XAI)</span>
+                          <span className="text-amber-300">{pfz.xai_attribution.total_score}/100</span>
+                        </div>
+                        
+                        <div className="space-y-1">
+                          <div>
+                            <div className="flex justify-between text-[9px] text-slate-300 font-mono mb-0.5">
+                              <span>🌡️ SST Thermal Optimality</span>
+                              <span className="font-bold text-teal-300">{pfz.xai_attribution.sst_score}/{pfz.xai_attribution.sst_max} pts ({pfz.xai_attribution.sst_contribution_pct}%)</span>
+                            </div>
+                            <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                              <div className="h-full bg-gradient-to-r from-teal-500 to-cyan-400 rounded-full" style={{ width: `${pfz.xai_attribution.sst_contribution_pct}%` }} />
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="flex justify-between text-[9px] text-slate-300 font-mono mb-0.5">
+                              <span>🌊 Mixed Layer Depth (MLD)</span>
+                              <span className="font-bold text-cyan-300">{pfz.xai_attribution.mld_score}/{pfz.xai_attribution.mld_max} pts ({pfz.xai_attribution.mld_contribution_pct}%)</span>
+                            </div>
+                            <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                              <div className="h-full bg-gradient-to-r from-cyan-500 to-blue-400 rounded-full" style={{ width: `${pfz.xai_attribution.mld_contribution_pct}%` }} />
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="flex justify-between text-[9px] text-slate-300 font-mono mb-0.5">
+                              <span>🌿 Chlorophyll-a Front Density</span>
+                              <span className="font-bold text-emerald-300">{pfz.xai_attribution.chlorophyll_score}/{pfz.xai_attribution.chlorophyll_max} pts ({pfz.xai_attribution.chlorophyll_contribution_pct}%)</span>
+                            </div>
+                            <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                              <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full" style={{ width: `${pfz.xai_attribution.chlorophyll_contribution_pct}%` }} />
+                            </div>
+                          </div>
+                        </div>
+
+                        {pfz.xai_attribution.reasons?.length > 0 && (
+                          <p className="text-[10px] text-slate-400 leading-snug pt-1 border-t border-slate-800 italic">
+                            💡 {pfz.xai_attribution.reasons[0]}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
                     {/* Navigation Telemetry Section */}
                     {(() => {
                       const distKm = userVesselPos
@@ -1287,6 +1381,49 @@ export const OceanMap: React.FC<OceanMapProps> = ({
               </CircleMarker>
             );
           })}
+
+        {/* VERIFIED CROWDSOURCED FISHERMEN CATCH REPORTS LAYER */}
+        {showCatchReports &&
+          catchReports.map((report) => (
+            <Marker
+              key={`catch-report-${report.id}`}
+              position={[report.latitude, report.longitude]}
+              icon={createCatchReportIcon()}
+            >
+              <Tooltip direction="top" offset={[0, -14]}>
+                <span className="text-[10px] font-bold text-emerald-300 bg-abyssal-950 px-2 py-0.5 rounded border border-emerald-500/50 shadow-lg font-sans">
+                  🎣 Catch: {report.species} ({report.quantity_kg}kg)
+                </span>
+              </Tooltip>
+              <Popup>
+                <div className="p-1 min-w-[240px] max-w-[280px] text-slate-100 space-y-1.5 font-sans">
+                  <div className="flex items-center justify-between border-b border-emerald-500/30 pb-1">
+                    <span className="font-bold text-emerald-400 text-xs flex items-center gap-1">
+                      🎣 Verified Community Catch
+                    </span>
+                    <span className="text-[9px] font-mono bg-emerald-950 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-600/50 font-bold">
+                      {report.quantity_kg} kg
+                    </span>
+                  </div>
+                  <div className="text-sm font-bold text-white font-heading">{report.species}</div>
+                  <div className="text-xs text-slate-300 space-y-0.5">
+                    <div>Depth: <span className="font-mono text-cyan-300 font-bold">{report.depth_m}m</span></div>
+                    <div>Reporter: <span className="font-semibold text-slate-200">{report.reporter_name}</span></div>
+                    {report.notes && (
+                      <p className="text-[11px] text-slate-300 italic mt-1 bg-slate-900/80 p-1.5 rounded-lg border border-slate-800 leading-snug">
+                        "{report.notes}"
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-[9px] font-mono text-slate-400 pt-1 border-t border-slate-800 flex justify-between">
+                    <span>{report.harbour || 'Indian Coast'}</span>
+                    <span>{new Date(report.created_at).toLocaleDateString()}</span>
+                  </div>
+                </div>
+              </Popup>
+            </Marker>
+          ))}
+
 
         {/* COASTAL PFZ THERMAL & CHLOROPHYLL-A FRONT CORRIDOR (GOLDEN DASHED LINE) */}
         {(showPFZ || showHarbours) && (

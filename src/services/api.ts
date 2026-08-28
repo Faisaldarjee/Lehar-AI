@@ -243,4 +243,21 @@ export async function triggerGuardianScan(): Promise<GuardianStatusResponse> {
   return data;
 }
 
+/** Fetch crowdsourced fishermen catch reports */
+export async function fetchFishermenReports(limit = 30): Promise<{ reports: any[]; count: number }> {
+  try {
+    const { data } = await api.get<{ reports: any[]; count: number }>(`/api/reports?limit=${limit}`);
+    return data;
+  } catch (error) {
+    console.warn('[API] Could not fetch catch reports, using fallback:', error);
+    return { reports: [], count: 0 };
+  }
+}
+
+/** Submit a new fisherman catch observation */
+export async function submitFishermanReport(payload: Record<string, any>): Promise<any> {
+  const { data } = await api.post('/api/reports', payload);
+  return data;
+}
+
 export default api;

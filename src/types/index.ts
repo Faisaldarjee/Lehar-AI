@@ -134,6 +134,20 @@ export interface AIAnomalyImpact {
   actionable_advisory: string;
 }
 
+export interface XAIAttribution {
+  sst_score: number;
+  sst_max: number;
+  sst_contribution_pct: number;
+  mld_score: number;
+  mld_max: number;
+  mld_contribution_pct: number;
+  chlorophyll_score: number;
+  chlorophyll_max: number;
+  chlorophyll_contribution_pct: number;
+  total_score: number;
+  reasons: string[];
+}
+
 export interface PFZAdvisory {
   float_id: string;
   latitude: number;
@@ -146,11 +160,27 @@ export interface PFZAdvisory {
   mld_meters: number | null;
   pfz_rating: 'Excellent' | 'Good' | 'Fair' | 'Poor';
   pfz_score: number;
+  xai_attribution?: XAIAttribution;
   data_confidence?: string;
   data_sources?: string[];
   target_species: string[];
   nearest_harbour: PFZHarbour;
   advisory: string;
+}
+
+export interface FishermanReport {
+  id: number;
+  reporter_id: string;
+  reporter_name: string;
+  latitude: number;
+  longitude: number;
+  harbour?: string;
+  species: string;
+  quantity_kg: number;
+  depth_m: number;
+  notes?: string;
+  verified: number;
+  created_at: string;
 }
 
 export interface SatelliteGridPoint {
@@ -255,3 +285,5 @@ export interface SystemStatusResponse {
 }
 
 export type AppMode = 'chat' | 'map' | 'anomaly' | 'whatsapp' | 'pipeline' | '3d';
+export type UserRole = 'fisherman' | 'oceanographer' | 'student';
+

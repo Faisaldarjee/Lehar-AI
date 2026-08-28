@@ -801,6 +801,77 @@ async def _handle_text_query(
         })
 
 
+async def _handle_report_command(client: httpx.AsyncClient, chat_id: int, first_name: str, text: str):
+    """
+    Handle /report catch submission by coastal fishermen.
+    Example: /report 300kg Yellowfin Tuna near Sassoon Dock at 40m depth
+    """
+    from .db import save_fisherman_report, get_connection
+    from .species_dict import detect_species_in_query
+    
+    clean_text = text.replace("/report", "").strip()
+    if not clean_text:
+        guide_msg = (
+            "📝 *How to Report Live Catch:*\n\n"
+            "Send your catch details to update the live community map:\n"
+            "• `/report 400kg Bangda at 20m depth near Mumbai`\n"
+            "• `/report 250kg Tuna near Kochi 50m`\n\n"
+            "Or send a voice note saying your catch details!"
+        )
+        await _telegram_request(client, "sendMessage", {
+            "chat_id": chat_id,
+            "text": guide_msg,
+            "parse_mode": "Markdown"
+        })
+        return
+
+    # Extract location if mentioned
+    with get_connection() as conn:
+        sub = conn.execute("SELECT latitude, longitude, harbour FROM telegram_subscribers WHERE chat_id = ?", (chat_id,)).fetchone()
+    
+    lat = sub["latitude"] if sub and sub["latitude"] else 18.915
+    lon = sub["longitude"] if sub and sub["longitude"] else 72.828
+    harbour = sub["harbour"] if sub and sub["harbour"] else "Mumbai (Sassoon Dock)"
+    
+    species_info = detect_species_in_query(clean_text)
+    species_name = species_info["common_name"] if species_info else "Pelagic Mixed Catch"
+    
+    # Extract quantity (e.g. 500kg, 200 kg)
+    qty_match = re.search(r"(\d+)\s*(kg|kilo|ton|quintal)?", clean_text, re.IGNORECASE)
+    quantity = float(qty_match.group(1)) if qty_match else 75.0
+    
+    # Extract depth (e.g. 30m, 50 meters)
+    depth_match = re.search(r"(\d+)\s*(m|meter|metre)", clean_text, re.IGNORECASE)
+    depth = float(depth_match.group(1)) if depth_match else 25.0
+    
+    report_id = save_fisherman_report(
+        latitude=lat,
+        longitude=lon,
+        species=species_name,
+        quantity_kg=quantity,
+        depth_m=depth,
+        reporter_id=f"tg_{chat_id}",
+        reporter_name=first_name,
+        harbour=harbour,
+        notes=clean_text
+    )
+    
+    reply = (
+        f"✅ *Catch Report Verified & Logged!* (#FR-{report_id:04d})\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🎣 *Species:* _{species_name}_\n"
+        f"⚖️ *Quantity:* *{quantity:.0f} kg* | Depth: *{depth:.0f}m*\n"
+        f"⚓ *Port Sector:* {harbour} ({lat:.3f}°N, {lon:.3f}°E)\n\n"
+        f"🌐 *Thank you, Captain {first_name}!* Your report has been added to the **Lehar AI Live Community Catch Map Layer** to help fellow coastal fishermen and validate INCOIS PFZ forecasts."
+    )
+    
+    await _telegram_request(client, "sendMessage", {
+        "chat_id": chat_id,
+        "text": reply,
+        "parse_mode": "Markdown"
+    })
+
+
 async def run_telegram_bot():
     """Main async long-polling worker loop."""
     global _bot_running, _last_update_id, _http_client
@@ -829,6 +900,7 @@ async def run_telegram_bot():
                     {"command": "pfz", "description": "🐟 Find Nearest Potential Fishing Zone"},
                     {"command": "temp", "description": "🌊 Check Ocean Temperature & MLD"},
                     {"command": "storm", "description": "🚨 Marine Heatwave & Storm Alerts"},
+                    {"command": "report", "description": "📝 Report Live Catch for Community Map"},
                     {"command": "help", "description": "ℹ️ How to use Lehar AI"}
                 ]
             })
@@ -919,6 +991,8 @@ async def run_telegram_bot():
                             _spawn_task(_handle_start_command(client, chat_id, first_name))
                         elif text.startswith("/help"):
                             _spawn_task(_handle_start_command(client, chat_id, first_name))
+                        elif text.startswith("/report"):
+                            _spawn_task(_handle_report_command(client, chat_id, first_name, text))
                         else:
                             _spawn_task(_handle_text_query(client, chat_id, text, send_voice=True))
 

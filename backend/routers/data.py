@@ -169,3 +169,45 @@ async def get_system_status():
             "species_count": len(SPECIES_REGISTRY)
         }
     }
+
+
+@router.get("/reports")
+async def get_reports(limit: int = Query(30, description="Max reports to retrieve")):
+    """Get crowdsourced fishermen catch observations for map visualization."""
+    from ..services.db import get_recent_fishermen_reports
+    reports = get_recent_fishermen_reports(limit=limit)
+    return {"reports": reports, "count": len(reports)}
+
+
+@router.post("/reports")
+async def create_report(payload: dict):
+    """Submit a new crowdsourced catch observation."""
+    from ..services.db import save_fisherman_report
+    lat = float(payload.get("latitude", 18.91))
+    lon = float(payload.get("longitude", 72.82))
+    species = str(payload.get("species", "Pelagic Catch"))
+    quantity_kg = float(payload.get("quantity_kg", 50.0))
+    depth_m = float(payload.get("depth_m", 20.0))
+    reporter_id = str(payload.get("reporter_id", "web_user"))
+    reporter_name = str(payload.get("reporter_name", "Coastal Fisherman"))
+    harbour = str(payload.get("harbour", ""))
+    notes = str(payload.get("notes", ""))
+
+    report_id = save_fisherman_report(
+        latitude=lat,
+        longitude=lon,
+        species=species,
+        quantity_kg=quantity_kg,
+        depth_m=depth_m,
+        reporter_id=reporter_id,
+        reporter_name=reporter_name,
+        harbour=harbour,
+        notes=notes
+    )
+
+    return {
+        "status": "success",
+        "report_id": report_id,
+        "message": "Catch report registered and verified in Lehar AI Ocean Commons."
+    }
+

@@ -8,31 +8,46 @@ import {
   GitBranch,
   Sparkles,
   Activity,
-  Send
+  Send,
+  FileText,
+  Anchor,
+  Microscope,
+  GraduationCap
 } from 'lucide-react';
-import type { AppMode } from '../../types';
+import type { AppMode, UserRole } from '../../types';
 
 interface NavbarProps {
   currentMode: AppMode;
   onSelectMode: (mode: AppMode) => void;
+  userRole?: UserRole;
+  onSelectRole?: (role: UserRole) => void;
   backendOnline?: boolean;
   onOpenTelegramModal?: () => void;
+  onOpenBulletinModal?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentMode,
   onSelectMode,
+  userRole = 'fisherman',
+  onSelectRole,
   backendOnline = true,
   onOpenTelegramModal,
+  onOpenBulletinModal,
 }) => {
   const [demoOpen, setDemoOpen] = useState(false);
+  const [roleOpen, setRoleOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const roleRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setDemoOpen(false);
+      }
+      if (roleRef.current && !roleRef.current.contains(event.target as Node)) {
+        setRoleOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -69,6 +84,12 @@ export const Navbar: React.FC<NavbarProps> = ({
       icon: GitBranch,
     },
   ];
+
+  const roleConfigs = {
+    fisherman: { label: 'Fisherman Mode', icon: Anchor, color: 'text-amber-400', badge: '🎣 Field' },
+    oceanographer: { label: 'Researcher Mode', icon: Microscope, color: 'text-ocean-cyan', badge: '🔬 Science' },
+    student: { label: 'Classroom Mode', icon: GraduationCap, color: 'text-emerald-400', badge: '🎓 EdTech' },
+  };
 
   const activeDemo = demoItems.find((d) => d.id === currentMode && !d.isModal);
   const isDemoActive = Boolean(activeDemo);
@@ -137,29 +158,82 @@ export const Navbar: React.FC<NavbarProps> = ({
           })}
         </nav>
 
-        {/* Right Section: Offline Readiness Badge & Demonstrators Dropdown */}
-        <div className="flex items-center gap-2.5 shrink-0">
+        {/* Right Section: Adaptive Role Selector, Bulletin Button & Demonstrators */}
+        <div className="flex items-center gap-2 shrink-0">
 
-          {/* Real-time Backend Connectivity / Offline Edge Readiness Badge */}
+          {/* Backend / Edge Indicator */}
           <div
-            className={`hidden lg:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-[11px] font-mono shadow-sm select-none ${
+            className={`hidden xl:flex items-center space-x-1.5 px-2.5 py-1 rounded-xl border text-[10px] font-mono select-none ${
               backendOnline
                 ? 'bg-teal-950/80 border-teal-500/40 text-teal-300'
                 : 'bg-amber-950/80 border-amber-500/40 text-amber-300'
             }`}
-            title={
-              backendOnline
-                ? 'Live Backend Connected: FastAPI in-situ ARGO service reachable.'
-                : 'Backend unreachable — running on Lehar Edge: local SQLite in-situ DB + cached NOAA satellite snapshot. 100% offline capable.'
-            }
+            title={backendOnline ? 'Backend Online: FastAPI ARGO & NetCDF services connected.' : 'Edge Mode: Local SQLite database active.'}
           >
-            <span
-              className={`w-2 h-2 rounded-full shrink-0 animate-pulse ${
-                backendOnline ? 'bg-teal-400 shadow-glow-cyan-sm' : 'bg-amber-400'
-              }`}
-            />
-            <span className="font-bold">{backendOnline ? 'Backend Online' : 'Offline Edge Mode'}</span>
+            <span className={`w-1.5 h-1.5 rounded-full ${backendOnline ? 'bg-teal-400 animate-pulse' : 'bg-amber-400'}`} />
+            <span>{backendOnline ? 'Online' : 'Edge'}</span>
           </div>
+
+          {/* Adaptive Multi-Role Switcher */}
+          <div className="relative" ref={roleRef}>
+            <button
+              type="button"
+              onClick={() => setRoleOpen(!roleOpen)}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#091524] hover:bg-[#0e2238] border border-cyan-500/30 text-white transition-all cursor-pointer shadow-sm active:scale-95"
+              title="Switch user perspective (Fisherman / Scientist / Student)"
+            >
+              {React.createElement(roleConfigs[userRole].icon, { className: `w-3.5 h-3.5 ${roleConfigs[userRole].color}` })}
+              <span className="hidden sm:inline font-bold">{roleConfigs[userRole].label}</span>
+              <ChevronDown className="w-3 h-3 text-slate-400" />
+            </button>
+
+            {roleOpen && (
+              <div className="absolute right-0 mt-2 w-52 bg-[#071322] border border-cyan-500/30 rounded-2xl shadow-2xl p-1.5 z-[9999] space-y-1 ring-1 ring-cyan-500/20 animate-in fade-in">
+                <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono border-b border-slate-800 mb-1">
+                  Select User Persona
+                </div>
+                {(['fisherman', 'oceanographer', 'student'] as UserRole[]).map((r) => {
+                  const cfg = roleConfigs[r];
+                  const Icon = cfg.icon;
+                  const isSelected = userRole === r;
+                  return (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => {
+                        if (onSelectRole) onSelectRole(r);
+                        setRoleOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between p-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+                        isSelected
+                          ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40'
+                          : 'hover:bg-slate-800/80 text-slate-300 hover:text-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Icon className={`w-4 h-4 ${cfg.color}`} />
+                        <span>{cfg.label}</span>
+                      </div>
+                      <span className="text-[10px] font-mono text-slate-400">{cfg.badge}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Official INCOIS Bulletin Button */}
+          {onOpenBulletinModal && (
+            <button
+              type="button"
+              onClick={onOpenBulletinModal}
+              className="hidden md:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-teal-500/20 to-cyan-500/20 hover:from-teal-500/30 hover:to-cyan-500/30 border border-teal-400/40 text-teal-200 transition-all cursor-pointer active:scale-95 shadow-sm"
+              title="Generate Official INCOIS & Ministry of Earth Sciences Daily Marine Bulletin"
+            >
+              <FileText className="w-3.5 h-3.5 text-teal-300" />
+              <span>Bulletin</span>
+            </button>
+          )}
 
           {/* Demonstrators Dropdown Menu */}
           <div className="relative shrink-0" ref={dropdownRef}>
@@ -227,3 +301,4 @@ export const Navbar: React.FC<NavbarProps> = ({
     </header>
   );
 };
+

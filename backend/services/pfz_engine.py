@@ -353,58 +353,72 @@ def score_pfz_fused(
     sat_sst: float,
     chlorophyll: float,
     chl_gradient: float
-) -> tuple[str, int]:
+) -> tuple[str, int, dict]:
     """
-    Multi-sensor fused PFZ scoring:
+    Multi-sensor fused Explainable AI (XAI) PFZ scoring:
     1. Argo Subsurface MLD & thermocline stability (max 35 pts)
     2. Satellite SST thermal front matching (max 35 pts)
     3. Satellite Chlorophyll-a bio-productivity & nutrient gradient (max 30 pts)
     Total: 0 to 100 points
+    Returns: (rating, score, xai_attribution)
     """
-    score = 0
+    reasons = []
 
     # 1. SST Score (Blend Argo + Satellite SST)
     fused_sst = (argo_sst + sat_sst) / 2.0
     opt_min, opt_max = OPTIMAL_SST["general_pelagic"]
     if opt_min <= fused_sst <= opt_max:
-        score += 35
+        sst_score = 35
+        reasons.append(f"Optimal surface temperature ({fused_sst:.1f}°C) matches Indian Ocean pelagic comfort zone (25.5°C-30.0°C)")
     elif opt_min - 1.0 <= fused_sst <= opt_max + 1.0:
-        score += 25
+        sst_score = 25
+        reasons.append(f"Sub-optimal thermal boundary ({fused_sst:.1f}°C) within ±1°C tolerance")
     elif opt_min - 2.0 <= fused_sst <= opt_max + 2.0:
-        score += 15
+        sst_score = 15
+        reasons.append(f"Marginal thermal front ({fused_sst:.1f}°C)")
     else:
-        score += 5
+        sst_score = 5
+        reasons.append(f"Extreme temperature ({fused_sst:.1f}°C) outside pelagic preference")
 
     # 2. MLD Score (Argo Subsurface)
     if mld is not None:
         if 18 <= mld <= 55:
-            score += 35
+            mld_score = 35
+            reasons.append(f"Optimal Mixed Layer Depth ({mld:.1f}m) drives strong nutrient mixing without deep shoal dispersal")
         elif 55 < mld <= 90:
-            score += 25
+            mld_score = 25
+            reasons.append(f"Moderate mixed layer ({mld:.1f}m) with active thermocline boundary")
         elif 10 <= mld < 18:
-            score += 20
+            mld_score = 20
+            reasons.append(f"Shallow mixed layer ({mld:.1f}m) — concentrated surface shoal potential")
         else:
-            score += 10
+            mld_score = 10
+            reasons.append(f"Deep/diffuse mixed layer ({mld:.1f}m)")
     else:
-        score += 18
+        mld_score = 18
+        reasons.append("Default coastal mixed layer approximation applied")
 
     # 3. Chlorophyll-a Score (Satellite VIIRS/MODIS)
-    # Optimum: 0.30 to 2.50 mg/m³ for Indian Ocean pelagic feeders
+    chl_score = 0
     if 0.40 <= chlorophyll <= 2.20:
-        score += 22
+        chl_score += 22
+        reasons.append(f"High phytoplankton productivity (Chlorophyll-a: {chlorophyll:.2f} mg/m³)")
     elif 0.20 <= chlorophyll < 0.40 or 2.20 < chlorophyll <= 3.50:
-        score += 15
+        chl_score += 15
+        reasons.append(f"Moderate ocean color signature (Chlorophyll-a: {chlorophyll:.2f} mg/m³)")
     else:
-        score += 8
+        chl_score += 8
+        reasons.append(f"Low/oligotrophic ocean color ({chlorophyll:.2f} mg/m³)")
 
     # Chlorophyll front bonus (gradient >= 0.08)
     if chl_gradient >= 0.08:
-        score += 8
+        chl_score += 8
+        reasons.append(f"Sharp nutrient convergence front detected (gradient: {chl_gradient:.3f})")
     elif chl_gradient >= 0.04:
-        score += 4
+        chl_score += 4
+        reasons.append("Mild bio-optical chlorophyll gradient")
 
-    # Cap score at 100
-    score = min(100, max(0, score))
+    score = min(100, max(0, sst_score + mld_score + chl_score))
 
     if score >= 80:
         rating = "Excellent"
@@ -415,7 +429,21 @@ def score_pfz_fused(
     else:
         rating = "Poor"
 
-    return rating, score
+    xai_attribution = {
+        "sst_score": sst_score,
+        "sst_max": 35,
+        "sst_contribution_pct": round((sst_score / 35.0) * 100, 1),
+        "mld_score": mld_score,
+        "mld_max": 35,
+        "mld_contribution_pct": round((mld_score / 35.0) * 100, 1),
+        "chlorophyll_score": chl_score,
+        "chlorophyll_max": 30,
+        "chlorophyll_contribution_pct": round((chl_score / 30.0) * 100, 1),
+        "total_score": score,
+        "reasons": reasons
+    }
+
+    return rating, score, xai_attribution
 
 
 def get_all_harbours() -> list[dict]:
@@ -469,7 +497,7 @@ def get_pfz_advisories(region: str = "arabian_sea", limit: int = 40) -> list[dic
             coastal_mld = None
 
             # Score on the modeled satellite SST alone; there is no independent in-situ SST to fuse.
-            rating, score = score_pfz_fused(sat_sst, coastal_mld, sat_sst, chlorophyll, chl_grad)
+            rating, score, xai = score_pfz_fused(sat_sst, coastal_mld, sat_sst, chlorophyll, chl_grad)
             h_info = nearest_harbour(c_lat, c_lon)
 
             # Local coastal fish species
@@ -492,6 +520,7 @@ def get_pfz_advisories(region: str = "arabian_sea", limit: int = 40) -> list[dic
                 "mld_meters": coastal_mld,
                 "pfz_rating": rating,
                 "pfz_score": score,
+                "xai_attribution": xai,
                 "data_confidence": sat_data["data_confidence"],
                 "data_sources": sat_data["data_sources"],
                 "target_species": fish_species,
@@ -532,7 +561,7 @@ def get_pfz_advisories(region: str = "arabian_sea", limit: int = 40) -> list[dic
         chlorophyll = sat_data["chlorophyll_mg_m3"]
         chl_gradient = sat_data["chlorophyll_gradient"]
 
-        rating, score = score_pfz_fused(argo_sst, mld, sat_sst, chlorophyll, chl_gradient)
+        rating, score, xai = score_pfz_fused(argo_sst, mld, sat_sst, chlorophyll, chl_gradient)
         harbour = nearest_harbour(lat, lon)
 
         # Determine target fish species based on fused SST and chlorophyll
@@ -554,6 +583,7 @@ def get_pfz_advisories(region: str = "arabian_sea", limit: int = 40) -> list[dic
             "mld_meters": mld,
             "pfz_rating": rating,
             "pfz_score": score,
+            "xai_attribution": xai,
             "data_confidence": sat_data["data_confidence"],
             "data_sources": sat_data["data_sources"],
             "target_species": fish_species if fish_species else ["General Pelagic"],
