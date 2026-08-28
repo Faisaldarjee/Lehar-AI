@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Send,
@@ -9,7 +9,7 @@ import {
   Radio,
   ShieldCheck
 } from 'lucide-react';
-import axios from 'axios';
+import api from '../../services/api';
 
 interface TelegramModalProps {
   isOpen: boolean;
@@ -27,6 +27,7 @@ interface TelegramBotStatus {
 
 export const TelegramModal: React.FC<TelegramModalProps> = ({ isOpen, onClose }) => {
   const [copiedText, setCopiedText] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const [botStatus, setBotStatus] = useState<TelegramBotStatus>({
     status: 'standby',
     bot_username: '@LeharAIBot',
@@ -39,8 +40,8 @@ export const TelegramModal: React.FC<TelegramModalProps> = ({ isOpen, onClose })
   useEffect(() => {
     if (!isOpen) return;
 
-    // Fetch live bot status from backend
-    axios.get('http://127.0.0.1:8000/api/telegram/status')
+    // Fetch live bot status from backend (routed through the shared API base URL)
+    api.get('/api/telegram/status')
       .then((res) => {
         if (res.data) setBotStatus(res.data);
       })
@@ -49,6 +50,46 @@ export const TelegramModal: React.FC<TelegramModalProps> = ({ isOpen, onClose })
         setBotStatus((prev) => ({ ...prev, status: 'standby' }));
       });
   }, [isOpen]);
+
+  // Accessibility: Esc-to-close and a simple focus trap while the dialog is open.
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (e.key === 'Tab' && dialogRef.current) {
+        const focusables = dialogRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    const focusTimer = window.setTimeout(() => {
+      const firstFocusable = dialogRef.current?.querySelector<HTMLElement>(
+        'button, a[href], input, [tabindex]:not([tabindex="-1"])'
+      );
+      firstFocusable?.focus();
+    }, 0);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      window.clearTimeout(focusTimer);
+    };
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -81,16 +122,28 @@ export const TelegramModal: React.FC<TelegramModalProps> = ({ isOpen, onClose })
   ];
 
   const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedText(text);
-    setTimeout(() => setCopiedText(null), 2000);
+    navigator.clipboard.writeText(text)
+      .then(() => {
+        setCopiedText(text);
+        setTimeout(() => setCopiedText(null), 2000);
+      })
+      .catch((err) => {
+        console.warn('Clipboard write failed:', err);
+      });
   };
 
   return (
-    <div className="fixed inset-0 z-[1500] flex items-center justify-center p-4 bg-abyssal-950/80 backdrop-blur-md animate-in fade-in duration-200">
-      
+    <div
+      className="fixed inset-0 z-[1500] flex items-center justify-center p-4 bg-abyssal-950/80 backdrop-blur-md animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+
       {/* Modal Card */}
-      <div 
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Live Telegram Bot ${botStatus.bot_username}`}
         className="relative w-full max-w-2xl bg-gradient-to-b from-[#071322] via-[#050e1a] to-[#030810] border border-cyan-500/30 rounded-3xl p-6 sm:p-7 shadow-2xl shadow-cyan-950/50 space-y-5 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
@@ -123,6 +176,7 @@ export const TelegramModal: React.FC<TelegramModalProps> = ({ isOpen, onClose })
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close Telegram bot dialog"
             className="p-2 rounded-xl bg-abyssal-900 hover:bg-abyssal-800 text-slate-400 hover:text-white transition cursor-pointer border border-abyssal-750 active:scale-95"
           >
             <X className="w-5 h-5" />
@@ -186,6 +240,7 @@ export const TelegramModal: React.FC<TelegramModalProps> = ({ isOpen, onClose })
 
                   <button
                     type="button"
+                    aria-label={`Copy query: ${p.query}`}
                     className="p-1.5 rounded-lg bg-abyssal-900 text-slate-400 group-hover:text-cyan-400 group-hover:bg-cyan-500/20 transition shrink-0"
                     title="Copy query text"
                   >

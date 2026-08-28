@@ -46,18 +46,119 @@ class SessionContext:
 # In-memory thread-safe session store
 SESSION_STORE: dict[str, SessionContext] = {}
 MAX_SESSION_HISTORY = 10
-SESSION_EXPIRY_SECONDS = 3600  # 1 hour
+SESSION_EXPIRY_SECONDS = 3600 * 24  # 24 hours durable session window
+
+
+def _load_session_from_db(session_id: str) -> SessionContext | None:
+    """Load persistent session context and recent conversation turns from SQLite."""
+    try:
+        from .db import get_connection
+        with get_connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM chat_sessions WHERE session_id = ?",
+                (session_id,)
+            ).fetchone()
+
+            if not row:
+                return None
+
+            session = SessionContext(
+                session_id=session_id,
+                last_updated=float(row["last_updated"]),
+                active_location=row["active_location"],
+                active_float_id=row["active_float_id"],
+                active_species=row["active_species"],
+                active_parameter=row["active_parameter"],
+                history=[]
+            )
+
+            # Load recent message history
+            msg_rows = conn.execute(
+                """
+                SELECT user_query, bot_summary, timestamp, detected_location, detected_float_id, detected_species
+                FROM chat_messages
+                WHERE session_id = ?
+                ORDER BY id ASC
+                LIMIT ?
+                """,
+                (session_id, MAX_SESSION_HISTORY)
+            ).fetchall()
+
+            for mr in msg_rows:
+                session.history.append(
+                    ConversationTurn(
+                        user_query=mr["user_query"],
+                        bot_summary=mr["bot_summary"],
+                        timestamp=float(mr["timestamp"]),
+                        detected_location=mr["detected_location"],
+                        detected_float_id=mr["detected_float_id"],
+                        detected_species=mr["detected_species"]
+                    )
+                )
+
+            return session
+    except Exception as e:
+        print(f"[ChatMemory] DB load fallback: {e}")
+        return None
+
+
+def _persist_session_to_db(session: SessionContext, turn: ConversationTurn | None = None) -> None:
+    """Persist updated session metadata and new conversation turn to SQLite."""
+    try:
+        from .db import get_connection
+        with get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO chat_sessions (session_id, active_location, active_float_id, active_species, active_parameter, last_updated)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(session_id) DO UPDATE SET
+                    active_location = excluded.active_location,
+                    active_float_id = excluded.active_float_id,
+                    active_species = excluded.active_species,
+                    active_parameter = excluded.active_parameter,
+                    last_updated = excluded.last_updated
+                """,
+                (
+                    session.session_id,
+                    session.active_location,
+                    session.active_float_id,
+                    session.active_species,
+                    session.active_parameter,
+                    session.last_updated
+                )
+            )
+
+            if turn:
+                conn.execute(
+                    """
+                    INSERT INTO chat_messages (session_id, user_query, bot_summary, detected_location, detected_float_id, detected_species, timestamp)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        session.session_id,
+                        turn.user_query,
+                        turn.bot_summary,
+                        turn.detected_location,
+                        turn.detected_float_id,
+                        turn.detected_species,
+                        turn.timestamp
+                    )
+                )
+            conn.commit()
+    except Exception as e:
+        print(f"[ChatMemory] DB persist fallback: {e}")
 
 
 def get_or_create_session(session_id: str | None) -> SessionContext:
-    """Retrieve existing session context or create a new one."""
+    """Retrieve existing session context from memory or SQLite, or create a new one."""
     if not session_id or session_id.strip() == "":
         session_id = "default_guest_session"
 
     current_time = time.time()
+    
+    # 1. Check in-memory store
     if session_id in SESSION_STORE:
         session = SESSION_STORE[session_id]
-        # Reset if expired
         if current_time - session.last_updated > SESSION_EXPIRY_SECONDS:
             session.history.clear()
             session.active_location = None
@@ -67,8 +168,16 @@ def get_or_create_session(session_id: str | None) -> SessionContext:
         session.last_updated = current_time
         return session
 
+    # 2. Check persistent SQLite database
+    db_session = _load_session_from_db(session_id)
+    if db_session:
+        SESSION_STORE[session_id] = db_session
+        return db_session
+
+    # 3. Create fresh session
     session = SessionContext(session_id=session_id, last_updated=current_time)
     SESSION_STORE[session_id] = session
+    _persist_session_to_db(session)
     return session
 
 
@@ -112,7 +221,7 @@ def resolve_query_context(session_id: str | None, current_query: str) -> tuple[s
 
     # Coreference Triggers (Pronouns / Follow-up phrases)
     coreference_patterns = [
-        r"\b(it|its|there|this place|that float|that area|this sector|wahan|iska|uski|yahan|us float)\b",
+        r"\b(it|its|there|this place|that float|that area|this sector|wahan|iska|uski|yahan|us float|vahan)\b",
         r"^(and\s+)?what about\s+",
         r"^(and\s+)?aur\s+",
         r"^(is it|kya yeh)\s+",
@@ -153,7 +262,7 @@ def update_session_memory(
     detected_float_id: str | None = None,
     detected_species: str | None = None
 ) -> None:
-    """Commit the completed turn to the session history queue."""
+    """Commit the completed turn to the session history queue and persistent SQLite store."""
     session = get_or_create_session(session_id)
 
     # Update active slots
@@ -183,3 +292,7 @@ def update_session_memory(
     if len(session.history) > MAX_SESSION_HISTORY:
         session.history.pop(0)
     session.last_updated = time.time()
+
+    # Persist to SQLite
+    _persist_session_to_db(session, turn)
+

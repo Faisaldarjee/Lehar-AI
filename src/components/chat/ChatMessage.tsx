@@ -105,9 +105,14 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 
   const handleCopySql = () => {
     if (message.sql) {
-      navigator.clipboard.writeText(message.sql);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      navigator.clipboard.writeText(message.sql)
+        .then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        })
+        .catch((err) => {
+          console.warn('Clipboard write failed:', err);
+        });
     }
   };
 
@@ -224,6 +229,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                   <div className="relative" ref={menuRef}>
                     <button
                       onClick={() => setMenuOpen(!menuOpen)}
+                      aria-label="More data actions"
+                      aria-haspopup="menu"
+                      aria-expanded={menuOpen}
                       title="More data actions"
                       className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-abyssal-800 transition cursor-pointer"
                     >
@@ -302,7 +310,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
                   {message.stats.map((stat: StatItem, idx: number) => (
                     <div
-                      key={idx}
+                      key={`${stat.label}-${idx}`}
                       className="p-2.5 rounded-xl bg-abyssal-950/70 border border-abyssal-800/90 flex flex-col justify-center text-left hover:border-ocean-cyan/30 transition-all duration-150"
                     >
                       <div className="flex items-center space-x-1.5">

@@ -9,7 +9,6 @@ Pushes two types of proactive notifications to registered coastal fishermen:
 
 from __future__ import annotations
 import math
-import uuid
 from datetime import datetime, timezone
 from .db import get_connection
 from .pfz_engine import get_pfz_advisories, nearest_harbour, haversine_km
@@ -103,6 +102,28 @@ def _match_nearest_fisherman(lat: float, lon: float) -> tuple[dict, float]:
     return best_f, round(min_d, 1)
 
 
+def _get_monitored_counts() -> tuple[int, int]:
+    """
+    Derive live monitored-zone and anomaly-signal counts from the database
+    instead of using hardcoded values. Falls back to 0 on any DB error.
+    Returns (monitored_pfz_zones, monitored_anomaly_signals).
+    """
+    pfz_zones, anomaly_signals = 0, 0
+    try:
+        with get_connection() as conn:
+            row = conn.execute(
+                "SELECT COUNT(DISTINCT float_id) AS c FROM argo_profiles"
+            ).fetchone()
+            pfz_zones = (row["c"] if row else 0) or 0
+            row = conn.execute(
+                "SELECT COUNT(*) AS c FROM anomaly_alerts"
+            ).fetchone()
+            anomaly_signals = (row["c"] if row else 0) or 0
+    except Exception:
+        pass
+    return pfz_zones, anomaly_signals
+
+
 def scan_for_guardian_alerts(
     harbour: str | None = None,
     lat: float | None = None,
@@ -117,6 +138,8 @@ def scan_for_guardian_alerts(
     Supports smart Geo-Fencing (filters alerts within max_radius_km of given harbour/coords).
     """
     alerts = []
+    # Deterministic per-day date stamp so the same event yields a stable, de-dupable ID
+    today_str = datetime.now(timezone.utc).strftime("%Y%m%d")
 
     # 1. SCAN FOR SAFETY ALERTS (From Anomaly Observations)
     with get_connection() as conn:
@@ -131,9 +154,9 @@ def scan_for_guardian_alerts(
         ).fetchall()
 
     for row in anomaly_rows:
-        lat, lon = row["latitude"], row["longitude"]
-        fisherman, dist_km = _match_nearest_fisherman(lat, lon)
-        sat = get_nearest_satellite_data(lat, lon)
+        ev_lat, ev_lon = row["latitude"], row["longitude"]
+        fisherman, dist_km = _match_nearest_fisherman(ev_lat, ev_lon)
+        sat = get_nearest_satellite_data(ev_lat, ev_lon)
 
         param = row["parameter"]
         val = row["value"]
@@ -156,7 +179,7 @@ def scan_for_guardian_alerts(
             )
 
         alerts.append({
-            "id": f"safe-{row['id']}-{uuid.uuid4().hex[:4]}",
+            "id": f"safe-{row['id']}-{today_str}",
             "type": "safety",
             "severity": sev,
             "title": f"Ocean Safety Warning ({fisherman['home_sector']} Sector)",
@@ -169,8 +192,8 @@ def scan_for_guardian_alerts(
                 "harbour": fisherman["harbour"],
             },
             "location": {
-                "latitude": round(lat, 3),
-                "longitude": round(lon, 3),
+                "latitude": round(ev_lat, 3),
+                "longitude": round(ev_lon, 3),
                 "distance_km": dist_km,
                 "home_harbour": fisherman["harbour"],
             },
@@ -193,8 +216,8 @@ def scan_for_guardian_alerts(
     high_yield_pfz = [p for p in pfz_advisories if p.get("pfz_score", 0) >= 80]
 
     for pfz in high_yield_pfz[:4]:
-        lat, lon = pfz["latitude"], pfz["longitude"]
-        fisherman, dist_km = _match_nearest_fisherman(lat, lon)
+        ev_lat, ev_lon = pfz["latitude"], pfz["longitude"]
+        fisherman, dist_km = _match_nearest_fisherman(ev_lat, ev_lon)
         sst = pfz.get("sst_celsius", 28.2)
         sal = pfz.get("salinity", 35.2)
         mld = pfz.get("mld_meters", 35.0)
@@ -251,7 +274,7 @@ def scan_for_guardian_alerts(
         )
 
         alerts.append({
-            "id": f"opp-{pfz['float_id']}-{uuid.uuid4().hex[:4]}",
+            "id": f"opp-{pfz['float_id']}-{today_str}",
             "type": "opportunity",
             "severity": "high",
             "title": f"High-Confidence PFZ ({fisherman['home_sector']} Sector)",
@@ -267,8 +290,8 @@ def scan_for_guardian_alerts(
                 "harbour": fisherman["harbour"],
             },
             "location": {
-                "latitude": lat,
-                "longitude": lon,
+                "latitude": ev_lat,
+                "longitude": ev_lon,
                 "distance_km": dist_km,
                 "home_harbour": fisherman["harbour"],
             },
@@ -345,11 +368,12 @@ def get_guardian_status(
     )
     safety_count = sum(1 for a in alerts if a["type"] == "safety")
     opportunity_count = sum(1 for a in alerts if a["type"] == "opportunity")
+    monitored_pfz_zones, monitored_anomaly_signals = _get_monitored_counts()
 
     return {
         "status": "active",
-        "monitored_pfz_zones": 47,
-        "monitored_anomaly_signals": 9,
+        "monitored_pfz_zones": monitored_pfz_zones,
+        "monitored_anomaly_signals": monitored_anomaly_signals,
         "registered_fishermen_count": len(REGISTERED_FISHERMEN),
         "active_safety_alerts": safety_count,
         "active_opportunity_alerts": opportunity_count,

@@ -17,10 +17,8 @@ import asyncio
 import os
 import re
 import json
-import math
 import logging
-import io
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 from pathlib import Path
 import httpx
 from dotenv import load_dotenv
@@ -67,6 +65,72 @@ _bot_running = False
 _last_update_id = 0
 _total_messages_handled = 0
 _sent_proactive_alert_ids: set[str] = set()
+
+# Strong references to fire-and-forget handler tasks (prevents GC + surfaces exceptions)
+_background_tasks: set[asyncio.Task] = set()
+
+# Single reused async HTTP client for outbound send_* helpers (avoids per-call sockets)
+_http_client: Optional[httpx.AsyncClient] = None
+
+# Persisted polling offset so a restart does not reprocess ~24h of Telegram backlog
+_STATE_FILE = Path(__file__).resolve().parent.parent / "data" / "telegram_state.json"
+
+
+def _get_http_client() -> httpx.AsyncClient:
+    """Return a lazily-created, reused module-level async HTTP client."""
+    global _http_client
+    if _http_client is None or _http_client.is_closed:
+        _http_client = httpx.AsyncClient(timeout=30.0)
+    return _http_client
+
+
+def _on_task_done(task: asyncio.Task) -> None:
+    """Done-callback: drop the task reference and log any swallowed exception."""
+    _background_tasks.discard(task)
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        logger.error(f"[Telegram Bot] Background handler task failed: {exc}", exc_info=exc)
+
+
+def _spawn_task(coro) -> asyncio.Task:
+    """Create a tracked fire-and-forget task with a retained reference + error logging."""
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_on_task_done)
+    return task
+
+
+def _load_last_update_id() -> int:
+    """Load the persisted Telegram polling offset so a restart skips old backlog."""
+    try:
+        if _STATE_FILE.exists():
+            data = json.loads(_STATE_FILE.read_text(encoding="utf-8"))
+            return int(data.get("last_update_id", 0))
+    except Exception as e:
+        logger.debug(f"[Telegram State] Could not load last_update_id: {e}")
+    return 0
+
+
+def _save_last_update_id(update_id: int) -> None:
+    """Persist the latest processed Telegram update_id to disk."""
+    try:
+        _STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _STATE_FILE.write_text(json.dumps({"last_update_id": update_id}), encoding="utf-8")
+    except Exception as e:
+        logger.debug(f"[Telegram State] Could not persist last_update_id: {e}")
+
+
+def _escape_md(text: str) -> str:
+    """
+    Escape Telegram legacy-Markdown entity characters (_ * ` [) in user/LLM-supplied
+    text so stray symbols can't unbalance entities and trigger a 400 'can't parse
+    entities' error (which silently drops the reply).
+    """
+    if not text:
+        return ""
+    return re.sub(r'([_*`\[])', r'\\\1', str(text))
 
 
 def register_or_update_subscriber(
@@ -123,6 +187,7 @@ async def send_proactive_guardian_alert(subscriber: dict, alert: dict) -> bool:
     """Dispatches a real-time proactive Guardian alert card + spoken voice note to a specific Telegram subscriber."""
     chat_id = subscriber["chat_id"]
     first_name = subscriber.get("first_name", "Captain")
+    safe_first_name = _escape_md(first_name)
     is_safety = alert.get("type") == "safety"
     harbour = subscriber.get("harbour", "Coast")
 
@@ -139,7 +204,7 @@ async def send_proactive_guardian_alert(subscriber: dict, alert: dict) -> bool:
     msg_text = (
         f"{badge}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"👤 *Subscriber:* `{first_name}` ({harbour})\n"
+        f"👤 *Subscriber:* `{safe_first_name}` ({harbour})\n"
         f"📍 *Sector Vector:* *{dist_km} km offshore* (`{lat:.3f}°N, {lon:.3f}°E`)\n\n"
         f"{alert['message']}\n\n"
         f"⚡ *Multi-Sensor Verification:* INCOIS ARGO CTD + NOAA Satellite SST\n"
@@ -183,7 +248,7 @@ async def send_proactive_guardian_alert(subscriber: dict, alert: dict) -> bool:
 
         voice_bytes = await _synthesize_voice_audio(voice_script, lang="hi")
         if voice_bytes:
-            await send_telegram_voice(chat_id, voice_bytes, caption=f"🔊 *Lehar Guardian Voice Advisory for {first_name}*")
+            await send_telegram_voice(chat_id, voice_bytes, caption=f"🔊 *Lehar Guardian Voice Advisory for {safe_first_name}*")
 
     return True
 
@@ -219,6 +284,22 @@ async def _telegram_request(client: httpx.AsyncClient, method: str, payload: dic
             logger.info("[Telegram API] Duplicate polling instance detected (409 Conflict). Waiting 6s for single-instance sync...")
             await asyncio.sleep(6)
             return None
+        elif resp.status_code == 429:
+            # Rate limited — honor Telegram's retry_after hint, then retry once.
+            try:
+                retry_after = int(resp.json().get("parameters", {}).get("retry_after", 1))
+            except Exception:
+                retry_after = 1
+            logger.warning(f"[Telegram API] Rate limited (429) on {method}. Honoring retry_after={retry_after}s...")
+            await asyncio.sleep(max(retry_after, 1))
+            try:
+                retry_resp = await client.post(url, json=payload, timeout=30.0)
+                if retry_resp.status_code == 200:
+                    return retry_resp.json().get("result")
+                logger.warning(f"[Telegram API] {method} retry after 429 returned {retry_resp.status_code}")
+            except Exception as e:
+                logger.debug(f"[Telegram API] Retry after 429 failed for {method}: {e}")
+            return None
         elif method == "answerCallbackQuery" and resp.status_code == 400:
             # Expired query ID from before restart (>20s old), safe to ignore silently
             return None
@@ -245,17 +326,17 @@ async def send_telegram_message(
     token = get_bot_token()
     if not token:
         return False
-    async with httpx.AsyncClient() as client:
-        payload = {
-            "chat_id": chat_id,
-            "text": text,
-            "parse_mode": parse_mode,
-            "disable_web_page_preview": False,
-        }
-        if reply_markup:
-            payload["reply_markup"] = reply_markup
-        res = await _telegram_request(client, "sendMessage", payload)
-        return bool(res)
+    client = _get_http_client()
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": parse_mode,
+        "disable_web_page_preview": False,
+    }
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
+    res = await _telegram_request(client, "sendMessage", payload)
+    return bool(res)
 
 
 async def send_telegram_voice(
@@ -267,20 +348,20 @@ async def send_telegram_voice(
     token = get_bot_token()
     if not token or not audio_bytes:
         return False
-    async with httpx.AsyncClient() as client:
-        files = {"voice": ("voice.mp3", audio_bytes, "audio/mpeg")}
-        data = {"chat_id": chat_id, "caption": caption, "parse_mode": "Markdown"}
-        try:
-            res = await client.post(
-                f"https://api.telegram.org/bot{token}/sendVoice",
-                data=data,
-                files=files,
-                timeout=30.0
-            )
-            return res.status_code == 200
-        except Exception as e:
-            logger.error(f"[Telegram Voice] Error sending voice note: {e}")
-            return False
+    client = _get_http_client()
+    files = {"voice": ("voice.mp3", audio_bytes, "audio/mpeg")}
+    data = {"chat_id": chat_id, "caption": caption, "parse_mode": "Markdown"}
+    try:
+        res = await client.post(
+            f"https://api.telegram.org/bot{token}/sendVoice",
+            data=data,
+            files=files,
+            timeout=30.0
+        )
+        return res.status_code == 200
+    except Exception as e:
+        logger.error(f"[Telegram Voice] Error sending voice note: {e}")
+        return False
 
 
 async def send_telegram_location(
@@ -292,14 +373,14 @@ async def send_telegram_location(
     token = get_bot_token()
     if not token:
         return False
-    async with httpx.AsyncClient() as client:
-        payload = {
-            "chat_id": chat_id,
-            "latitude": latitude,
-            "longitude": longitude,
-        }
-        res = await _telegram_request(client, "sendLocation", payload)
-        return bool(res)
+    client = _get_http_client()
+    payload = {
+        "chat_id": chat_id,
+        "latitude": latitude,
+        "longitude": longitude,
+    }
+    res = await _telegram_request(client, "sendLocation", payload)
+    return bool(res)
 
 
 async def _download_telegram_voice(client: httpx.AsyncClient, file_id: str) -> Optional[bytes]:
@@ -446,8 +527,9 @@ def _get_start_keyboard() -> dict:
 async def _handle_start_command(client: httpx.AsyncClient, chat_id: int, first_name: str):
     """Handle /start greeting with rich introductory banner & instant voice welcome."""
     username = get_bot_username()
+    safe_first_name = _escape_md(first_name)
     welcome_text = (
-        f"🌊 *Namaste {first_name}! Welcome to Lehar AI (@{username})*\n"
+        f"🌊 *Namaste {safe_first_name}! Welcome to Lehar AI (@{username})*\n"
         f"_Know the Sea. Know the Way._\n\n"
         f"I am your *24/7 AI Marine Intelligence Assistant*, developed for **INCOIS & Ministry of Earth Sciences (SIH26040)**.\n\n"
         f"⚡ *What you can do:*\n"
@@ -490,11 +572,15 @@ async def _handle_location(client: httpx.AsyncClient, chat_id: int, lat: float, 
     sal = nearest_f["sss"]
     mld = compute_mld(nearest_f["profile_id"]) or 42.0
     therm = compute_thermocline_gradient(nearest_f["profile_id"])
+    # compute_thermocline_gradient returns None when the profile has too few valid levels.
+    therm_depth = therm["thermocline_depth_m"] if therm else None
+    therm_grad = therm["max_gradient_c_per_m"] if therm else None
+    therm_str = f"{therm_depth} m (dT/dz: {therm_grad}°C/m)" if therm else "Insufficient profile levels to resolve"
     econ = calculate_voyage_economics(nearest_f["distance_km"])
-    
+
     # Species evaluation for primary pelagic species
-    tuna_eval = evaluate_species_profile_viability("yellowfin_tuna", sst, mld, therm["thermocline_depth_m"], sal)
-    mackerel_eval = evaluate_species_profile_viability("indian_mackerel", sst, mld, therm["thermocline_depth_m"], sal)
+    tuna_eval = evaluate_species_profile_viability("yellowfin_tuna", sst, mld, therm_depth, sal)
+    mackerel_eval = evaluate_species_profile_viability("indian_mackerel", sst, mld, therm_depth, sal)
 
     maps_url = f"https://maps.google.com/?q={nearest_f['latitude']:.4f},{nearest_f['longitude']:.4f}"
 
@@ -507,7 +593,7 @@ async def _handle_location(client: httpx.AsyncClient, chat_id: int, lat: float, 
         f"🌊 *Subsurface Ocean Physics:*\n"
         f"• 🌡️ *Sea Surface Temp (SST):* `{sst}°C`\n"
         f"• 📏 *Mixed Layer Depth (MLD):* `{mld:.1f} m` (Surface nutrient mixing)\n"
-        f"• 📉 *Thermocline Peak:* `{therm['thermocline_depth_m']} m` (dT/dz: {therm['max_gradient_c_per_m']}°C/m)\n"
+        f"• 📉 *Thermocline Peak:* `{therm_str}`\n"
         f"• 🧂 *Salinity:* `{sal} PSU`\n\n"
         f"🎣 *ICAR-CMFRI Biological Catch Feasibility:*\n"
         f"• *Yellowfin Tuna:* {tuna_eval['status']} ({tuna_eval['viability_pct']}%)\n"
@@ -555,8 +641,9 @@ async def _handle_voice_message(client: httpx.AsyncClient, chat_id: int, voice_f
         })
         return
 
-    # Transcribe via Groq Whisper
-    transcribed_text = _transcribe_audio_groq(audio_bytes)
+    # Transcribe via Groq Whisper (offloaded to a worker thread — the SDK call is
+    # synchronous/blocking and would otherwise freeze the whole event loop)
+    transcribed_text = await asyncio.to_thread(_transcribe_audio_groq, audio_bytes)
     if not transcribed_text:
         await _telegram_request(client, "sendMessage", {
             "chat_id": chat_id,
@@ -568,7 +655,7 @@ async def _handle_voice_message(client: httpx.AsyncClient, chat_id: int, voice_f
     # Notify transcribed query
     await _telegram_request(client, "sendMessage", {
         "chat_id": chat_id,
-        "text": f"🎙️ *I heard you say:*\n_\"{transcribed_text}\"_\n\n⏳ *Querying ARGO in-situ database & ocean models...*",
+        "text": f"🎙️ *I heard you say:*\n_\"{_escape_md(transcribed_text)}\"_\n\n⏳ *Querying ARGO in-situ database & ocean models...*",
         "parse_mode": "Markdown"
     })
 
@@ -579,17 +666,24 @@ async def _handle_voice_message(client: httpx.AsyncClient, chat_id: int, voice_f
 async def _handle_callback_query(client: httpx.AsyncClient, callback_query: dict):
     """Handle interactive button taps from inline keyboard."""
     cb_id = callback_query["id"]
-    chat_id = callback_query["message"]["chat"]["id"]
-    data = callback_query.get("data", "")
 
-    # Acknowledge callback immediately
+    # Acknowledge callback immediately (clears the button spinner even for old messages)
     await _telegram_request(client, "answerCallbackQuery", {"callback_query_id": cb_id})
 
+    # `message` can be absent for very old inline messages (>48h) — handle gracefully
+    message = callback_query.get("message")
+    if not message or "chat" not in message:
+        logger.debug("[Telegram Callback] Callback query has no accessible message; acknowledged only.")
+        return
+
+    chat_id = message["chat"]["id"]
+    data = callback_query.get("data", "")
+
     if data == "cmd_pfz":
-        query = "Where are the top 3 potential fishing zones near the Indian coast with optimal SST and chlorophyll?"
+        query = "Show me the top 3 potential fishing zones near the Indian coast with the best SST and chlorophyll today"
         await _handle_text_query(client, chat_id, query, send_voice=True)
     elif data == "cmd_temp":
-        query = "What is the latest sea surface temperature and mixed layer depth in the Arabian Sea from ARGO floats?"
+        query = "Show the latest sea surface temperature and salinity near Mumbai coast from ARGO floats today"
         await _handle_text_query(client, chat_id, query, send_voice=True)
     elif data == "cmd_storm":
         query = "Are there any active marine heatwaves, extreme thermal anomalies, or storm warnings in the Indian Ocean?"
@@ -601,7 +695,7 @@ async def _handle_callback_query(client: httpx.AsyncClient, callback_query: dict
             "parse_mode": "Markdown"
         })
     elif data == "cmd_lang_hi":
-        query = "अरब सागर में मछली पकड़ने के सबसे अच्छे क्षेत्र कौन से हैं और पानी का तापमान कितना है?"
+        query = "Mumbai ke paas samundar ka taapman kya hai aur machhli pakadne ke liye kaunsa zone best hai aaj?"
         await _handle_text_query(client, chat_id, query, send_voice=True, lang="hi")
     elif data == "cmd_about":
         about_text = (
@@ -630,10 +724,21 @@ async def _handle_text_query(
 
     try:
         result = await process_chat_query(text, language="auto", session_id=f"tg_{chat_id}")
-        answer = result.get("answer", "No insights could be generated.")
-        
-        # Build clean Telegram markdown response
-        response_text = f"🌊 *Lehar AI Operational Advisory:*\n\n{answer}"
+
+        # Check if the pipeline returned an error
+        if result.get("error"):
+            logger.warning(f"[Telegram Query] Pipeline error for '{text[:50]}': {result['error']}")
+
+        answer = result.get("answer") or result.get("summary") or ""
+
+        # If answer is empty or too short, generate a helpful fallback
+        if not answer or len(answer.strip()) < 20:
+            answer = "Currently no specific data available for this query. Please try asking about a specific coastal area like Mumbai, Chennai, or Kochi."
+
+        # Build clean Telegram markdown response. Escape the raw LLM answer so stray
+        # Markdown entity chars can't trigger a 400 'can't parse entities' (silent drop).
+        safe_answer = _escape_md(answer)
+        response_text = f"🌊 *Lehar AI Operational Advisory:*\n\n{safe_answer}"
 
         if result.get("hero_stat") and result["hero_stat"].get("value"):
             hs = result["hero_stat"]
@@ -685,17 +790,20 @@ async def _handle_text_query(
                 await send_telegram_voice(chat_id, voice_bytes, caption="🔊 *Lehar AI Spoken Summary*")
 
     except Exception as err:
-        logger.error(f"Error processing Telegram query: {err}")
+        import traceback
+        logger.error(f"Error processing Telegram query for '{text[:60]}': {err}\n{traceback.format_exc()}")
+        # Send a helpful fallback instead of a generic error
         await _telegram_request(client, "sendMessage", {
             "chat_id": chat_id,
-            "text": "⚠️ *Apologies, error querying ARGO ocean database.* Please try rephrasing your question.",
-            "parse_mode": "Markdown"
+            "text": "⚠️ *Temporary processing error.* Please try asking your question again or try a specific query like:\n\n• _Mumbai ke paas samundar ka taapman kya hai?_\n• _Show temperature near Chennai coast_\n• _Best fishing zone near Goa_",
+            "parse_mode": "Markdown",
+            "reply_markup": _get_start_keyboard()
         })
 
 
 async def run_telegram_bot():
     """Main async long-polling worker loop."""
-    global _bot_running, _last_update_id
+    global _bot_running, _last_update_id, _http_client
     token = get_bot_token()
     username = get_bot_username()
     if not token:
@@ -704,7 +812,9 @@ async def run_telegram_bot():
         return
 
     _bot_running = True
-    logger.info(f"[Telegram Bot] Starting async polling for @{username}...")
+    # Resume from the last processed update so a restart doesn't reprocess ~24h of backlog
+    _last_update_id = _load_last_update_id()
+    logger.info(f"[Telegram Bot] Starting async polling for @{username} (resume offset={_last_update_id})...")
 
     async with httpx.AsyncClient(timeout=35.0) as client:
         # Verify bot token on startup
@@ -739,6 +849,10 @@ async def run_telegram_bot():
         else:
             logger.warning("[Telegram Bot] Failed to verify bot token with Telegram API.")
 
+        # Ensure no leftover webhook is registered — a live webhook makes getUpdates
+        # return a permanent 409 Conflict. Keep pending updates (offset handles backlog).
+        await _telegram_request(client, "deleteWebhook", {"drop_pending_updates": False})
+
         while _bot_running:
             try:
                 updates = await _telegram_request(client, "getUpdates", {
@@ -750,10 +864,11 @@ async def run_telegram_bot():
                 if updates and isinstance(updates, list):
                     for u in updates:
                         _last_update_id = u["update_id"]
+                        _save_last_update_id(_last_update_id)
 
                         # Handle Callback Query (Buttons)
                         if "callback_query" in u:
-                            asyncio.create_task(_handle_callback_query(client, u["callback_query"]))
+                            _spawn_task(_handle_callback_query(client, u["callback_query"]))
                             continue
 
                         # Handle Standard Message
@@ -778,21 +893,21 @@ async def run_telegram_bot():
                                 username=username_val,
                                 lat=loc["latitude"],
                                 lon=loc["longitude"],
-                                harbour=h_info["name"]
+                                harbour=h_info["harbour"]
                             )
-                            asyncio.create_task(_handle_location(client, chat_id, loc["latitude"], loc["longitude"]))
+                            _spawn_task(_handle_location(client, chat_id, loc["latitude"], loc["longitude"]))
                             continue
 
                         # Voice Message (Voice In)
                         if "voice" in message:
                             voice_file_id = message["voice"]["file_id"]
-                            asyncio.create_task(_handle_voice_message(client, chat_id, voice_file_id))
+                            _spawn_task(_handle_voice_message(client, chat_id, voice_file_id))
                             continue
 
                         # Audio File Message (Voice In)
                         if "audio" in message:
                             audio_file_id = message["audio"]["file_id"]
-                            asyncio.create_task(_handle_voice_message(client, chat_id, audio_file_id))
+                            _spawn_task(_handle_voice_message(client, chat_id, audio_file_id))
                             continue
 
                         # Text Message
@@ -801,11 +916,11 @@ async def run_telegram_bot():
                             continue
 
                         if text.startswith("/start"):
-                            asyncio.create_task(_handle_start_command(client, chat_id, first_name))
+                            _spawn_task(_handle_start_command(client, chat_id, first_name))
                         elif text.startswith("/help"):
-                            asyncio.create_task(_handle_start_command(client, chat_id, first_name))
+                            _spawn_task(_handle_start_command(client, chat_id, first_name))
                         else:
-                            asyncio.create_task(_handle_text_query(client, chat_id, text, send_voice=True))
+                            _spawn_task(_handle_text_query(client, chat_id, text, send_voice=True))
 
             except asyncio.CancelledError:
                 logger.info("[Telegram Bot] Worker cancelled.")
@@ -815,6 +930,13 @@ async def run_telegram_bot():
                 await asyncio.sleep(5)
 
     _bot_running = False
+    # Close the reused outbound client (self-heals via _get_http_client if used again)
+    if _http_client is not None and not _http_client.is_closed:
+        try:
+            await _http_client.aclose()
+        except Exception:
+            pass
+        _http_client = None
     logger.info("[Telegram Bot] Gateway shutdown complete.")
 
 
@@ -835,7 +957,9 @@ async def run_guardian_proactive_watchdog():
             if not subscribers:
                 continue
 
-            alerts = scan_for_guardian_alerts()
+            # Offload the synchronous multi-sensor scan (DB + satellite lookups) to a
+            # thread so it doesn't block the event loop / other users' handlers.
+            alerts = await asyncio.to_thread(scan_for_guardian_alerts)
             for alert in alerts:
                 alert_id = alert.get("id")
                 if not alert_id or alert_id in _sent_proactive_alert_ids:

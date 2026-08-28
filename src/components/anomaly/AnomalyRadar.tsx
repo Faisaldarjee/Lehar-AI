@@ -11,8 +11,6 @@ import {
   Sparkles,
   ChevronDown,
   ChevronUp,
-  Fish,
-  AlertTriangle,
   Info
 } from 'lucide-react';
 import type { AnomalyAlert, AIAnomalyImpact } from '../../types';
@@ -20,13 +18,18 @@ import { PolarRadarScope } from './PolarRadarScope';
 
 interface AnomalyRadarProps {
   anomalies: AnomalyAlert[];
+  /** True when `anomalies` is the offline sample fallback rather than live backend data. */
+  isSampleData?: boolean;
   onSelectAnomaly?: (anomaly: AnomalyAlert) => void;
   onHoverAnomaly?: (anomaly: AnomalyAlert | null) => void;
   onTriggerScan?: () => void;
   isScanning?: boolean;
 }
 
-function getAIImpact(alert: AnomalyAlert): AIAnomalyImpact {
+// Deterministic rule-based impact engine. NOTE: these are hardcoded heuristic
+// if/else rules derived from parameter/severity thresholds — there is NO LLM /
+// Gemini call here. Labelled honestly in the UI as the "Lehar Heuristic Impact Engine".
+function getHeuristicImpact(alert: AnomalyAlert): AIAnomalyImpact {
   const isTemp = alert.parameter.toLowerCase().includes('temp');
   const val = typeof alert.value === 'number' ? alert.value : parseFloat(alert.value);
   const diff = Math.abs(val - alert.threshold);
@@ -67,6 +70,7 @@ function getAIImpact(alert: AnomalyAlert): AIAnomalyImpact {
 
 export const AnomalyRadar: React.FC<AnomalyRadarProps> = ({
   anomalies,
+  isSampleData = false,
   onSelectAnomaly,
   onHoverAnomaly,
   onTriggerScan,
@@ -119,6 +123,11 @@ export const AnomalyRadar: React.FC<AnomalyRadarProps> = ({
               <span className="px-2 py-0.5 text-[10px] font-bold uppercase rounded-md bg-coral-alert/20 text-coral-glow border border-coral-alert/30 font-mono">
                 24/7 Ocean Alert
               </span>
+              {isSampleData && (
+                <span className="px-2 py-0.5 text-[10px] font-bold uppercase rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/40 font-mono flex items-center gap-1">
+                  <Info className="w-3 h-3" /> Sample / Offline Data
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-400">
               Proactive marine heatwave (MHW) & deep CTD threshold deviation monitoring
@@ -207,7 +216,7 @@ export const AnomalyRadar: React.FC<AnomalyRadarProps> = ({
             const isSal = alert.parameter.toLowerCase().includes('sal');
             const isSelected = activeAlertId === alert.id;
             const isImpactOpen = expandedImpactId === alert.id;
-            const aiImpact = getAIImpact(alert);
+            const aiImpact = getHeuristicImpact(alert);
 
             return (
               <div
@@ -280,7 +289,7 @@ export const AnomalyRadar: React.FC<AnomalyRadarProps> = ({
                   </div>
                 )}
 
-                {/* 2. GEMINI AI ECOLOGICAL & FISHERY IMPACT ACCORDION */}
+                {/* 2. LEHAR HEURISTIC IMPACT ENGINE — RULE-BASED ECOLOGICAL & FISHERY ACCORDION */}
                 <div className="border border-abyssal-800 rounded-lg overflow-hidden bg-abyssal-950/70">
                   <button
                     type="button"
@@ -289,7 +298,7 @@ export const AnomalyRadar: React.FC<AnomalyRadarProps> = ({
                   >
                     <div className="flex items-center gap-1.5 font-heading text-[11px]">
                       <Sparkles className="w-3 h-3 text-emerald-400" />
-                      <span>🤖 AI Ecological & Fish Catch Impact Assessment</span>
+                      <span>Lehar Heuristic Impact Engine — Ecological &amp; Fish Catch Assessment</span>
                     </div>
                     {isImpactOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                   </button>

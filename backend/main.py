@@ -65,7 +65,7 @@ app.include_router(guardian.router)
 app.include_router(telegram.router)
 
 
-@app.get("/")
+@app.get("/api/info")
 async def root():
     return {
         "name": "Lehar AI API",
@@ -85,3 +85,30 @@ async def health():
         "profiles": get_profile_count(),
         "floats": get_unique_float_count(),
     }
+
+
+# Mount built React frontend static assets if dist directory exists
+dist_path = os.path.join(os.path.dirname(__file__), "..", "dist")
+if os.path.exists(dist_path):
+    from fastapi.staticfiles import StaticFiles
+    from fastapi.responses import FileResponse
+
+    app.mount("/assets", StaticFiles(directory=os.path.join(dist_path, "assets")), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        file_target = os.path.join(dist_path, full_path)
+        if os.path.exists(file_target) and os.path.isfile(file_target):
+            return FileResponse(file_target)
+        return FileResponse(os.path.join(dist_path, "index.html"))
+else:
+    @app.get("/")
+    async def fallback_root():
+        return {
+            "name": "Lehar AI API",
+            "version": "1.0.0",
+            "tagline": "Know the Sea. Know the Way.",
+            "status": "running",
+            "team": "Ctrl Alt Elites",
+            "docs": "/docs",
+        }

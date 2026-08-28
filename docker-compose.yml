@@ -1,0 +1,34 @@
+# ==============================================================================
+# Lehar AI — Docker Compose Orchestration (SIH26040)
+# Launches full stack with persistent volume storage for Argo ocean profiles
+# ==============================================================================
+
+services:
+  lehar-ai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lehar_ai_platform
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME:-LeharAIBot}
+      - CORS_ORIGINS=http://localhost:8000,http://127.0.0.1:8000,http://localhost:5173,http://127.0.0.1:5173
+    volumes:
+      # Persist SQLite ARGO database and chat session history across container restarts
+      - lehar_ocean_data:/app/backend/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  lehar_ocean_data:
+    driver: local

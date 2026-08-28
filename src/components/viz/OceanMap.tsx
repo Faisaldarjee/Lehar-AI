@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import type { FloatSummary, MapMarker, PFZAdvisory, SatelliteGridPoint } from '../../types';
 import { getPFZAdvisories, getSatelliteGrid } from '../../services/api';
-import { INDIAN_PORTS_DATABASE, type IndianPort } from '../../data/indianPorts';
+import { INDIAN_PORTS_DATABASE } from '../../data/indianPorts';
 
 // Coastal Clustered Port Representation for National & Regional Overview (Zoom <= 7)
 export interface CoastalPortCluster {
@@ -421,8 +421,8 @@ export const OceanMap: React.FC<OceanMapProps> = ({
   selectedFloatId,
   trajectory,
 }) => {
-  const [mapCenter, setMapCenter] = useState<[number, number]>([14.0, 75.0]); // Indian Ocean
-  const [mapZoom, setMapZoom] = useState<number>(5);
+  const [mapCenter] = useState<[number, number]>([14.0, 75.0]); // Indian Ocean
+  const [mapZoom] = useState<number>(5);
   const [currentZoom, setCurrentZoom] = useState<number>(5);
 
   // Dynamic Level-of-Detail (LOD) Filtering for 150+ Indian Coastal Fishing Harbours
@@ -595,6 +595,21 @@ export const OceanMap: React.FC<OceanMapProps> = ({
 
     return zones;
   }, [pfzZones, selectedSpecies, activeSpecies, activeDockCoords, selectedHarbourId]);
+
+  // Level-of-Detail decimation for the satellite grid. Rendering one Leaflet
+  // CircleMarker per grid point can mean thousands of vector nodes — a major
+  // perf sink. Sample fewer points at low zoom (wider stride), progressively
+  // more as the user zooms in, and always enforce a hard cap.
+  const visibleSatelliteGrid = useMemo(() => {
+    if (satelliteGrid.length === 0) return satelliteGrid;
+    const stride = currentZoom <= 5 ? 4 : currentZoom <= 7 ? 2 : 1;
+    const sampled =
+      stride === 1 ? satelliteGrid : satelliteGrid.filter((_, i) => i % stride === 0);
+    const MAX_POINTS = 600;
+    if (sampled.length <= MAX_POINTS) return sampled;
+    const cap = Math.ceil(sampled.length / MAX_POINTS);
+    return sampled.filter((_, i) => i % cap === 0);
+  }, [satelliteGrid, currentZoom]);
 
   const polylinePositions: [number, number][] =
     trajectory?.map((t) => [t.latitude, t.longitude] as [number, number]) || [];
@@ -1063,11 +1078,11 @@ export const OceanMap: React.FC<OceanMapProps> = ({
 
         {/* SATELLITE SST HEATMAP OVERLAY LAYER */}
         {showSatelliteSST &&
-          satelliteGrid.map((pt, idx) => {
+          visibleSatelliteGrid.map((pt) => {
             const color = getSSTColor(pt.sst);
             return (
               <CircleMarker
-                key={`sat-sst-${idx}`}
+                key={`sat-sst-${pt.lat}-${pt.lon}`}
                 center={[pt.lat, pt.lon]}
                 radius={7}
                 pathOptions={{
@@ -1092,12 +1107,12 @@ export const OceanMap: React.FC<OceanMapProps> = ({
 
         {/* SATELLITE CHLOROPHYLL-A BIO-PRODUCTIVITY OVERLAY LAYER */}
         {showChlorophyll &&
-          satelliteGrid.map((pt, idx) => {
+          visibleSatelliteGrid.map((pt) => {
             const chl = pt.chlorophyll;
             const color = getChlColor(chl);
             return (
               <CircleMarker
-                key={`sat-chl-${idx}`}
+                key={`sat-chl-${pt.lat}-${pt.lon}`}
                 center={[pt.lat, pt.lon]}
                 radius={8}
                 pathOptions={{
@@ -1122,7 +1137,7 @@ export const OceanMap: React.FC<OceanMapProps> = ({
 
         {/* PFZ FISHING OPPORTUNITY ZONES (ZOOM-ADAPTIVE GLOWING TARGET MARKERS) */}
         {showPFZ &&
-          displayedPfzZones.map((pfz, idx) => {
+          displayedPfzZones.map((pfz) => {
             const isHighYield = pfz.pfz_score >= 80;
             // Adaptive Level of Detail: Smaller clean dots at country overview, rich glowing circles when zoomed in
             const dynamicRadius =
@@ -1134,7 +1149,7 @@ export const OceanMap: React.FC<OceanMapProps> = ({
 
             return (
               <CircleMarker
-                key={`pfz-zone-${idx}`}
+                key={`pfz-zone-${pfz.float_id}-${pfz.latitude}-${pfz.longitude}`}
                 center={[pfz.latitude, pfz.longitude]}
                 radius={dynamicRadius}
                 pathOptions={{
@@ -1185,8 +1200,8 @@ export const OceanMap: React.FC<OceanMapProps> = ({
                           <Layers className="w-3.5 h-3.5 text-cyan-400" />
                           <span>Thermocline Layer:</span>
                         </span>
-                        <strong className="text-white">
-                          {pfz.mld_meters ? `${Math.round(pfz.mld_meters)}m - ${Math.round(pfz.mld_meters + 25)}m Depth` : '35m - 60m Depth'}
+                        <strong className={pfz.mld_meters ? 'text-white' : 'text-slate-500'}>
+                          {pfz.mld_meters ? `${Math.round(pfz.mld_meters)}m - ${Math.round(pfz.mld_meters + 25)}m Depth` : 'MLD data unavailable'}
                         </strong>
                       </div>
                     </div>
@@ -1311,7 +1326,7 @@ export const OceanMap: React.FC<OceanMapProps> = ({
           currentZoom <= 7 ? (
             /* REGIONAL CLUSTERED COASTAL BADGES (ZOOM <= 7) — Matches Clean Overview */
             COASTAL_PORT_CLUSTERS.map((cl) => {
-              const isHighlighted = selectedHarbourId === cl.id || (dockedPortName && dockedPortName.includes(cl.state));
+              const isHighlighted = selectedHarbourId === cl.id || Boolean(dockedPortName && dockedPortName.includes(cl.state));
               return (
                 <Marker
                   key={`cluster-${cl.id}`}

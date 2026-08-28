@@ -1,6 +1,8 @@
 """
 Lehar AI — Telegram Bot Management Router
-Provides bot status, connectivity diagnostics, and webhook setup endpoints.
+Exposes a single read-only endpoint, GET /api/telegram/status, which reports the
+live operational state of the Telegram Bot gateway (token configured, worker
+running, subscriber count, messages handled).
 """
 
 from fastapi import APIRouter

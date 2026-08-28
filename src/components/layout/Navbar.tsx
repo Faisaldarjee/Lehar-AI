@@ -22,6 +22,7 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({
   currentMode,
   onSelectMode,
+  backendOnline = true,
   onOpenTelegramModal,
 }) => {
   const [demoOpen, setDemoOpen] = useState(false);
@@ -139,13 +140,25 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Right Section: Offline Readiness Badge & Demonstrators Dropdown */}
         <div className="flex items-center gap-2.5 shrink-0">
 
-          {/* Real-time Offline Edge Readiness Badge */}
+          {/* Real-time Backend Connectivity / Offline Edge Readiness Badge */}
           <div
-            className="hidden lg:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-teal-950/80 border border-teal-500/40 text-[11px] font-mono text-teal-300 shadow-sm select-none"
-            title="Lehar Edge Active: Local SQLite In-Situ DB + Cached NOAA Satellite Snapshot. 100% Offline Capable."
+            className={`hidden lg:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-[11px] font-mono shadow-sm select-none ${
+              backendOnline
+                ? 'bg-teal-950/80 border-teal-500/40 text-teal-300'
+                : 'bg-amber-950/80 border-amber-500/40 text-amber-300'
+            }`}
+            title={
+              backendOnline
+                ? 'Live Backend Connected: FastAPI in-situ ARGO service reachable.'
+                : 'Backend unreachable — running on Lehar Edge: local SQLite in-situ DB + cached NOAA satellite snapshot. 100% offline capable.'
+            }
           >
-            <span className="w-2 h-2 rounded-full bg-teal-400 shadow-glow-cyan-sm animate-pulse shrink-0" />
-            <span className="font-bold">Offline-Ready Edge</span>
+            <span
+              className={`w-2 h-2 rounded-full shrink-0 animate-pulse ${
+                backendOnline ? 'bg-teal-400 shadow-glow-cyan-sm' : 'bg-amber-400'
+              }`}
+            />
+            <span className="font-bold">{backendOnline ? 'Backend Online' : 'Offline Edge Mode'}</span>
           </div>
 
           {/* Demonstrators Dropdown Menu */}

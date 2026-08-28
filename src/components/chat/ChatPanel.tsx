@@ -22,6 +22,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   onSendMessage,
   onFocusMap,
   onView3D,
+  selectedLanguage,
+  onSelectLanguage,
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -107,7 +109,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         <ChatInput
           onSendMessage={(text, mode) => onSendMessage(text, mode)}
           isLoading={isLoading}
-          language="auto"
+          selectedLanguage={selectedLanguage}
+          onSelectLanguage={onSelectLanguage}
         />
       </div>
 

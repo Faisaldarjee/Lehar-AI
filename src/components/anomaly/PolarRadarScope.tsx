@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Radar, Compass, ShieldAlert, Sparkles, Activity, MapPin } from 'lucide-react';
+import { Activity, MapPin } from 'lucide-react';
 import type { AnomalyAlert } from '../../types';
 
 interface PolarRadarScopeProps {
@@ -8,13 +8,19 @@ interface PolarRadarScopeProps {
   onSelectAnomaly: (anomaly: AnomalyAlert) => void;
 }
 
+// Logical (CSS) size of the square scope. The backing store is scaled by DPR.
+const SCOPE_SIZE = 320;
+
 export const PolarRadarScope: React.FC<PolarRadarScopeProps> = ({
   anomalies,
   selectedAnomaly,
   onSelectAnomaly,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [hoveredAnomaly, setHoveredAnomaly] = useState<AnomalyAlert | null>(null);
+  // Hovered blip id lives in a ref so mouse movement never restarts the rAF loop
+  // (previously `hoveredAnomaly` was an effect dependency, tearing down/rebuilding
+  // the animation on every hover). The continuously-running render reads it live.
+  const hoveredIdRef = useRef<number | null>(null);
   const [rangeNM, setRangeNM] = useState<number>(300);
 
   // Center coordinates: Arabian Sea / West Coast Hub (18.9°N, 72.8°E)
@@ -40,12 +46,21 @@ export const PolarRadarScope: React.FC<PolarRadarScopeProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Make the canvas crisp on high-DPR (Retina) displays: scale the backing
+    // store by devicePixelRatio while drawing in logical (CSS) coordinates.
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = SCOPE_SIZE * dpr;
+    canvas.height = SCOPE_SIZE * dpr;
+    canvas.style.width = `${SCOPE_SIZE}px`;
+    canvas.style.height = `${SCOPE_SIZE}px`;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
     let animationFrameId: number;
     let sweepAngle = 0;
 
     const render = () => {
-      const width = canvas.width;
-      const height = canvas.height;
+      const width = SCOPE_SIZE;
+      const height = SCOPE_SIZE;
       const centerX = width / 2;
       const centerY = height / 2;
       const radius = (Math.min(width, height) / 2) - 24;
@@ -66,7 +81,7 @@ export const PolarRadarScope: React.FC<PolarRadarScopeProps> = ({
       ctx.lineWidth = 1;
       ctx.strokeStyle = 'rgba(20, 184, 166, 0.25)';
       const rings = [0.25, 0.5, 0.75, 1.0];
-      rings.forEach((rFactor, idx) => {
+      rings.forEach((rFactor) => {
         ctx.beginPath();
         ctx.arc(centerX, centerY, radius * rFactor, 0, Math.PI * 2);
         ctx.stroke();
@@ -127,7 +142,7 @@ export const PolarRadarScope: React.FC<PolarRadarScopeProps> = ({
         const blipY = centerY - Math.cos(angleRad) * (radius * normRadius);
 
         const isSelected = selectedAnomaly?.id === a.id;
-        const isHovered = hoveredAnomaly?.id === a.id;
+        const isHovered = hoveredIdRef.current === a.id;
         const isCritical = a.severity === 'critical';
 
         // Blip Color
@@ -169,32 +184,44 @@ export const PolarRadarScope: React.FC<PolarRadarScopeProps> = ({
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, [anomalies, selectedAnomaly, hoveredAnomaly, rangeNM]);
+  }, [anomalies, selectedAnomaly, rangeNM]);
 
-  // Handle canvas clicks to select closest blip
-  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  // Shared blip hit-test used by both click (select) and mousemove (hover).
+  const findBlipAt = (clientX: number, clientY: number, threshold: number): AnomalyAlert | null => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const clickY = e.clientY - rect.top;
-
-    const width = canvas.width;
-    const height = canvas.height;
-    const centerX = width / 2;
-    const centerY = height / 2;
-    const radius = (Math.min(width, height) / 2) - 24;
+    const px = clientX - rect.left;
+    const py = clientY - rect.top;
+    const centerX = SCOPE_SIZE / 2;
+    const centerY = SCOPE_SIZE / 2;
+    const radius = SCOPE_SIZE / 2 - 24;
 
     for (const a of anomalies) {
       const { angleRad, normRadius } = convertToPolar(a.latitude, a.longitude, rangeNM);
       const blipX = centerX + Math.sin(angleRad) * (radius * normRadius);
       const blipY = centerY - Math.cos(angleRad) * (radius * normRadius);
-      const dist = Math.hypot(clickX - blipX, clickY - blipY);
-      if (dist <= 16) {
-        onSelectAnomaly(a);
-        break;
+      if (Math.hypot(px - blipX, py - blipY) <= threshold) {
+        return a;
       }
     }
+    return null;
+  };
+
+  // Handle canvas clicks to select closest blip
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const hit = findBlipAt(e.clientX, e.clientY, 16);
+    if (hit) onSelectAnomaly(hit);
+  };
+
+  // Live hover highlight — writes to a ref so the animation loop is untouched.
+  const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const hit = findBlipAt(e.clientX, e.clientY, 12);
+    hoveredIdRef.current = hit ? hit.id : null;
+  };
+
+  const handleCanvasMouseLeave = () => {
+    hoveredIdRef.current = null;
   };
 
   return (
@@ -205,9 +232,13 @@ export const PolarRadarScope: React.FC<PolarRadarScopeProps> = ({
         <div className="relative p-2 rounded-full bg-gradient-to-b from-emerald-950/80 to-abyssal-950 border border-emerald-500/40 shadow-glow-emerald-lg">
           <canvas
             ref={canvasRef}
-            width={320}
-            height={320}
+            width={SCOPE_SIZE}
+            height={SCOPE_SIZE}
+            role="img"
+            aria-label={`Polar radar scope showing ${anomalies.length} ocean anomaly signals within ${rangeNM} nautical miles`}
             onClick={handleCanvasClick}
+            onMouseMove={handleCanvasMouseMove}
+            onMouseLeave={handleCanvasMouseLeave}
             className="rounded-full cursor-crosshair"
           />
 

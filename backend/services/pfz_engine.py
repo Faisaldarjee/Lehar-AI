@@ -197,10 +197,12 @@ def compute_mld(profile_id: int) -> float | None:
     return None
 
 
-def compute_thermocline_gradient(profile_id: int) -> dict:
+def compute_thermocline_gradient(profile_id: int) -> dict | None:
     """
-    Calculates the exact vertical temperature gradient (dT/dz) across depth layers.
-    Identifies maximum thermocline peak, depth range, and stratification strength.
+    Calculates the vertical temperature gradient (dT/dz) across depth layers.
+    Identifies the maximum thermocline peak, its depth range, and stratification strength.
+    Returns None when the profile has too few valid levels to resolve a gradient
+    (no fabricated fallback constants).
     """
     with get_connection() as conn:
         rows = conn.execute(
@@ -213,15 +215,10 @@ def compute_thermocline_gradient(profile_id: int) -> dict:
         ).fetchall()
 
     if len(rows) < 4:
-        return {
-            "thermocline_depth_m": 45.0,
-            "max_gradient_c_per_m": 0.08,
-            "thermocline_layer": (30.0, 65.0),
-            "stratification": "Moderate"
-        }
+        return None
 
     max_grad = 0.0
-    therm_depth = 40.0
+    therm_depth = None
     for i in range(len(rows) - 1):
         z1, t1 = rows[i]["depth"], rows[i]["temperature"]
         z2, t2 = rows[i + 1]["depth"], rows[i + 1]["temperature"]
@@ -231,6 +228,9 @@ def compute_thermocline_gradient(profile_id: int) -> dict:
             if grad > max_grad:
                 max_grad = grad
                 therm_depth = (z1 + z2) / 2.0
+
+    if therm_depth is None:
+        return None
 
     strat = "Strong" if max_grad > 0.12 else ("Moderate" if max_grad > 0.05 else "Weak")
     return {
@@ -462,10 +462,13 @@ def get_pfz_advisories(region: str = "arabian_sea", limit: int = 40) -> list[dic
         for c_lat, c_lon, tag in coastal_points:
             sat_data = get_nearest_satellite_data(c_lat, c_lon)
             sat_sst = sat_data["satellite_sst"]
-            chlorophyll = max(0.65, sat_data["chlorophyll_mg_m3"])  # Coastal upwelling boost
-            chl_grad = max(0.09, sat_data["chlorophyll_gradient"])
-            coastal_mld = 26.0  # Typical coastal thermocline mixing depth
+            chlorophyll = sat_data["chlorophyll_mg_m3"]
+            chl_grad = sat_data["chlorophyll_gradient"]
+            # No ARGO profile exists at these synthetic offshore points, so MLD is genuinely
+            # unknown here — pass None (neutral weight in scoring) rather than a fabricated value.
+            coastal_mld = None
 
+            # Score on the modeled satellite SST alone; there is no independent in-situ SST to fuse.
             rating, score = score_pfz_fused(sat_sst, coastal_mld, sat_sst, chlorophyll, chl_grad)
             h_info = nearest_harbour(c_lat, c_lon)
 
@@ -481,21 +484,21 @@ def get_pfz_advisories(region: str = "arabian_sea", limit: int = 40) -> list[dic
                 "float_id": f"COASTAL-PFZ-{h_name.split('(')[0].split(',')[0].strip().upper()}",
                 "latitude": c_lat,
                 "longitude": c_lon,
-                "date": "Today (Live Coastal Front)",
+                "date": "Modeled coastal front (climatology)",
                 "sst_celsius": sat_sst,
                 "satellite_sst": sat_sst,
                 "chlorophyll_mg_m3": chlorophyll,
                 "chlorophyll_gradient": chl_grad,
                 "mld_meters": coastal_mld,
                 "pfz_rating": rating,
-                "pfz_score": min(100, max(84, score)),
-                "data_confidence": "High (Coastal Satellite Multi-Front)",
-                "data_sources": ["NOAA High-Res MUR SST", "NASA VIIRS Coastal Chlorophyll", "INCOIS Coastal Climatology"],
+                "pfz_score": score,
+                "data_confidence": sat_data["data_confidence"],
+                "data_sources": sat_data["data_sources"],
                 "target_species": fish_species,
                 "nearest_harbour": h_info,
                 "advisory": (
-                    f"Prime Coastal Fishing Zone ({tag})! Rich chlorophyll bloom ({chlorophyll:.2f} mg/m³) "
-                    f"and SST {sat_sst:.1f}°C optimal for {', '.join(fish_species[:3])}. "
+                    f"Modeled coastal fishing zone ({tag}). Chlorophyll {chlorophyll:.2f} mg/m³ "
+                    f"and SST {sat_sst:.1f}°C favour {', '.join(fish_species[:3])}. "
                     f"Located {h_info['distance_km']} km {h_info['compass']} of {h_info['harbour']}."
                 )
             })
@@ -519,6 +522,7 @@ def get_pfz_advisories(region: str = "arabian_sea", limit: int = 40) -> list[dic
             continue
 
         mld = compute_mld(p["id"])
+        thermo = compute_thermocline_gradient(p["id"])
         lat = round(p["latitude"], 4)
         lon = round(p["longitude"], 4)
 
@@ -555,7 +559,7 @@ def get_pfz_advisories(region: str = "arabian_sea", limit: int = 40) -> list[dic
             "target_species": fish_species if fish_species else ["General Pelagic"],
             "nearest_harbour": harbour,
             "advisory": _generate_fused_advisory_text(
-                argo_sst, sat_sst, chlorophyll, mld, rating, harbour, fish_species
+                argo_sst, sat_sst, chlorophyll, mld, rating, harbour, fish_species, thermo
             ),
         })
 
@@ -571,28 +575,36 @@ def _generate_fused_advisory_text(
     mld: float | None,
     rating: str,
     harbour: dict,
-    species: list[str]
+    species: list[str],
+    thermo: dict | None = None,
 ) -> str:
     """Generate comprehensive scientific advisory text citing both Argo and Satellite indicators."""
     mld_text = f"Mixed Layer Depth {mld:.0f}m" if mld else "Subsurface MLD stable"
     species_text = ", ".join(species[:3]) if species else "pelagic fish"
     harbour_text = f"{harbour['distance_km']}km {harbour['compass']} of {harbour['harbour']}" if harbour else "offshore sector"
+    # Surface real ARGO-derived thermocline through the advisory string, since the PFZResponse
+    # schema strips unknown keys — this is the only channel that reaches the client.
+    therm_text = (
+        f" Thermocline ~{thermo['thermocline_depth_m']:.0f}m "
+        f"({thermo['stratification'].lower()} stratification, dT/dz {thermo['max_gradient_c_per_m']:.3f}°C/m)."
+        if thermo else ""
+    )
 
     if rating == "Excellent":
         return (
             f"High-confidence PFZ! Satellite Chlorophyll {chlorophyll:.2f} mg/m³ confirms rich bio-productivity. "
             f"Fused SST {argo_sst:.1f}°C (Argo) / {sat_sst:.1f}°C (Satellite) is optimal for {species_text}. "
-            f"{mld_text}. Location: {harbour_text}."
+            f"{mld_text}.{therm_text} Location: {harbour_text}."
         )
     elif rating == "Good":
         return (
             f"Favorable fishing zone. Satellite Chlorophyll {chlorophyll:.2f} mg/m³ with {mld_text}. "
-            f"SST {argo_sst:.1f}°C supports {species_text}. Location: {harbour_text}."
+            f"SST {argo_sst:.1f}°C supports {species_text}.{therm_text} Location: {harbour_text}."
         )
     elif rating == "Fair":
         return (
             f"Moderate fishing conditions. Chlorophyll {chlorophyll:.2f} mg/m³, SST {argo_sst:.1f}°C. "
-            f"{mld_text}. Location: {harbour_text}."
+            f"{mld_text}.{therm_text} Location: {harbour_text}."
         )
     else:
         return (
@@ -604,6 +616,10 @@ def _generate_fused_advisory_text(
 # =========================================================================
 # COASTAL THERMAL FRONT VECTORS & MULTI-SENSOR FRONTAL LINES
 # =========================================================================
+# NOTE: These are STATIC, ILLUSTRATIVE reference polylines for map overlay — hand-digitised
+# from typical seasonal shelf-front positions, NOT computed from live ARGO/satellite data.
+# The embedded SST / chlorophyll / depth values in each "advisory" are representative
+# examples, not real-time measurements. Do not present them as current observations.
 COASTAL_SECTOR_LINES = [
     {
         "id": "LINE-KONKAN-01",

@@ -84,12 +84,36 @@ def init_db():
                 notifications_enabled INTEGER DEFAULT 1
             );
 
+            CREATE TABLE IF NOT EXISTS chat_sessions (
+                session_id TEXT PRIMARY KEY,
+                active_location TEXT,
+                active_float_id TEXT,
+                active_species TEXT,
+                active_parameter TEXT,
+                last_updated REAL NOT NULL,
+                created_at TEXT DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL REFERENCES chat_sessions(session_id) ON DELETE CASCADE,
+                user_query TEXT NOT NULL,
+                bot_summary TEXT NOT NULL,
+                detected_location TEXT,
+                detected_float_id TEXT,
+                detected_species TEXT,
+                timestamp REAL NOT NULL,
+                created_at TEXT DEFAULT (datetime('now'))
+            );
+
             CREATE INDEX IF NOT EXISTS idx_profiles_float_id ON argo_profiles(float_id);
             CREATE INDEX IF NOT EXISTS idx_profiles_location ON argo_profiles(latitude, longitude);
             CREATE INDEX IF NOT EXISTS idx_profiles_date ON argo_profiles(date);
             CREATE INDEX IF NOT EXISTS idx_measurements_profile ON argo_measurements(profile_id);
             CREATE INDEX IF NOT EXISTS idx_anomalies_date ON anomaly_alerts(date);
             CREATE INDEX IF NOT EXISTS idx_telegram_active ON telegram_subscribers(last_active);
+            CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id);
+            CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(last_updated);
         """)
         conn.commit()
     print(f"[DB] Database initialized at {get_db_path()}")

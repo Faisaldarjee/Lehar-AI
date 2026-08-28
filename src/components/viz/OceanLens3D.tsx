@@ -10,14 +10,17 @@ interface OceanLens3DProps {
 export const OceanLens3D: React.FC<OceanLens3DProps> = ({ selectedFloatId, profileData = [] }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying] = useState(true);
-  const [currentDepthSlice, setCurrentDepthSlice] = useState(0);
-  const [tempAtDepth, setTempAtDepth] = useState<number | null>(null);
-  const [salAtDepth, setSalAtDepth] = useState<number | null>(null);
-  const [mldDepth, setMldDepth] = useState<number>(38);
+  const [mldDepth, setMldDepth] = useState<number | null>(null);
   const observedSampleCount = profileData.filter((sample) => typeof sample.depth === 'number').length;
 
   const isPlayingRef = useRef(true);
   isPlayingRef.current = isPlaying;
+
+  // Live telemetry is written directly to the DOM (throttled) to avoid a
+  // 60fps React re-render storm. These refs point at the display spans.
+  const depthValueRef = useRef<HTMLSpanElement>(null);
+  const tempValueRef = useRef<HTMLSpanElement>(null);
+  const salValueRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     const currentMount = mountRef.current;
@@ -119,8 +122,10 @@ export const OceanLens3D: React.FC<OceanLens3DProps> = ({ selectedFloatId, profi
     deepPlane.position.y = 0;
     scene.add(deepPlane);
 
-    // Calculate actual Mixed Layer Depth (MLD) from observed CTD profile
-    let calculatedMld = 38;
+    // Calculate actual Mixed Layer Depth (MLD) from observed CTD profile.
+    // Left null when there isn't enough observed data to detect a thermocline —
+    // we never fabricate a depth (honest "insufficient data" handling below).
+    let calculatedMld: number | null = null;
     if (observedProfile.length > 1) {
       const surfaceRef = observedProfile[0].temperature ?? 28.5;
       for (const sample of observedProfile) {
@@ -133,32 +138,36 @@ export const OceanLens3D: React.FC<OceanLens3DProps> = ({ selectedFloatId, profi
       }
     }
     setMldDepth(calculatedMld);
-    // Proportional Y in 3D cylinder ([0m, 2000m] mapped to [10, -10])
-    const mldY = 10 - (Math.min(calculatedMld, 2000) / 2000) * 20;
 
-    // Glowing MLD / Thermocline Boundary Ring & Translucent Disc
-    const mldRingGeo = new THREE.RingGeometry(7.6, 8.4, 32);
-    const mldRingMat = new THREE.MeshBasicMaterial({
-      color: 0xf59e0b,
-      side: THREE.DoubleSide,
-      transparent: true,
-      opacity: 0.85,
-    });
-    const mldRingMesh = new THREE.Mesh(mldRingGeo, mldRingMat);
-    mldRingMesh.rotation.x = Math.PI / 2;
-    mldRingMesh.position.y = mldY;
-    scene.add(mldRingMesh);
+    // Glowing MLD / Thermocline Boundary Ring & Translucent Disc — only drawn
+    // when a real MLD was detected from the observed profile.
+    if (calculatedMld !== null) {
+      // Proportional Y in 3D cylinder ([0m, 2000m] mapped to [10, -10])
+      const mldY = 10 - (Math.min(calculatedMld, 2000) / 2000) * 20;
 
-    const mldDiscMat = new THREE.MeshBasicMaterial({
-      color: 0xf59e0b,
-      side: THREE.DoubleSide,
-      transparent: true,
-      opacity: 0.12,
-    });
-    const mldDisc = new THREE.Mesh(surfaceGeo, mldDiscMat);
-    mldDisc.rotation.x = Math.PI / 2;
-    mldDisc.position.y = mldY;
-    scene.add(mldDisc);
+      const mldRingGeo = new THREE.RingGeometry(7.6, 8.4, 32);
+      const mldRingMat = new THREE.MeshBasicMaterial({
+        color: 0xf59e0b,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.85,
+      });
+      const mldRingMesh = new THREE.Mesh(mldRingGeo, mldRingMat);
+      mldRingMesh.rotation.x = Math.PI / 2;
+      mldRingMesh.position.y = mldY;
+      scene.add(mldRingMesh);
+
+      const mldDiscMat = new THREE.MeshBasicMaterial({
+        color: 0xf59e0b,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.12,
+      });
+      const mldDisc = new THREE.Mesh(surfaceGeo, mldDiscMat);
+      mldDisc.rotation.x = Math.PI / 2;
+      mldDisc.position.y = mldY;
+      scene.add(mldDisc);
+    }
 
     // Active Argo Float Indicator Sphere in 3D Space
     const floatGeo = new THREE.SphereGeometry(0.5, 16, 16);
@@ -241,6 +250,8 @@ export const OceanLens3D: React.FC<OceanLens3DProps> = ({ selectedFloatId, profi
     // Animation Loop
     let animationFrameId: number;
     let diveTime = 0;
+    // Throttle live telemetry DOM writes to ~4Hz instead of every frame.
+    let lastTelemetryWrite = 0;
 
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
@@ -254,9 +265,10 @@ export const OceanLens3D: React.FC<OceanLens3DProps> = ({ selectedFloatId, profi
         // Map Y from [10, -10] to Depth [0m, 2000m]
         const normalizedDepthRatio = (10 - currentY) / 20;
         const mappedDepth = Math.round(normalizedDepthRatio * 2000);
-        setCurrentDepthSlice(mappedDepth);
 
         // Interpolate profile values
+        let tempAtDepth: number;
+        let salAtDepth: number;
         if (observedProfile.length > 0) {
           const depthSpan = observedMaxDepth > 0 ? observedMaxDepth : 2000;
           const targetDepth = normalizedDepthRatio * depthSpan;
@@ -264,23 +276,26 @@ export const OceanLens3D: React.FC<OceanLens3DProps> = ({ selectedFloatId, profi
             Math.abs((curr.depth ?? 0) - targetDepth) < Math.abs((prev.depth ?? 0) - targetDepth) ? curr : prev
           );
 
-          if (nearestSample) {
-            setTempAtDepth(
-              typeof nearestSample.temperature === 'number'
-                ? parseFloat(nearestSample.temperature.toFixed(2))
-                : 28.5
-            );
-            setSalAtDepth(
-              typeof nearestSample.salinity === 'number'
-                ? parseFloat(nearestSample.salinity.toFixed(2))
-                : 35.2
-            );
-          }
+          tempAtDepth =
+            typeof nearestSample.temperature === 'number'
+              ? parseFloat(nearestSample.temperature.toFixed(2))
+              : 28.5;
+          salAtDepth =
+            typeof nearestSample.salinity === 'number'
+              ? parseFloat(nearestSample.salinity.toFixed(2))
+              : 35.2;
         } else {
-          const mockTemp = (29.5 - normalizedDepthRatio * 26.0).toFixed(2);
-          const mockSal = (35.0 + Math.sin(normalizedDepthRatio * Math.PI) * 0.8).toFixed(2);
-          setTempAtDepth(parseFloat(mockTemp));
-          setSalAtDepth(parseFloat(mockSal));
+          tempAtDepth = parseFloat((29.5 - normalizedDepthRatio * 26.0).toFixed(2));
+          salAtDepth = parseFloat((35.0 + Math.sin(normalizedDepthRatio * Math.PI) * 0.8).toFixed(2));
+        }
+
+        // Write telemetry straight to the DOM, throttled — no React setState per frame.
+        const now = performance.now();
+        if (now - lastTelemetryWrite > 240) {
+          lastTelemetryWrite = now;
+          if (depthValueRef.current) depthValueRef.current.textContent = `${mappedDepth}m`;
+          if (tempValueRef.current) tempValueRef.current.textContent = `${tempAtDepth}°C`;
+          if (salValueRef.current) salValueRef.current.textContent = `${salAtDepth} PSU`;
         }
 
         // Gentle auto rotation
@@ -316,16 +331,40 @@ export const OceanLens3D: React.FC<OceanLens3DProps> = ({ selectedFloatId, profi
       if (currentMount && renderer.domElement) {
         currentMount.removeChild(renderer.domElement);
       }
+
+      // Dispose ALL GPU resources (geometries, materials, textures) to avoid leaks.
+      const disposeMaterial = (material: THREE.Material) => {
+        for (const value of Object.values(material)) {
+          if (value && (value as THREE.Texture).isTexture) {
+            (value as THREE.Texture).dispose();
+          }
+        }
+        material.dispose();
+      };
+
+      scene.traverse((object) => {
+        const mesh = object as THREE.Mesh;
+        if (mesh.geometry) mesh.geometry.dispose();
+        const material = (mesh as unknown as { material?: THREE.Material | THREE.Material[] }).material;
+        if (material) {
+          if (Array.isArray(material)) {
+            material.forEach(disposeMaterial);
+          } else {
+            disposeMaterial(material);
+          }
+        }
+      });
+      scene.clear();
       renderer.dispose();
     };
   }, [profileData]);
 
   return (
     <div className="relative w-full h-full min-h-[420px] rounded-2xl overflow-hidden border border-abyssal-800/80 bg-abyssal-950 shadow-2xl flex flex-col">
-      
+
       {/* Top Telemetry Header */}
       <div className="absolute top-3 left-3 right-3 z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
-        
+
         {/* Title Badge */}
         <div className="flex items-center gap-2 bg-abyssal-950/90 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-ocean-cyan/30 text-ocean-cyan shadow-glow-cyan-sm pointer-events-auto">
           <Box className="w-4 h-4 text-ocean-cyan animate-spin" style={{ animationDuration: '10s' }} />
@@ -337,23 +376,35 @@ export const OceanLens3D: React.FC<OceanLens3DProps> = ({ selectedFloatId, profi
           </span>
         </div>
 
-        {/* Live Depth Telemetry Gauge */}
+        {/* Live Depth Telemetry Gauge (updated via DOM refs, not React state) */}
         <div className="flex items-center gap-2 bg-abyssal-950/95 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-abyssal-800 font-mono text-xs text-slate-300 shadow-xl pointer-events-auto">
           <span className="text-slate-500">Live Dive:</span>
-          <span className="font-bold text-white text-sm">{currentDepthSlice}m</span>
+          <span ref={depthValueRef} className="font-bold text-white text-sm">0m</span>
           <span className="text-slate-600">|</span>
-          <span className="text-ocean-cyan font-bold">{tempAtDepth}°C</span>
+          <span ref={tempValueRef} className="text-ocean-cyan font-bold">--°C</span>
           <span className="text-slate-600">|</span>
-          <span className="text-emerald-400 font-bold">{salAtDepth} PSU</span>
+          <span ref={salValueRef} className="text-emerald-400 font-bold">-- PSU</span>
         </div>
 
       </div>
 
       {/* Dynamic MLD Thermocline Marker */}
-      <div className="absolute top-14 left-3 z-10 flex items-center gap-2 bg-amber-950/90 backdrop-blur-md px-3 py-1 rounded-xl border border-amber-500/40 text-amber-300 font-mono text-[11px] shadow-lg pointer-events-auto">
-        <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping shrink-0" />
+      <div
+        className={`absolute top-14 left-3 z-10 flex items-center gap-2 backdrop-blur-md px-3 py-1 rounded-xl border font-mono text-[11px] shadow-lg pointer-events-auto ${
+          mldDepth !== null
+            ? 'bg-amber-950/90 border-amber-500/40 text-amber-300'
+            : 'bg-abyssal-900/90 border-abyssal-700 text-slate-400'
+        }`}
+      >
+        <span
+          className={`w-2 h-2 rounded-full shrink-0 ${
+            mldDepth !== null ? 'bg-amber-400 animate-ping' : 'bg-slate-600'
+          }`}
+        />
         <span className="font-bold">
-          Mixed Layer Depth (MLD): {mldDepth}m — Thermocline Boundary
+          {mldDepth !== null
+            ? `Mixed Layer Depth (MLD): ${mldDepth}m — Thermocline Boundary`
+            : 'Mixed Layer Depth (MLD): insufficient data — load a CTD cast'}
         </span>
       </div>
 
@@ -374,7 +425,7 @@ export const OceanLens3D: React.FC<OceanLens3DProps> = ({ selectedFloatId, profi
         </div>
         <div className="flex items-center gap-1.5 pr-2 border-r border-abyssal-800">
           <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-sm"></span>
-          <span className="text-amber-300 font-semibold">Thermocline ({mldDepth}m)</span>
+          <span className="text-amber-300 font-semibold">Thermocline ({mldDepth !== null ? `${mldDepth}m` : 'n/a'})</span>
         </div>
         <div className="flex items-center gap-1.5 pr-2 border-r border-abyssal-800">
           <span className="w-2.5 h-2.5 rounded-full bg-teal-500 shadow-sm"></span>
@@ -391,6 +442,7 @@ export const OceanLens3D: React.FC<OceanLens3DProps> = ({ selectedFloatId, profi
         <button
           type="button"
           onClick={() => setIsPlaying(!isPlaying)}
+          aria-label={isPlaying ? 'Pause depth dive animation' : 'Resume depth dive animation'}
           className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-abyssal-900/90 hover:bg-abyssal-850 border border-abyssal-800 text-xs text-slate-300 hover:text-white transition shadow-2xl cursor-pointer active:scale-95"
         >
           {isPlaying ? <Pause className="w-3.5 h-3.5 text-amber-400" /> : <Play className="w-3.5 h-3.5 text-emerald-400" />}

@@ -81,8 +81,9 @@ def calculate_solunar_activity(dt: datetime | None = None) -> Dict[str, Any]:
         "solunar_score": score,
         "solunar_rating": rating,
         "moon_age_days": round(moon_age, 1),
-        "major_window_morning": "05:30 AM – 08:30 AM (Dawn High-Tide)",
-        "major_window_evening": "05:00 PM – 08:00 PM (Dusk Influx)"
+        # Typical dawn/dusk feeding windows (approximate, not location- or tide-table-specific).
+        "major_window_morning": "~05:30–08:30 AM (typical dawn window)",
+        "major_window_evening": "~05:00–08:00 PM (typical dusk window)"
     }
 
 
@@ -290,5 +291,5 @@ def format_marine_weather_response(
         "stats": stats,
         "weather_data": weather,
         "query_route": "marine_weather_safety",
-        "data_sources": ["INCOIS Marine Climatology", "Open-Meteo High-Res Marine ECMWF", "IMD Coastal Safety"]
+        "data_sources": ["Open-Meteo Marine API (ECMWF wave model)", "Open-Meteo Forecast API (wind)"]
     }

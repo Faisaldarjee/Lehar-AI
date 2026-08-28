@@ -89,6 +89,12 @@ export async function getSystemStatus(): Promise<import('../types').SystemStatus
   return data;
 }
 
+/**
+ * Hardcoded sample anomalies used ONLY as an offline fallback when the backend
+ * `/api/anomalies` endpoint is unreachable or returns nothing. Responses tagged
+ * with `source: 'sample'` should be surfaced in the UI as demo/offline data, not
+ * presented as live detections.
+ */
 export const CANONICAL_ANOMALIES: AnomalyAlert[] = [
   {
     id: 1,
@@ -170,16 +176,19 @@ export const CANONICAL_ANOMALIES: AnomalyAlert[] = [
   }
 ];
 
-/** Get anomaly alerts */
-export async function getAnomalies(limit = 20): Promise<{ anomalies: AnomalyAlert[]; count: number }> {
+/** Get anomaly alerts. Includes `source: 'live' | 'sample'` so the UI can flag
+ *  when it is showing the offline sample fallback rather than live detections. */
+export async function getAnomalies(
+  limit = 20
+): Promise<{ anomalies: AnomalyAlert[]; count: number; source: 'live' | 'sample' }> {
   try {
     const { data } = await api.get('/api/anomalies', { params: { limit } });
     if (data && data.anomalies && data.anomalies.length > 0) {
-      return data;
+      return { ...data, source: 'live' };
     }
-    return { anomalies: CANONICAL_ANOMALIES, count: CANONICAL_ANOMALIES.length };
+    return { anomalies: CANONICAL_ANOMALIES, count: CANONICAL_ANOMALIES.length, source: 'sample' };
   } catch {
-    return { anomalies: CANONICAL_ANOMALIES, count: CANONICAL_ANOMALIES.length };
+    return { anomalies: CANONICAL_ANOMALIES, count: CANONICAL_ANOMALIES.length, source: 'sample' };
   }
 }
 

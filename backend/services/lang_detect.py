@@ -17,9 +17,12 @@ Supports:
 import re
 from typing import Dict, Any
 
-# Common Romanized Hindi / Hinglish tokens
+# Common Romanized Hindi / Hinglish tokens.
+# NOTE: "me" is intentionally excluded — it is a very common English word (object pronoun)
+# and caused English sentences to be misclassified as Hinglish. The Devanagari-derived
+# "mein" is kept as it is unambiguous.
 HINGLISH_KEYWORDS = {
-    "hai", "hain", "kya", "kaisa", "kaisi", "kaise", "mein", "me", "ka", "ki", "ke",
+    "hai", "hain", "kya", "kaisa", "kaisi", "kaise", "mein", "ka", "ki", "ke",
     "ko", "se", "par", "paas", "kahaan", "kahan", "kitna", "kitni", "kitne", "pakad",
     "machli", "machhli", "samundar", "paani", "taapman", "batao", "bataiye", "dikhaye",
     "kardo", "karo", "raha", "rahi", "aaj", "kal", "abhi", "kripya", "namaste", "chahiye",

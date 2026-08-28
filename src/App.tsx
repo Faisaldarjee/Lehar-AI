@@ -1,22 +1,26 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy } from 'react';
 import { Navbar } from './components/layout/Navbar';
 import { ChatPanel } from './components/chat/ChatPanel';
-import { OceanMap } from './components/viz/OceanMap';
-import { DepthChart } from './components/viz/DepthChart';
-import { OceanLens3D } from './components/viz/OceanLens3D';
-import { AnomalyRadar } from './components/anomaly/AnomalyRadar';
-import { WhatsAppSimulator } from './components/whatsapp/WhatsAppSimulator';
-import { ArchitecturePipeline } from './components/pipeline/ArchitecturePipeline';
 import { TelegramModal } from './components/common/TelegramModal';
 import { OceanAtmosphere } from './components/common/OceanAtmosphere';
 import { HudCornerBrackets } from './components/common/HudCornerBrackets';
+import { ViewBoundary } from './components/common/ErrorBoundary';
+
+// Heavy visualization views are code-split so the initial chat view does not
+// eagerly download three.js (3D), leaflet (map) or recharts (charts). Each
+// loads on demand into its own chunk when its stage/tab is first shown.
+const OceanMap = lazy(() => import('./components/viz/OceanMap').then((m) => ({ default: m.OceanMap })));
+const DepthChart = lazy(() => import('./components/viz/DepthChart').then((m) => ({ default: m.DepthChart })));
+const OceanLens3D = lazy(() => import('./components/viz/OceanLens3D').then((m) => ({ default: m.OceanLens3D })));
+const AnomalyRadar = lazy(() => import('./components/anomaly/AnomalyRadar').then((m) => ({ default: m.AnomalyRadar })));
+const WhatsAppSimulator = lazy(() => import('./components/whatsapp/WhatsAppSimulator').then((m) => ({ default: m.WhatsAppSimulator })));
+const ArchitecturePipeline = lazy(() => import('./components/pipeline/ArchitecturePipeline').then((m) => ({ default: m.ArchitecturePipeline })));
 import { 
   MapPin, 
   LineChart, 
   Box, 
-  Compass, 
-  Waves, 
-  ArrowRight
+  Compass,
+  Waves
 } from 'lucide-react';
 
 import {
@@ -36,7 +40,13 @@ import type {
   AnomalyAlert,
   ChartData,
   MapMarker,
+  DepthMeasurement,
 } from './types';
+
+// Stable empty profile reference — a fresh `[]` literal in JSX would be a new
+// array identity on every render, forcing OceanLens3D to rebuild its entire
+// three.js scene each time App re-renders. A module-level constant is referentially stable.
+const EMPTY_PROFILE: DepthMeasurement[] = [];
 
 export default function App() {
   const [currentMode, setCurrentMode] = useState<AppMode>('chat');
@@ -46,6 +56,7 @@ export default function App() {
   // Core Application Data State
   const [floats, setFloats] = useState<FloatSummary[]>([]);
   const [anomalies, setAnomalies] = useState<AnomalyAlert[]>([]);
+  const [anomaliesAreSample, setAnomaliesAreSample] = useState<boolean>(false);
   const [isScanningAnomalies, setIsScanningAnomalies] = useState<boolean>(false);
 
   // Chat Conversation State
@@ -55,7 +66,9 @@ export default function App() {
 
   // Smart Stage Visualization State (Chat View)
   const [stageView, setStageView] = useState<'map' | 'chart' | '3d'>('map');
-  const [hasEverQueried, setHasEverQueried] = useState<boolean>(false);
+  // Tracks whether the user has ever run a query. The value is currently only
+  // written (never read), so we keep just the setter to preserve existing calls.
+  const [, setHasEverQueried] = useState<boolean>(false);
 
   // Ocean Explorer View Toggle State (Map View)
   const [explorerView, setExplorerView] = useState<'map' | '3d'>('map');
@@ -73,7 +86,7 @@ export default function App() {
         const [statsData, floatsData, anomaliesData] = await Promise.all([
           getStats().catch(() => null),
           getFloats().catch(() => ({ floats: [], count: 0 })),
-          getAnomalies().catch(() => ({ anomalies: [], count: 0 })),
+          getAnomalies().catch(() => ({ anomalies: [] as AnomalyAlert[], count: 0, source: 'sample' as const })),
         ]);
 
         if (statsData) {
@@ -89,6 +102,7 @@ export default function App() {
 
         if (anomaliesData.anomalies.length > 0) {
           setAnomalies(anomaliesData.anomalies);
+          setAnomaliesAreSample(anomaliesData.source === 'sample');
         }
 
         // Pre-fetch initial sample depth profile for when charts are opened
@@ -250,6 +264,7 @@ export default function App() {
       await triggerAnomalyScan();
       const fresh = await getAnomalies();
       setAnomalies(fresh.anomalies);
+      setAnomaliesAreSample(fresh.source === 'sample');
     } catch (err) {
       console.warn('Scan trigger error:', err);
     } finally {
@@ -402,6 +417,7 @@ export default function App() {
                 </div>
               ) : (
                 <div className="flex-1 w-full h-full relative overflow-hidden">
+                  <ViewBoundary label={stageView === 'map' ? 'Fleet Map' : stageView === 'chart' ? 'CTD Chart' : '3D OceanLens'}>
                   {stageView === 'map' && (
                     <OceanMap
                       floats={floats}
@@ -421,9 +437,10 @@ export default function App() {
                   {stageView === '3d' && (
                     <OceanLens3D
                       selectedFloatId={selectedFloatId}
-                      profileData={activeChart?.chart_type === 'depth_profile' ? activeChart.data : []}
+                      profileData={activeChart?.chart_type === 'depth_profile' ? activeChart.data : EMPTY_PROFILE}
                     />
                   )}
+                  </ViewBoundary>
                 </div>
               )}
 
@@ -484,6 +501,7 @@ export default function App() {
             </div>
 
             <div className="flex-1 w-full h-full relative overflow-hidden">
+              <ViewBoundary label={explorerView === 'map' ? '2D Fleet Map' : '3D OceanLens'}>
               {explorerView === 'map' ? (
                 <OceanMap
                   floats={floats}
@@ -495,9 +513,10 @@ export default function App() {
               ) : (
                 <OceanLens3D
                   selectedFloatId={selectedFloatId}
-                  profileData={activeChart?.chart_type === 'depth_profile' ? activeChart.data : []}
+                  profileData={activeChart?.chart_type === 'depth_profile' ? activeChart.data : EMPTY_PROFILE}
                 />
               )}
+              </ViewBoundary>
             </div>
           </div>
         )}
@@ -506,8 +525,10 @@ export default function App() {
         {currentMode === 'anomaly' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 flex-1 h-full min-h-0 overflow-y-auto custom-scrollbar">
             <div className="lg:col-span-6 h-full min-h-0 flex flex-col overflow-hidden">
+              <ViewBoundary label="Anomaly Radar">
               <AnomalyRadar
                 anomalies={anomalies}
+                isSampleData={anomaliesAreSample}
                 onSelectAnomaly={handleSelectAnomaly}
                 onHoverAnomaly={(anomaly) => {
                   if (anomaly) {
@@ -525,8 +546,10 @@ export default function App() {
                 onTriggerScan={handleTriggerAnomalyScan}
                 isScanning={isScanningAnomalies}
               />
+              </ViewBoundary>
             </div>
             <div className="lg:col-span-6 h-full min-h-0 rounded-2xl overflow-hidden shadow-2xl">
+              <ViewBoundary label="Anomaly Map">
               <OceanMap
                 floats={floats}
                 highlightMarkers={
@@ -543,6 +566,7 @@ export default function App() {
                 onSelectFloat={handleSelectFloat}
                 selectedFloatId={selectedFloatId}
               />
+              </ViewBoundary>
             </div>
           </div>
         )}
@@ -550,14 +574,18 @@ export default function App() {
         {/* VIEW 4: WHATSAPP COASTAL BOT SIMULATOR */}
         {currentMode === 'whatsapp' && (
           <div className="flex-1 h-full min-h-0 overflow-y-auto custom-scrollbar">
-            <WhatsAppSimulator selectedLanguage={selectedLanguage} />
+            <ViewBoundary label="WhatsApp Simulator">
+              <WhatsAppSimulator selectedLanguage={selectedLanguage} />
+            </ViewBoundary>
           </div>
         )}
 
         {/* VIEW 5: SYSTEM ARCHITECTURE PIPELINE */}
         {currentMode === 'pipeline' && (
           <div className="flex-1 h-full min-h-0 overflow-y-auto custom-scrollbar">
-            <ArchitecturePipeline />
+            <ViewBoundary label="Architecture Pipeline">
+              <ArchitecturePipeline />
+            </ViewBoundary>
           </div>
         )}
 

@@ -5,8 +5,10 @@ import { useVoice } from '../../hooks/useVoice';
 interface ChatInputProps {
   onSendMessage: (text: string, mode?: 'text' | 'voice') => void;
   isLoading: boolean;
-  language?: string;
+  /** App-level selected language (controlled). Drives the mic speech locale. */
   selectedLanguage?: string;
+  /** Called when the user overrides the speech/language locale from the menu. */
+  onSelectLanguage?: (lang: string) => void;
 }
 
 const REGIONAL_SPEECH_OPTIONS = [
@@ -21,19 +23,30 @@ const REGIONAL_SPEECH_OPTIONS = [
 export const ChatInput: React.FC<ChatInputProps> = ({
   onSendMessage,
   isLoading,
+  selectedLanguage,
+  onSelectLanguage,
 }) => {
   const [inputText, setInputText] = useState('');
-  const [micLang, setMicLang] = useState<string>('en-IN');
+  const [micLang, setMicLang] = useState<string>(selectedLanguage || 'en-IN');
   const [showLangMenu, setShowLangMenu] = useState<boolean>(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const langMenuRef = useRef<HTMLDivElement>(null);
+  // Tracks whether the current draft came from the mic (voice) vs typing (text),
+  // so we can report the correct input mode to the backend on submit.
+  const cameFromVoiceRef = useRef<boolean>(false);
 
   const { isListening, errorMsg, toggleListening } = useVoice({
     onTranscriptChange: (text) => {
       setInputText(text);
+      cameFromVoiceRef.current = true;
     },
     language: micLang,
   });
+
+  // Keep the mic locale in sync when the app-level language changes.
+  useEffect(() => {
+    if (selectedLanguage) setMicLang(selectedLanguage);
+  }, [selectedLanguage]);
 
   // Focus input when listening starts
   useEffect(() => {
@@ -56,13 +69,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!inputText.trim() || isLoading) return;
-    
+
     if (isListening) {
       toggleListening();
     }
 
-    onSendMessage(inputText.trim(), 'text');
+    // Report 'voice' when the text was captured via the mic, otherwise 'text'.
+    const mode: 'text' | 'voice' = cameFromVoiceRef.current ? 'voice' : 'text';
+    onSendMessage(inputText.trim(), mode);
     setInputText('');
+    cameFromVoiceRef.current = false;
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -116,6 +132,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           <button
             type="button"
             onClick={toggleListening}
+            aria-label={isListening ? 'Stop voice input' : `Start voice input in ${activeOption.label}`}
+            aria-pressed={isListening}
             title={isListening ? 'Stop Listening (Click to stop)' : `Click to Speak in ${activeOption.label}`}
             className={`p-2 rounded-xl transition-all duration-200 shrink-0 cursor-pointer ${
               isListening
@@ -153,6 +171,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   type="button"
                   onClick={() => {
                     setMicLang(opt.code);
+                    onSelectLanguage?.(opt.code);
                     setShowLangMenu(false);
                   }}
                   className={`w-full flex items-center justify-between px-2 py-1 rounded-lg text-left text-xs transition cursor-pointer ${
@@ -174,7 +193,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           ref={inputRef}
           type="text"
           value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
+          onChange={(e) => {
+            setInputText(e.target.value);
+            cameFromVoiceRef.current = false;
+          }}
           onKeyDown={handleKeyDown}
           placeholder={
             isListening 
@@ -190,6 +212,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           <button
             type="button"
             onClick={() => setInputText('')}
+            aria-label="Clear input text"
             className="p-1 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-abyssal-800 transition mr-1 cursor-pointer"
           >
             <X className="w-3.5 h-3.5" />

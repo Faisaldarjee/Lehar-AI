@@ -271,27 +271,46 @@ def classify_query_intent(query: str) -> str:
         "lahare", "lehar", "toofan", "rough sea", "मौसम", "हवामान", "लहरें", "हवा", "तूफान", "सुरक्षित", "सावधानी", "लाटा"
     ]
 
-    rag_triggers = [
-        "what is", "explain", "how does", "why does", "define", "meaning of",
-        "iod", "indian ocean dipole", "marine heatwave", "mhw", "hobday", "bleaching",
-        "thermocline", "mld", "mixed layer depth", "oxygen minimum zone", "omz",
-        "fishing ban", "ban period", "wmo", "incois", "upwelling", "barrier layer"
+    # RAG-only triggers: purely conceptual / definitional / policy questions
+    rag_only_triggers = [
+        "explain", "how does", "why does", "define", "meaning of",
+        "iod", "indian ocean dipole", "hobday", "bleaching",
+        "oxygen minimum zone", "omz",
+        "fishing ban", "ban period", "wmo", "upwelling", "barrier layer"
     ]
 
+    # Broad data-oriented triggers: any query asking for actual measurements, locations, or live data
     sql_triggers = [
-        "how many", "count", "average temperature", "salinity at", "depth profile",
-        "temperature near", "latest float", "floats in", "coordinates", "today", "aaj",
-        "machhli kahaan", "fishing spot", "where to catch", "sst near"
+        "how many", "count", "average", "salinity", "depth profile", "depth",
+        "temperature", "taapman", "tapman", "tapmaan", "sst", "sea surface",
+        "latest", "float", "floats", "argo", "coordinates", "today", "aaj",
+        "machhli", "machli", "machali", "machhali", "fishing", "fish", "catch",
+        "where", "kahan", "kahaan", "kidhar", "near", "paas", "pass",
+        "zone", "pfz", "potential fishing", "fishing zone",
+        "coast", "coastal", "arabian", "bengal", "bay of bengal",
+        "mumbai", "chennai", "kochi", "vizag", "goa", "kolkata", "paradip",
+        "gujarat", "kerala", "tamil", "andhra", "odisha", "maharashtra",
+        "samundar", "sagar", "ocean", "sea", "marine",
+        "chlorophyll", "chl", "optimal", "best", "top",
+        "current", "currents", "mixed layer", "mld", "thermocline",
+        "heatwave", "marine heatwave", "mhw", "anomaly", "anomalies",
+        "incois", "alert", "warning",
+        "taapman", "namak", "khara", "khaarapan", "गहराई", "तापमान", "नमक",
+        "मछली", "मत्स्य", "समुद्र", "सागर", "तट", "मिलेगी", "पकड़",
+        "மீன்", "கடல்", "வெப்பநிலை", "చేపలు", "సముద్రం"
     ]
 
     if any(trigger in lowered for trigger in weather_triggers):
         return "marine_weather_safety"
 
-    has_rag = any(trigger in lowered for trigger in rag_triggers)
+    has_rag = any(trigger in lowered for trigger in rag_only_triggers)
     has_sql = any(trigger in lowered for trigger in sql_triggers)
 
-    if has_rag and has_sql:
-        return "hybrid"
+    # Data queries always take priority — "what is the temperature" is a data question, not conceptual
+    if has_sql:
+        if has_rag:
+            return "hybrid"
+        return "sql_data"
     elif has_rag:
         return "ocean_science_rag"
     return "sql_data"
