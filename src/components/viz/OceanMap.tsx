@@ -380,21 +380,23 @@ function createVesselIcon() {
   });
 }
 
-// Thermal palette for Satellite SST (Blue 26°C -> Cyan 27.5°C -> Yellow 28.5°C -> Red 30°C)
+// Thermal palette for Satellite SST (Deep Indigo -> Ocean Blue -> Cyan -> Amber -> Coral -> Crimson)
 function getSSTColor(sst: number): string {
-  if (sst >= 29.5) return '#ef4444'; // Hot red
-  if (sst >= 28.5) return '#f97316'; // Warm orange
-  if (sst >= 27.5) return '#06b6d4'; // Cyan
-  if (sst >= 26.5) return '#0d9488'; // Teal
-  return '#3b82f6';                  // Blue
+  if (sst >= 29.5) return '#f43f5e'; // Radiant Hot Rose/Crimson
+  if (sst >= 28.5) return '#f97316'; // Warm Coral Orange
+  if (sst >= 27.5) return '#fbbf24'; // Golden Amber
+  if (sst >= 26.5) return '#06b6d4'; // Tropical Cyan
+  if (sst >= 25.0) return '#0284c7'; // Pelagic Ocean Blue
+  return '#1e3a8a';                  // Deep Cool Indigo
 }
 
-// Bio-productivity palette for Chlorophyll-a (mg/m³)
+// Bio-productivity palette for Chlorophyll-a (mg/m³) (Oligotrophic Blue -> Seafoam -> Green -> Emerald -> Neon Lime)
 function getChlColor(chl: number): string {
-  if (chl >= 1.5) return '#059669'; // High emerald
-  if (chl >= 0.8) return '#10b981'; // Green
-  if (chl >= 0.4) return '#34d399'; // Mint green
-  return '#14b8a6';                 // Cyan
+  if (chl >= 1.8) return '#84cc16'; // Hyper-Bloom Neon Lime
+  if (chl >= 1.0) return '#22c55e'; // High Feeding Emerald
+  if (chl >= 0.5) return '#10b981'; // Productive Green
+  if (chl >= 0.25) return '#14b8a6'; // Coastal Seafoam
+  return '#0369a1';                 // Oligotrophic Deep Blue
 }
 
 function haversineDistKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -1126,26 +1128,27 @@ export const OceanMap: React.FC<OceanMapProps> = ({
         <MapSectorPanner target={targetSector} />
         <MapZoomWatcher onZoomChange={setCurrentZoom} />
 
-        {/* Esri World Dark Gray Canvas Basemap (Zero Watermark / No API Key Required) */}
+        {/* CartoDB Fastly Dark Matter Basemap (Zero Watermark / Deep Navy Ocean Aesthetic) */}
         <TileLayer
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
-          maxZoom={16}
+          url="https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png"
+          subdomains={['a', 'b', 'c', 'd']}
+          maxZoom={19}
         />
 
-        {/* SATELLITE SST HEATMAP OVERLAY LAYER */}
+        {/* SATELLITE SST HEATMAP OVERLAY LAYER (SMOOTH RADIANT OCEAN THERMAL FIELD) */}
         {showSatelliteSST &&
           visibleSatelliteGrid.map((pt) => {
             const color = getSSTColor(pt.sst);
+            const dynamicRadius = currentZoom <= 5 ? 18 : currentZoom <= 7 ? 26 : 38;
             return (
               <CircleMarker
                 key={`sat-sst-${pt.lat}-${pt.lon}`}
                 center={[pt.lat, pt.lon]}
-                radius={7}
+                radius={dynamicRadius}
                 pathOptions={{
-                  color,
+                  stroke: false,
                   fillColor: color,
-                  fillOpacity: 0.40,
-                  weight: 0.5,
+                  fillOpacity: 0.52,
                 }}
               >
                 <Popup>
@@ -1161,21 +1164,21 @@ export const OceanMap: React.FC<OceanMapProps> = ({
             );
           })}
 
-        {/* SATELLITE CHLOROPHYLL-A BIO-PRODUCTIVITY OVERLAY LAYER */}
+        {/* SATELLITE CHLOROPHYLL-A BIO-PRODUCTIVITY OVERLAY LAYER (SMOOTH CONTINUOUS PLANKTON BLOOM) */}
         {showChlorophyll &&
           visibleSatelliteGrid.map((pt) => {
             const chl = pt.chlorophyll;
             const color = getChlColor(chl);
+            const dynamicRadius = currentZoom <= 5 ? 19 : currentZoom <= 7 ? 28 : 40;
             return (
               <CircleMarker
                 key={`sat-chl-${pt.lat}-${pt.lon}`}
                 center={[pt.lat, pt.lon]}
-                radius={8}
+                radius={dynamicRadius}
                 pathOptions={{
-                  color,
+                  stroke: false,
                   fillColor: color,
-                  fillOpacity: 0.45,
-                  weight: 0.5,
+                  fillOpacity: 0.55,
                 }}
               >
                 <Popup>
