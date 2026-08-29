@@ -24,6 +24,7 @@ interface AnomalyRadarProps {
   onHoverAnomaly?: (anomaly: AnomalyAlert | null) => void;
   onTriggerScan?: () => void;
   isScanning?: boolean;
+  onViewIn3D?: (floatId: string, isMHW: boolean) => void;
 }
 
 // Deterministic rule-based impact engine. NOTE: these are hardcoded heuristic
@@ -75,6 +76,7 @@ export const AnomalyRadar: React.FC<AnomalyRadarProps> = ({
   onHoverAnomaly,
   onTriggerScan,
   isScanning = false,
+  onViewIn3D,
 }) => {
   const [filterSeverity, setFilterSeverity] = useState<string>('all');
   const [activeAlertId, setActiveAlertId] = useState<number | null>(null);
@@ -345,13 +347,31 @@ export const AnomalyRadar: React.FC<AnomalyRadarProps> = ({
                     <span>Probe #{alert.float_id || 'Alert-Probe'}</span>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => handleCardClick(alert)}
-                    className="flex items-center gap-0.5 text-ocean-cyan hover:underline cursor-pointer"
-                  >
-                    View on Map <ArrowUpRight className="w-3 h-3" />
-                  </button>
+                  <div className="flex items-center gap-3">
+                    {onViewIn3D && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const isMHW = !!alert.mhw_category || alert.parameter.toLowerCase().includes('temp');
+                          onViewIn3D(alert.float_id || '2902150', isMHW);
+                        }}
+                        className="flex items-center gap-1 text-teal-300 hover:text-teal-200 hover:underline cursor-pointer font-bold bg-teal-950/80 px-2 py-0.5 rounded border border-teal-500/40"
+                        title="Open 3D Ocean Digital Twin for this anomaly"
+                      >
+                        <span>🌊 3D Dive</span>
+                        <ArrowUpRight className="w-3 h-3 text-teal-300" />
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => handleCardClick(alert)}
+                      className="flex items-center gap-0.5 text-ocean-cyan hover:underline cursor-pointer"
+                    >
+                      View on Map <ArrowUpRight className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
               </div>
             );

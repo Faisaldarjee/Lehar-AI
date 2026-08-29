@@ -13,6 +13,7 @@ import { ViewBoundary } from './components/common/ErrorBoundary';
 const OceanMap = lazy(() => import('./components/viz/OceanMap').then((m) => ({ default: m.OceanMap })));
 const DepthChart = lazy(() => import('./components/viz/DepthChart').then((m) => ({ default: m.DepthChart })));
 const OceanLens3D = lazy(() => import('./components/viz/OceanLens3D').then((m) => ({ default: m.OceanLens3D })));
+const OceanTwin = lazy(() => import('./components/viz/OceanTwin').then((m) => ({ default: m.OceanTwin })));
 const AnomalyRadar = lazy(() => import('./components/anomaly/AnomalyRadar').then((m) => ({ default: m.AnomalyRadar })));
 const WhatsAppSimulator = lazy(() => import('./components/whatsapp/WhatsAppSimulator').then((m) => ({ default: m.WhatsAppSimulator })));
 const ArchitecturePipeline = lazy(() => import('./components/pipeline/ArchitecturePipeline').then((m) => ({ default: m.ArchitecturePipeline })));
@@ -79,6 +80,7 @@ export default function App() {
 
   // Ocean Explorer View Toggle State (Map View)
   const [explorerView, setExplorerView] = useState<'map' | '3d'>('map');
+  const [isMHW3D, setIsMHW3D] = useState<boolean>(false);
 
   // Visualization Selection State
   const [activeChart, setActiveChart] = useState<ChartData | null>(null);
@@ -461,6 +463,7 @@ export default function App() {
                     <OceanLens3D
                       selectedFloatId={selectedFloatId}
                       profileData={activeChart?.chart_type === 'depth_profile' ? activeChart.data : EMPTY_PROFILE}
+                      isMHWMode={isMHW3D}
                     />
                   )}
                   </ViewBoundary>
@@ -537,6 +540,7 @@ export default function App() {
                 <OceanLens3D
                   selectedFloatId={selectedFloatId}
                   profileData={activeChart?.chart_type === 'depth_profile' ? activeChart.data : EMPTY_PROFILE}
+                  isMHWMode={isMHW3D}
                 />
               )}
               </ViewBoundary>
@@ -568,6 +572,12 @@ export default function App() {
                 }}
                 onTriggerScan={handleTriggerAnomalyScan}
                 isScanning={isScanningAnomalies}
+                onViewIn3D={(floatId, isMHW) => {
+                  setIsMHW3D(isMHW);
+                  handleSelectFloat(floatId);
+                  setCurrentMode('map');
+                  setExplorerView('3d');
+                }}
               />
               </ViewBoundary>
             </div>
@@ -609,6 +619,17 @@ export default function App() {
             <ViewBoundary label="Architecture Pipeline">
               <ArchitecturePipeline />
             </ViewBoundary>
+          </div>
+        )}
+
+        {/* VIEW 6: OCEAN TWIN (IMMERSIVE 3D DIGITAL TWIN) */}
+        {currentMode === 'twin' && (
+          <div className="flex-1 min-h-0 w-full overflow-hidden">
+            <OceanTwin
+              selectedFloatId={selectedFloatId}
+              profileData={activeChart?.chart_type === 'depth_profile' ? activeChart.data : EMPTY_PROFILE}
+              isMHWMode={isMHW3D}
+            />
           </div>
         )}
 

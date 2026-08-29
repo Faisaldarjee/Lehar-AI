@@ -284,6 +284,6 @@ export interface SystemStatusResponse {
   };
 }
 
-export type AppMode = 'chat' | 'map' | 'anomaly' | 'whatsapp' | 'pipeline' | '3d';
+export type AppMode = 'chat' | 'map' | 'anomaly' | 'whatsapp' | 'pipeline' | '3d' | 'twin';
 export type UserRole = 'fisherman' | 'oceanographer' | 'student';
 

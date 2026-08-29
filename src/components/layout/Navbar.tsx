@@ -12,7 +12,8 @@ import {
   FileText,
   Anchor,
   Microscope,
-  GraduationCap
+  GraduationCap,
+  Box
 } from 'lucide-react';
 import type { AppMode, UserRole } from '../../types';
 
@@ -82,6 +83,14 @@ export const Navbar: React.FC<NavbarProps> = ({
       desc: '4-layer dataflow, NetCDF ingestion & Groq benchmarks',
       tag: 'For Judges',
       icon: GitBranch,
+    },
+    {
+      id: 'twin' as AppMode,
+      label: 'Ocean Twin VR/AR',
+      desc: 'Immersive volumetric ocean digital twin with WebXR',
+      tag: 'Immersive Demo',
+      icon: Box,
+      isModal: false,
     },
   ];
 

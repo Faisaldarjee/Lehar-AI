@@ -418,3 +418,10 @@ export function speakText(text: string, preferredLanguage?: string): Promise<voi
     }
   });
 }
+
+export function stopVoice(): void {
+  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
+}
+
