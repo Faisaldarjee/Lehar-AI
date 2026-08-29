@@ -1,5 +1,9 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import * as THREE from 'three';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { 
   Play, 
   Pause, 
@@ -41,19 +45,19 @@ const SPECIES_KNOWLEDGE: Record<string, FishSpeciesData> = {
     name: 'Yellowfin Tuna',
     scientificName: 'Thunnus albacares',
     localName: 'Kera / Kuppa Tuna',
-    depthRange: '30m – 80m (Thermocline Front)',
+    depthRange: '25m – 75m (Thermocline Front)',
     optimalSST: '24.5°C – 28.5°C',
-    commercialTier: 'Tier-1 High-Value Export',
-    gearType: 'Deep Oceanic Longline & Trolling',
+    commercialTier: 'Tier-1 High-Value Pelagic Export',
+    gearType: 'Oceanic Longline & Trolling',
     diet: 'Squid, flying fish, pelagic crustaceans',
-    description: 'High-speed hydrodynamic apex predator hunting along the thermocline temperature break where cold nutrient upwelling meets warm surface waters.',
+    description: 'High-speed apex predator cruising along oceanic thermal breaks where cold nutrient upwelling meets warm surface waters.',
   },
   manta: {
     id: 'manta',
     name: 'Oceanic Manta Ray',
     scientificName: 'Mobula birostris',
     localName: 'Kombu Thirandi / Shingro',
-    depthRange: '5m – 40m (Sunlit Water Column)',
+    depthRange: '5m – 35m (Sunlit Water Column)',
     optimalSST: '25.0°C – 29.5°C',
     commercialTier: 'Ecological Flagship (Protected)',
     gearType: 'Non-Targeted / Conservation Watch',
@@ -65,11 +69,11 @@ const SPECIES_KNOWLEDGE: Record<string, FishSpeciesData> = {
     name: 'Indian Mackerel',
     scientificName: 'Rastrelliger kanagurta',
     localName: 'Bangda',
-    depthRange: '10m – 30m (Epipelagic)',
+    depthRange: '8m – 25m (Epipelagic)',
     optimalSST: '25.5°C – 29.0°C',
     commercialTier: 'High-Volume Coastal Staple',
     gearType: 'Purse Seine & Ring Net',
-    diet: 'Phytoplankton blooms, diatoms, larvae',
+    diet: 'Phytoplankton blooms, diatoms, copepod larvae',
     description: 'Forms massive, synchronized rotating baitballs to confuse predators and maximize filter-feeding efficiency in high-chlorophyll zones.',
   },
   jellyfish: {
@@ -77,13 +81,169 @@ const SPECIES_KNOWLEDGE: Record<string, FishSpeciesData> = {
     name: 'Bioluminescent Sea Jelly',
     scientificName: 'Aequorea victoria',
     localName: 'Zal Phul',
-    depthRange: '40m – 120m (Mesopelagic Twilight)',
+    depthRange: '30m – 100m (Mesopelagic Twilight)',
     optimalSST: '22.0°C – 27.0°C',
     commercialTier: 'Bio-Indicator Species',
     gearType: 'Non-Targeted',
     diet: 'Micro-zooplankton, fish eggs',
     description: 'Drifting cnidarian that glows with cyan-green bioluminescence when agitated by ocean currents and thermohaline shears.',
   },
+};
+
+// -----------------------------------------------------------------------------
+// PROCEDURAL TEXTURE GENERATORS (Zero external file dependencies, 100% in-memory)
+// -----------------------------------------------------------------------------
+
+// 1. Soft Volumetric God-Ray Alpha Texture (No hard geometric edges)
+function createGodRayTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d')!;
+
+  const grad = ctx.createLinearGradient(0, 0, 0, 512);
+  grad.addColorStop(0.0, 'rgba(210, 245, 255, 0.0)');
+  grad.addColorStop(0.12, 'rgba(180, 235, 255, 0.45)');
+  grad.addColorStop(0.5, 'rgba(120, 215, 255, 0.7)');
+  grad.addColorStop(0.85, 'rgba(56, 189, 248, 0.25)');
+  grad.addColorStop(1.0, 'rgba(6, 182, 212, 0.0)');
+
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 256, 512);
+
+  // Soft horizontal feathering to ensure 0-opacity at side edges
+  const hGrad = ctx.createLinearGradient(0, 0, 256, 0);
+  hGrad.addColorStop(0.0, 'rgba(0,0,0,1)');
+  hGrad.addColorStop(0.18, 'rgba(0,0,0,0)');
+  hGrad.addColorStop(0.82, 'rgba(0,0,0,0)');
+  hGrad.addColorStop(1.0, 'rgba(0,0,0,1)');
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.fillStyle = hGrad;
+  ctx.fillRect(0, 0, 256, 512);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  return texture;
+}
+
+// 2. Animated Ocean Caustic Light Texture
+function createCausticTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d')!;
+
+  const imgData = ctx.createImageData(512, 512);
+  const data = imgData.data;
+
+  for (let y = 0; y < 512; y++) {
+    for (let x = 0; x < 512; x++) {
+      const u = x / 512;
+      const v = y / 512;
+      // Multi-wave procedural caustic interference pattern
+      const w1 = Math.sin(u * 22.0 + v * 14.0);
+      const w2 = Math.sin(u * 14.0 - v * 24.0);
+      const w3 = Math.cos(u * 32.0 + v * 28.0);
+      const val = Math.pow(Math.max(0, (w1 + w2 + w3) / 3.0), 2.2);
+      const idx = (y * 512 + x) * 4;
+      data[idx] = Math.floor(val * 210);     // Red
+      data[idx + 1] = Math.floor(val * 245); // Green
+      data[idx + 2] = Math.floor(val * 255); // Blue
+      data[idx + 3] = Math.floor(val * 220); // Alpha
+    }
+  }
+  ctx.putImageData(imgData, 0, 0);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(6, 6);
+  return texture;
+}
+
+// 3. Soft Glowing Circular Marine Snow Particle Texture
+function createParticleTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d')!;
+
+  const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 30);
+  grad.addColorStop(0.0, 'rgba(255, 255, 255, 1.0)');
+  grad.addColorStop(0.3, 'rgba(165, 243, 252, 0.85)');
+  grad.addColorStop(0.7, 'rgba(56, 189, 248, 0.25)');
+  grad.addColorStop(1.0, 'rgba(6, 182, 212, 0.0)');
+
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 64, 64);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  return texture;
+}
+
+// 4. Custom Cinematic Dive-Mask Shader (Barrel Distortion, Chromatic Aberration & Vignette)
+const UnderwaterLensShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uTime: { value: 0 },
+    uDistortion: { value: 0.045 },
+    uAberration: { value: 0.0028 },
+    uVignetteDarkness: { value: 0.95 },
+    uVignetteOffset: { value: 0.85 },
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float uTime;
+    uniform float uDistortion;
+    uniform float uAberration;
+    uniform float uVignetteDarkness;
+    uniform float uVignetteOffset;
+    varying vec2 vUv;
+
+    void main() {
+      // 1. Mild Barrel Distortion (Dive-Mask Optics)
+      vec2 center = vec2(0.5, 0.5);
+      vec2 uv = vUv - center;
+      float r2 = dot(uv, uv);
+      vec2 distortedUv = center + uv * (1.0 + uDistortion * r2);
+
+      // Clamp to edge
+      if (distortedUv.x < 0.0 || distortedUv.x > 1.0 || distortedUv.y < 0.0 || distortedUv.y > 1.0) {
+        gl_FragColor = vec4(0.01, 0.04, 0.08, 1.0);
+        return;
+      }
+
+      // 2. Chromatic Aberration (Lens water dispersion)
+      vec2 dir = normalize(distortedUv - center);
+      float dist = length(distortedUv - center);
+      vec2 redUv = distortedUv + dir * (uAberration * dist);
+      vec2 blueUv = distortedUv - dir * (uAberration * dist);
+
+      float r = texture2D(tDiffuse, redUv).r;
+      float g = texture2D(tDiffuse, distortedUv).g;
+      float b = texture2D(tDiffuse, blueUv).b;
+      vec3 color = vec3(r, g, b);
+
+      // 3. Underwater Blue-Green Atmospheric Tonemap / Tint
+      color.r *= 0.88;
+      color.g *= 1.04;
+      color.b *= 1.12;
+
+      // 4. Soft Vignette (Dive-Mask Oval Border)
+      float vignette = smoothstep(uVignetteOffset, uVignetteOffset - 0.45, dist * 1.35);
+      color = mix(color * (1.0 - uVignetteDarkness), color, vignette);
+
+      gl_FragColor = vec4(color, 1.0);
+    }
+  `,
 };
 
 export const OceanTwin: React.FC<OceanTwinProps> = ({
@@ -93,34 +253,33 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
 
-  // Simulation Controls & State
+  // Simulation Controls & Modes
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
-  const [cameraMode, setCameraMode] = useState<'orbit' | 'swim' | 'cinematic'>('orbit');
+  const [cameraMode, setCameraMode] = useState<'orbit' | 'swim' | 'cinematic'>('cinematic');
   const [selectedSpecies, setSelectedSpecies] = useState<FishSpeciesData | null>(null);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(false);
   const [vrSupported, setVrSupported] = useState<boolean>(false);
-  const [currentDepthM, setCurrentDepthM] = useState<number>(32);
+  const [currentDepthM, setCurrentDepthM] = useState<number>(18);
   const [hoveredObject, setHoveredObject] = useState<string | null>(null);
 
   const isPlayingRef = useRef(true);
   isPlayingRef.current = isPlaying;
-  const cameraModeRef = useRef<'orbit' | 'swim' | 'cinematic'>('orbit');
+  const cameraModeRef = useRef<'orbit' | 'swim' | 'cinematic'>('cinematic');
   cameraModeRef.current = cameraMode;
 
-  // Web Audio Context for Procedural Hydro-Acoustic Ambience & Sonar
   const audioCtxRef = useRef<AudioContext | null>(null);
 
-  // Live Telemetry Readouts
+  // Live Telemetry Readouts derived from live ARGO profile
   const telemetry = useMemo(() => {
     const validPoint = profileData.find(p => p && p.temperature != null && p.depth != null);
     return {
       floatId: selectedFloatId || 'INCOIS-ARGO-2902187',
-      depthM: validPoint?.depth != null ? Math.round(validPoint.depth) : 32,
-      tempC: validPoint?.temperature != null ? Number(validPoint.temperature.toFixed(1)) : 27.8,
+      depthM: validPoint?.depth != null ? Math.round(validPoint.depth) : 18,
+      tempC: validPoint?.temperature != null ? Number(validPoint.temperature.toFixed(1)) : 28.2,
       salPSU: validPoint?.salinity != null ? Number(validPoint.salinity.toFixed(1)) : 35.4,
-      windKts: 14,
-      swellM: 1.7,
-      seaState: 'Moderate (Douglas 3)',
+      windKts: 12,
+      swellM: 1.4,
+      seaState: 'Calm-Moderate (Douglas 2)',
     };
   }, [profileData, selectedFloatId]);
 
@@ -148,7 +307,7 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
         const ctx = new AudioContextClass();
         audioCtxRef.current = ctx;
 
-        // 1. Deep Submarine Swell White Noise Generator
+        // Submarine pink noise buffer
         const bufferSize = ctx.sampleRate * 2;
         const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
         const data = buffer.getChannelData(0);
@@ -161,7 +320,7 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
           b3 = 0.86650 * b3 + white * 0.3104856;
           b4 = 0.55000 * b4 + white * 0.5329522;
           b5 = -0.7616 * b5 - white * 0.0168980;
-          data[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.045;
+          data[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.038;
           b6 = white * 0.115926;
         }
 
@@ -171,33 +330,33 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
 
         const filter = ctx.createBiquadFilter();
         filter.type = 'lowpass';
-        filter.frequency.value = 280;
+        filter.frequency.value = 340;
 
         const gain = ctx.createGain();
-        gain.gain.value = 0.5;
+        gain.gain.value = 0.45;
 
         noise.connect(filter);
         filter.connect(gain);
         gain.connect(ctx.destination);
         noise.start(0);
 
-        // 2. Periodic ARGO CTD Sonar Ping (Every 5 seconds)
+        // Periodic ARGO Sonar Ping (Every 6 seconds)
         const sonarInterval = setInterval(() => {
           if (!audioCtxRef.current || audioCtxRef.current.state !== 'running') return;
           try {
             const osc = ctx.createOscillator();
             const sGain = ctx.createGain();
             osc.type = 'sine';
-            osc.frequency.setValueAtTime(840, ctx.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(420, ctx.currentTime + 0.35);
-            sGain.gain.setValueAtTime(0.08, ctx.currentTime);
-            sGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+            osc.frequency.setValueAtTime(880, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.38);
+            sGain.gain.setValueAtTime(0.07, ctx.currentTime);
+            sGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.38);
             osc.connect(sGain);
             sGain.connect(ctx.destination);
             osc.start();
-            osc.stop(ctx.currentTime + 0.36);
+            osc.stop(ctx.currentTime + 0.39);
           } catch (err) {}
-        }, 5000);
+        }, 6000);
 
         return () => clearInterval(sonarInterval);
       } else {
@@ -208,7 +367,7 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
     }
   }, [soundEnabled]);
 
-  // Main AAA-Grade Three.js Living Ocean Scene
+  // Main Three.js Living Ocean Ecosystem Scene
   useEffect(() => {
     const currentMount = mountRef.current;
     if (!currentMount) return;
@@ -216,188 +375,206 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
     let width = currentMount.clientWidth || 800;
     let height = currentMount.clientHeight || 500;
 
-    // 1. Scene & Depth Fog Gradient
+    // 1. Scene & Depth-Interpolated Exponential Fog
     const scene = new THREE.Scene();
-    const deepOceanColor = isMHWMode ? 0x071e29 : 0x021124;
-    scene.background = new THREE.Color(deepOceanColor);
-    scene.fog = new THREE.FogExp2(deepOceanColor, 0.022);
+    const shallowColor = new THREE.Color(0x0f8a8a); // Vivid sunlit teal-cyan
+    const midColor = new THREE.Color(0x023e59);     // Rich pelagic blue
+    const deepColor = new THREE.Color(0x010814);    // Deep abyssal midnight
 
-    // 2. Camera Setup
-    const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
-    camera.position.set(0, 4, 30);
+    const fog = new THREE.FogExp2(shallowColor.getHex(), 0.022);
+    scene.fog = fog;
 
-    // 3. Renderer with High Dynamic Range Tone Mapping
+    // 2. Camera Setup (First-Person Diver POV)
+    const camera = new THREE.PerspectiveCamera(68, width / height, 0.1, 1000);
+    camera.position.set(0, 1.6, 24);
+
+    // 3. WebGL Renderer
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.35;
+    renderer.toneMappingExposure = 1.3;
     renderer.xr.enabled = true;
     currentMount.appendChild(renderer.domElement);
 
-    // 4. Volumetric Underwater Lighting & Sun God Rays
-    const ambientLight = new THREE.AmbientLight(0x0284c7, 0.9);
+    // 4. Post-Processing Stack (EffectComposer with Bloom & Dive-Mask Optics)
+    const composer = new EffectComposer(renderer);
+    const renderPass = new RenderPass(scene, camera);
+    composer.addPass(renderPass);
+
+    // Subtle bloom for sunburst, caustics & bioluminescence
+    const bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(width, height),
+      0.36,  // Strength
+      0.55,  // Radius
+      0.82   // Threshold
+    );
+    composer.addPass(bloomPass);
+
+    // Underwater Dive-Mask Chromatic & Barrel Shader Pass
+    const lensPass = new ShaderPass(UnderwaterLensShader);
+    lensPass.renderToScreen = true;
+    composer.addPass(lensPass);
+
+    // 5. Lighting Setup
+    const ambientLight = new THREE.AmbientLight(0x06b6d4, 1.1);
     scene.add(ambientLight);
 
-    const sunDirectional = new THREE.DirectionalLight(0x7dd3fc, 3.2);
-    sunDirectional.position.set(15, 60, 15);
+    const sunDirectional = new THREE.DirectionalLight(0xdbeafe, 3.8);
+    sunDirectional.position.set(5, 50, 10);
     scene.add(sunDirectional);
 
-    // 4b. Volumetric Sun God Rays Shafts (Translucent light cones piercing the surface)
+    // 6. VOLUMETRIC SUN GOD-RAYS (CRITICAL FIX: Soft Alpha Gradient Planes)
+    const godRayTexture = createGodRayTexture();
     const godRayGroup = new THREE.Group();
+    const godRayCount = 14;
+    const godRayPlanes: THREE.Mesh[] = [];
+
     const rayMat = new THREE.MeshBasicMaterial({
-      color: 0x38bdf8,
+      map: godRayTexture,
       transparent: true,
-      opacity: 0.14,
+      opacity: 0.07,
       blending: THREE.AdditiveBlending,
-      side: THREE.DoubleSide,
       depthWrite: false,
+      side: THREE.DoubleSide,
     });
 
-    for (let i = 0; i < 9; i++) {
-      const rayGeo = new THREE.ConeGeometry(2.5 + Math.random() * 2, 45, 12, 1, true);
+    for (let i = 0; i < godRayCount; i++) {
+      const rayWidth = 6.0 + Math.random() * 5.0;
+      const rayHeight = 38.0 + Math.random() * 8.0;
+      const rayGeo = new THREE.PlaneGeometry(rayWidth, rayHeight);
       const rayMesh = new THREE.Mesh(rayGeo, rayMat);
-      const rx = (Math.random() - 0.5) * 45;
-      const rz = (Math.random() - 0.5) * 45;
-      rayMesh.position.set(rx, 2, rz);
-      rayMesh.rotation.x = Math.PI + (Math.random() - 0.5) * 0.3;
-      rayMesh.rotation.z = (Math.random() - 0.5) * 0.3;
+
+      const angle = (i / godRayCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+      const distFromCenter = 2.0 + Math.random() * 8.0;
+      rayMesh.position.set(Math.cos(angle) * distFromCenter, 6.0, Math.sin(angle) * distFromCenter);
+      
+      // Fan outward from implied overhead sun source
+      rayMesh.rotation.y = angle + Math.PI / 2;
+      rayMesh.rotation.x = (Math.random() - 0.5) * 0.25;
+      rayMesh.rotation.z = (Math.random() - 0.5) * 0.2;
+
+      godRayPlanes.push(rayMesh);
       godRayGroup.add(rayMesh);
     }
     scene.add(godRayGroup);
 
-    // 5. Water Surface Plane (0m) with Dynamic Waves & Caustics
-    const surfaceGeo = new THREE.PlaneGeometry(120, 120, 96, 96);
+    // 7. Water Surface (0m) with Refraction & Ripples
+    const surfaceGeo = new THREE.PlaneGeometry(120, 120, 80, 80);
     const surfaceMat = new THREE.MeshPhysicalMaterial({
       color: 0x0284c7,
-      emissive: 0x0369a1,
-      emissiveIntensity: 0.25,
-      metalness: 0.85,
-      roughness: 0.12,
-      transmission: 0.6,
+      emissive: 0x075985,
+      emissiveIntensity: 0.35,
+      metalness: 0.9,
+      roughness: 0.08,
+      transmission: 0.7,
       transparent: true,
-      opacity: 0.75,
+      opacity: 0.8,
       side: THREE.DoubleSide,
     });
     const oceanSurface = new THREE.Mesh(surfaceGeo, surfaceMat);
     oceanSurface.rotation.x = -Math.PI / 2;
-    oceanSurface.position.y = 16.0;
+    oceanSurface.position.y = 15.0;
     scene.add(oceanSurface);
 
-    // 6. Detailed Bathymetric Seabed Terrain (-24m)
+    // 8. White Rippled Sand Seabed with Caustic Projection (-18m)
+    const causticTexture = createCausticTexture();
     const seabedGeo = new THREE.PlaneGeometry(140, 140, 64, 64);
     const seabedPos = seabedGeo.attributes.position.array as Float32Array;
     for (let i = 0; i < seabedPos.length; i += 3) {
       const x = seabedPos[i];
       const y = seabedPos[i + 1];
-      // Generate rolling sand dunes and deep sea ridges
-      seabedPos[i + 2] = Math.sin(x * 0.1) * Math.cos(y * 0.1) * 3.5 + Math.sin(x * 0.04 + y * 0.04) * 2.2;
+      // Fine water-current sand ripples
+      seabedPos[i + 2] = Math.sin(x * 0.35) * 0.35 + Math.cos(y * 0.25) * 0.25 + Math.sin(x * 0.08 + y * 0.08) * 1.8;
     }
     seabedGeo.computeVertexNormals();
 
     const seabedMat = new THREE.MeshStandardMaterial({
-      color: 0x0a3342,
-      roughness: 0.88,
-      metalness: 0.15,
-      flatShading: true,
+      color: 0xe2d9cc, // Clean warm white/beige coral sand (Ref: Photo 4)
+      map: causticTexture,
+      roughness: 0.65,
+      metalness: 0.1,
     });
     const seabed = new THREE.Mesh(seabedGeo, seabedMat);
     seabed.rotation.x = -Math.PI / 2;
-    seabed.position.y = -22.0;
+    seabed.position.y = -18.0;
     scene.add(seabed);
 
-    // 7. Rich Coral Reef Garden & Swaying Sea Flora
+    // 9. Coral Formations & Seaweed on Sand Dunes
     const coralReefGroup = new THREE.Group();
-    
-    // Brain Corals (Organic bumpy geodesics)
-    const brainCoralMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.5, metalness: 0.1 });
-    const pinkCoralMat = new THREE.MeshStandardMaterial({ color: 0xec4899, roughness: 0.6, metalness: 0.1 });
-    const emeraldCoralMat = new THREE.MeshStandardMaterial({ color: 0x10b981, roughness: 0.5, metalness: 0.2 });
+    const brainCoralMat = new THREE.MeshStandardMaterial({ color: 0xc29b62, roughness: 0.7 });
+    const staghornCoralMat = new THREE.MeshStandardMaterial({ color: 0xdd6b20, roughness: 0.6 });
+    const softPurpleMat = new THREE.MeshStandardMaterial({ color: 0x9333ea, roughness: 0.5 });
 
-    for (let i = 0; i < 35; i++) {
-      const isPink = i % 3 === 0;
-      const isEmerald = i % 3 === 1;
-      const coralGeo = new THREE.DodecahedronGeometry(1.2 + Math.random() * 1.5, 2);
-      const coral = new THREE.Mesh(coralGeo, isPink ? pinkCoralMat : isEmerald ? emeraldCoralMat : brainCoralMat);
-      const cx = (Math.random() - 0.5) * 80;
-      const cz = (Math.random() - 0.5) * 80;
-      coral.position.set(cx, -20.5 + Math.sin(cx * 0.1) * 1.2, cz);
-      coral.scale.set(1 + Math.random() * 0.5, 0.7 + Math.random() * 0.6, 1 + Math.random() * 0.5);
+    for (let i = 0; i < 30; i++) {
+      const type = i % 3;
+      const coralGeo = type === 0 
+        ? new THREE.DodecahedronGeometry(1.2 + Math.random() * 0.8, 1)
+        : type === 1
+        ? new THREE.CylinderGeometry(0.2, 0.9, 2.5 + Math.random() * 1.5, 6)
+        : new THREE.SphereGeometry(0.9 + Math.random() * 0.6, 8, 8);
+
+      const coral = new THREE.Mesh(coralGeo, type === 0 ? brainCoralMat : type === 1 ? staghornCoralMat : softPurpleMat);
+      const cx = (Math.random() - 0.5) * 70;
+      const cz = (Math.random() - 0.5) * 70;
+      coral.position.set(cx, -17.2, cz);
       coralReefGroup.add(coral);
-    }
-
-    // Swaying Seaweed / Kelp Ribbons
-    const seaweedMeshes: THREE.Mesh[] = [];
-    const seaweedMat = new THREE.MeshStandardMaterial({ color: 0x059669, side: THREE.DoubleSide, roughness: 0.3 });
-    for (let i = 0; i < 40; i++) {
-      const sGeo = new THREE.PlaneGeometry(0.6, 7.0 + Math.random() * 4.0, 4, 12);
-      const sMesh = new THREE.Mesh(sGeo, seaweedMat);
-      const sx = (Math.random() - 0.5) * 75;
-      const sz = (Math.random() - 0.5) * 75;
-      sMesh.position.set(sx, -18.0, sz);
-      sMesh.rotation.y = Math.random() * Math.PI;
-      seaweedMeshes.push(sMesh);
-      coralReefGroup.add(sMesh);
     }
     scene.add(coralReefGroup);
 
-    // 8. Detailed ARGO Robot Float Model
+    // 10. ARGO CTD Robot Float Bobbing in Sunbeams (Ref: Photo 5)
     const argoFloat = new THREE.Group();
-    // Yellow Aluminum Hull
-    const hullGeo = new THREE.CylinderGeometry(0.55, 0.55, 2.4, 24);
-    const hullMat = new THREE.MeshPhysicalMaterial({ color: 0xeab308, metalness: 0.6, roughness: 0.25, clearcoat: 0.8 });
+    const hullGeo = new THREE.CylinderGeometry(0.5, 0.5, 2.2, 24);
+    const hullMat = new THREE.MeshPhysicalMaterial({ color: 0xeab308, metalness: 0.5, roughness: 0.25, clearcoat: 0.8 });
     const hull = new THREE.Mesh(hullGeo, hullMat);
     argoFloat.add(hull);
 
-    // Black Rubber Stability Ring
-    const collarGeo = new THREE.CylinderGeometry(0.75, 0.75, 0.4, 24);
-    const collarMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.8 });
+    const collarGeo = new THREE.CylinderGeometry(0.7, 0.7, 0.35, 24);
+    const collarMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.8 });
     const collar = new THREE.Mesh(collarGeo, collarMat);
-    collar.position.y = 0.6;
+    collar.position.y = 0.55;
     argoFloat.add(collar);
 
-    // CTD Sensor Probe Ring (Conductivity-Temperature-Depth)
-    const ctdGeo = new THREE.TorusGeometry(0.4, 0.08, 12, 24);
-    const ctdMat = new THREE.MeshStandardMaterial({ color: 0x06b6d4, metalness: 0.8 });
-    const ctd = new THREE.Mesh(ctdGeo, ctdMat);
-    ctd.position.y = -1.25;
-    ctd.rotation.x = Math.PI / 2;
-    argoFloat.add(ctd);
-
-    // Satellite Iridium Antenna
-    const antGeo = new THREE.CylinderGeometry(0.04, 0.04, 1.6, 8);
+    const antGeo = new THREE.CylinderGeometry(0.03, 0.03, 1.5, 8);
     const antMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9 });
     const ant = new THREE.Mesh(antGeo, antMat);
-    ant.position.y = 1.9;
+    ant.position.y = 1.8;
     argoFloat.add(ant);
 
-    // Flashing Comms Beacon LED
-    const beaconGeo = new THREE.SphereGeometry(0.16, 16, 16);
+    const beaconGeo = new THREE.SphereGeometry(0.14, 16, 16);
     const beaconMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
     const beacon = new THREE.Mesh(beaconGeo, beaconMat);
-    beacon.position.y = 2.75;
+    beacon.position.y = 2.6;
     argoFloat.add(beacon);
 
-    argoFloat.position.set(14, 13.5, -10);
+    // Trailing sensor cable into deep water
+    const cableGeo = new THREE.CylinderGeometry(0.015, 0.015, 8.0, 6);
+    const cableMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
+    const cable = new THREE.Mesh(cableGeo, cableMat);
+    cable.position.y = -5.0;
+    argoFloat.add(cable);
+
+    argoFloat.position.set(12, 12.0, -8);
     scene.add(argoFloat);
 
-    // 9. Procedurally Sculpted Anatomical Marine Life
-    // 9a. Yellowfin Tuna Shoal (Metallic blue apex predators with yellow finlets)
+    // 11. ANATOMICAL 3D MARINE LIFE (NO MORE FLAT CONES!)
+    
+    // 11a. Yellowfin Tuna Shoal (Ref: Photo 2) — Metallic countershading & golden finlets
     const tunaGroup = new THREE.Group();
-    const tunaCount = 7;
+    const tunaCount = 9;
     const tunaMeshes: THREE.Group[] = [];
 
-    const createTunaModel = (index: number) => {
+    const createAnatomicalTuna = (index: number) => {
       const tuna = new THREE.Group();
 
-      // Fusiform Streamlined Hydrodynamic Body
-      const bodyGeo = new THREE.ConeGeometry(0.65, 3.4, 16);
+      // Fusiform Torpedo Body with Countershading
+      const bodyGeo = new THREE.ConeGeometry(0.65, 3.6, 20);
       const bodyMat = new THREE.MeshPhysicalMaterial({
         color: 0x0284c7,
         emissive: 0x075985,
-        emissiveIntensity: 0.2,
-        metalness: 0.85,
-        roughness: 0.15,
+        emissiveIntensity: 0.25,
+        metalness: 0.88,
+        roughness: 0.12,
         clearcoat: 1.0,
       });
       const body = new THREE.Mesh(bodyGeo, bodyMat);
@@ -405,29 +582,29 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
       tuna.add(body);
 
       // Yellow Sickle Dorsal Fin
-      const finGeo = new THREE.ConeGeometry(0.3, 1.1, 8);
-      const finMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.4, roughness: 0.3 });
-      const fin = new THREE.Mesh(finGeo, finMat);
-      fin.position.set(0.3, 0.8, 0);
-      fin.rotation.z = -0.5;
-      tuna.add(fin);
+      const finMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.3, roughness: 0.3 });
+      const finGeo = new THREE.ConeGeometry(0.28, 1.2, 8);
+      const dFin = new THREE.Mesh(finGeo, finMat);
+      dFin.position.set(0.3, 0.9, 0);
+      dFin.rotation.z = -0.55;
+      tuna.add(dFin);
 
       // Yellow Sickle Ventral Fin
       const vFin = new THREE.Mesh(finGeo, finMat);
-      vFin.position.set(0.3, -0.8, 0);
-      vFin.rotation.z = 0.5;
+      vFin.position.set(0.3, -0.9, 0);
+      vFin.rotation.z = 0.55;
       vFin.rotation.x = Math.PI;
       tuna.add(vFin);
 
-      // Two-Lobed Crescent Tail Fin
-      const tailUpper = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.9, 6), finMat);
-      tailUpper.position.set(-1.8, 0.4, 0);
-      tailUpper.rotation.z = -0.6;
+      // Crescent Caudal Tail Fin
+      const tailUpper = new THREE.Mesh(new THREE.ConeGeometry(0.18, 1.0, 6), finMat);
+      tailUpper.position.set(-1.9, 0.45, 0);
+      tailUpper.rotation.z = -0.65;
       tuna.add(tailUpper);
 
-      const tailLower = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.9, 6), finMat);
-      tailLower.position.set(-1.8, -0.4, 0);
-      tailLower.rotation.z = 0.6;
+      const tailLower = new THREE.Mesh(new THREE.ConeGeometry(0.18, 1.0, 6), finMat);
+      tailLower.position.set(-1.9, -0.45, 0);
+      tailLower.rotation.z = 0.65;
       tuna.add(tailLower);
 
       (tuna as any).userData = { species: 'tuna', index };
@@ -435,57 +612,57 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
     };
 
     for (let i = 0; i < tunaCount; i++) {
-      const tuna = createTunaModel(i);
+      const tuna = createAnatomicalTuna(i);
       tunaMeshes.push(tuna);
       tunaGroup.add(tuna);
     }
     scene.add(tunaGroup);
 
-    // 9b. Majestic Gliding Oceanic Manta Ray (6m wingspan pelagic glider)
+    // 11b. Oceanic Manta Ray (Ref: Photo 3) — Realistic wings & countershading
     const manta = new THREE.Group();
-    const mantaBodyGeo = new THREE.CylinderGeometry(0.2, 1.2, 3.2, 8);
-    const mantaMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.4, metalness: 0.3 });
-    const mantaBody = new THREE.Mesh(mantaBodyGeo, mantaMat);
+    const mantaBodyGeo = new THREE.CylinderGeometry(0.25, 1.3, 3.8, 12);
+    const mantaMatDorsal = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.3, metalness: 0.4 });
+    const mantaBody = new THREE.Mesh(mantaBodyGeo, mantaMatDorsal);
     mantaBody.rotation.z = Math.PI / 2;
-    mantaBody.scale.set(0.25, 1, 1.4);
+    mantaBody.scale.set(0.22, 1, 1.35);
     manta.add(mantaBody);
 
-    // Left Wing
-    const wingGeo = new THREE.PlaneGeometry(5.0, 3.5, 8, 8);
-    const wingMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, side: THREE.DoubleSide, roughness: 0.3 });
+    // Left & Right Wings
+    const wingGeo = new THREE.PlaneGeometry(6.5, 4.2, 12, 12);
+    const wingMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, side: THREE.DoubleSide, roughness: 0.35 });
     const leftWing = new THREE.Mesh(wingGeo, wingMat);
-    leftWing.position.set(0, 0, 3.0);
+    leftWing.position.set(0, 0, 3.8);
     leftWing.rotation.x = Math.PI / 2;
     manta.add(leftWing);
 
-    // Right Wing
     const rightWing = new THREE.Mesh(wingGeo, wingMat);
-    rightWing.position.set(0, 0, -3.0);
+    rightWing.position.set(0, 0, -3.8);
     rightWing.rotation.x = -Math.PI / 2;
     manta.add(rightWing);
 
-    // Long Whip Tail
-    const mTailGeo = new THREE.CylinderGeometry(0.04, 0.01, 4.5, 6);
-    const mTail = new THREE.Mesh(mTailGeo, mantaMat);
-    mTail.position.set(-2.8, 0, 0);
+    // Whip Tail
+    const mTailGeo = new THREE.CylinderGeometry(0.04, 0.01, 5.2, 6);
+    const mTail = new THREE.Mesh(mTailGeo, mantaMatDorsal);
+    mTail.position.set(-3.2, 0, 0);
     mTail.rotation.z = Math.PI / 2;
     manta.add(mTail);
 
     (manta as any).userData = { species: 'manta' };
-    manta.position.set(0, 8, -5);
+    manta.position.set(0, 6.5, -4);
     scene.add(manta);
 
-    // 9c. Indian Mackerel Vortex Baitball (50+ iridescent fish)
+    // 11c. Indian Mackerel / Sardine Baitball (Ref: Photo 1)
     const mackerelGroup = new THREE.Group();
-    const mackerelCount = 52;
+    const mackerelCount = 65;
     const mackerelMeshes: THREE.Mesh[] = [];
-    const mackGeo = new THREE.ConeGeometry(0.16, 1.1, 8);
+    const mackGeo = new THREE.ConeGeometry(0.14, 1.0, 8);
     const mackMat = new THREE.MeshPhysicalMaterial({
-      color: 0x38bdf8,
+      color: 0x67e8f9,
       emissive: 0x0284c7,
-      emissiveIntensity: 0.3,
-      metalness: 0.9,
-      roughness: 0.1,
+      emissiveIntensity: 0.35,
+      metalness: 0.95,
+      roughness: 0.08,
+      clearcoat: 1.0,
     });
 
     for (let i = 0; i < mackerelCount; i++) {
@@ -495,68 +672,68 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
       mackerelMeshes.push(mack);
       mackerelGroup.add(mack);
     }
-    mackerelGroup.position.set(-14, 6, -6);
+    mackerelGroup.position.set(-12, 4.5, -4);
     scene.add(mackerelGroup);
 
-    // 9d. Translucent Bioluminescent Jellyfish Group
+    // 11d. Translucent Bioluminescent Jellyfish
     const jellyGroup = new THREE.Group();
     const jellyMeshes: THREE.Group[] = [];
     const jellyMat = new THREE.MeshPhysicalMaterial({
       color: 0x06b6d4,
       emissive: 0x22d3ee,
-      emissiveIntensity: 0.85,
+      emissiveIntensity: 0.9,
       transparent: true,
       opacity: 0.65,
       roughness: 0.1,
-      transmission: 0.7,
+      transmission: 0.8,
     });
 
     for (let j = 0; j < 6; j++) {
       const jelly = new THREE.Group();
-      const bellGeo = new THREE.SphereGeometry(0.8 + Math.random() * 0.4, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+      const bellGeo = new THREE.SphereGeometry(0.85 + Math.random() * 0.4, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2);
       const bell = new THREE.Mesh(bellGeo, jellyMat);
       jelly.add(bell);
 
-      // Trailing Tentacles
       for (let t = 0; t < 6; t++) {
-        const tGeo = new THREE.CylinderGeometry(0.02, 0.01, 2.8 + Math.random() * 1.5, 4);
+        const tGeo = new THREE.CylinderGeometry(0.02, 0.01, 3.2, 4);
         const tentacle = new THREE.Mesh(tGeo, jellyMat);
         const tAngle = (t / 6) * Math.PI * 2;
-        tentacle.position.set(Math.cos(tAngle) * 0.5, -1.4, Math.sin(tAngle) * 0.5);
+        tentacle.position.set(Math.cos(tAngle) * 0.5, -1.6, Math.sin(tAngle) * 0.5);
         jelly.add(tentacle);
       }
 
       (jelly as any).userData = { species: 'jellyfish', index: j };
-      const jx = (Math.random() - 0.5) * 40;
-      const jy = -4.0 - Math.random() * 12.0;
-      const jz = (Math.random() - 0.5) * 40;
+      const jx = (Math.random() - 0.5) * 45;
+      const jy = -2.0 - Math.random() * 10.0;
+      const jz = (Math.random() - 0.5) * 45;
       jelly.position.set(jx, jy, jz);
       jellyMeshes.push(jelly);
       jellyGroup.add(jelly);
     }
     scene.add(jellyGroup);
 
-    // 10. 1,400+ Bioluminescent Plankton & Marine Snow Particles
+    // 12. 1,400+ Soft Marine Snow Particulates
     const pCount = 1400;
     const pGeo = new THREE.BufferGeometry();
     const pPositions = new Float32Array(pCount * 3);
     for (let i = 0; i < pCount * 3; i += 3) {
-      pPositions[i] = (Math.random() - 0.5) * 100;
-      pPositions[i + 1] = (Math.random() - 0.5) * 50;
-      pPositions[i + 2] = (Math.random() - 0.5) * 100;
+      pPositions[i] = (Math.random() - 0.5) * 90;
+      pPositions[i + 1] = (Math.random() - 0.5) * 45;
+      pPositions[i + 2] = (Math.random() - 0.5) * 90;
     }
     pGeo.setAttribute('position', new THREE.BufferAttribute(pPositions, 3));
     const pMat = new THREE.PointsMaterial({
-      color: 0x67e8f9,
-      size: 0.22,
+      map: createParticleTexture(),
+      size: 0.4,
       transparent: true,
       opacity: 0.75,
       blending: THREE.AdditiveBlending,
+      depthWrite: false,
     });
     const planktonField = new THREE.Points(pGeo, pMat);
     scene.add(planktonField);
 
-    // 11. Interactive Raycasting Target Finder
+    // 13. Interactive Raycast Target Inspect
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
@@ -605,7 +782,7 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
       }
     };
 
-    // 12. Free-Swim Navigation & Mouse Drag Controls
+    // 14. Free-Swim Navigation & Mouse Controls
     const keysPressed: Record<string, boolean> = {};
     const handleKeyDown = (e: KeyboardEvent) => {
       keysPressed[e.key.toLowerCase()] = true;
@@ -619,9 +796,9 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
 
     let isDragging = false;
     let prevMouse = { x: 0, y: 0 };
-    let cameraAngle = 0.35;
-    let cameraPitch = 0.2;
-    let cameraDist = 32.0;
+    let cameraAngle = 0.25;
+    let cameraPitch = 0.15;
+    let cameraDist = 26.0;
 
     const handleMouseDown = (e: MouseEvent) => {
       isDragging = true;
@@ -635,7 +812,7 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
       const dy = e.clientY - prevMouse.y;
 
       cameraAngle += dx * 0.005;
-      cameraPitch = Math.max(-0.7, Math.min(0.85, cameraPitch + dy * 0.004));
+      cameraPitch = Math.max(-0.65, Math.min(0.8, cameraPitch + dy * 0.004));
       prevMouse = { x: e.clientX, y: e.clientY };
     };
 
@@ -645,7 +822,7 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
 
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
-      cameraDist = Math.max(6.0, Math.min(65.0, cameraDist + e.deltaY * 0.035));
+      cameraDist = Math.max(6.0, Math.min(60.0, cameraDist + e.deltaY * 0.035));
     };
 
     const dom = renderer.domElement;
@@ -655,7 +832,7 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
     dom.addEventListener('wheel', handleWheel, { passive: false });
     dom.addEventListener('click', handlePointerDown);
 
-    // 13. 60 FPS Organic Fluid Simulation Loop
+    // 15. 60 FPS Physically-Inspired Underwater Render Loop
     let animId: number;
     let clock = 0;
 
@@ -665,80 +842,99 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
       if (isPlayingRef.current) {
         clock += 0.016;
 
-        // Wave surface caustics displacement
+        // 1. Dynamic Depth-Interpolated Exponential Fog & ClearColor
+        const depthNorm = THREE.MathUtils.clamp((15.0 - camera.position.y) / 30.0, 0.0, 1.0);
+        const currentFogColor = new THREE.Color();
+        if (depthNorm < 0.5) {
+          currentFogColor.lerpColors(shallowColor, midColor, depthNorm * 2.0);
+        } else {
+          currentFogColor.lerpColors(midColor, deepColor, (depthNorm - 0.5) * 2.0);
+        }
+        fog.color.copy(currentFogColor);
+        renderer.setClearColor(currentFogColor);
+
+        // 2. Animated Caustic Pattern Scrolling on Seabed
+        causticTexture.offset.x = (clock * 0.04) % 1;
+        causticTexture.offset.y = (clock * 0.03) % 1;
+
+        // 3. Volumetric God-Ray Light Shaft Pulsing & Noise
+        godRayPlanes.forEach((ray, idx) => {
+          (ray.material as THREE.MeshBasicMaterial).opacity = 
+            0.06 + Math.sin(clock * 1.4 + idx * 0.8) * 0.025;
+        });
+
+        // 4. Water Surface Ripples
         const wavePos = surfaceGeo.attributes.position.array as Float32Array;
         for (let i = 0; i < wavePos.length; i += 3) {
           const u = wavePos[i];
           const v = wavePos[i + 1];
-          wavePos[i + 2] = Math.sin(u * 0.2 + clock * 2.2) * Math.cos(v * 0.2 + clock * 1.8) * 0.6;
+          wavePos[i + 2] = Math.sin(u * 0.2 + clock * 2.0) * Math.cos(v * 0.2 + clock * 1.6) * 0.5;
         }
         surfaceGeo.attributes.position.needsUpdate = true;
 
-        // Swaying Kelp Flora
-        seaweedMeshes.forEach((sw, idx) => {
-          sw.rotation.z = Math.sin(clock * 1.8 + idx * 0.4) * 0.25;
-        });
+        // 5. ARGO Float Bobbing & Pulsing Beacon
+        argoFloat.position.y = 12.0 + Math.sin(clock * 1.8) * 0.35;
+        beacon.material.color.setHex(Math.sin(clock * 5.0) > 0 ? 0x38bdf8 : 0x0369a1);
 
-        // ARGO Float Bobbing & LED Beacon
-        argoFloat.position.y = 13.5 + Math.sin(clock * 2.0) * 0.4;
-        beacon.material.color.setHex(Math.sin(clock * 6.0) > 0 ? 0x38bdf8 : 0x0369a1);
-
-        // 1. Tuna Predatory Cruising & Spine Flexing
-        const tunaRadius = 22.0;
-        const tunaSpeed = clock * 0.95;
+        // 6. Tuna Predatory Cruising & Spine Flexing
+        const tunaRadius = 20.0;
+        const tunaSpeed = clock * 0.9;
         tunaMeshes.forEach((tuna, idx) => {
-          const offsetAngle = idx * 0.42;
-          const tx = Math.cos(tunaSpeed + offsetAngle) * (tunaRadius + idx * 1.1);
-          const tz = Math.sin(tunaSpeed + offsetAngle) * (tunaRadius + idx * 0.85);
-          const ty = -4.0 + Math.sin(clock * 1.6 + idx) * 1.8;
+          const offsetAngle = idx * 0.45;
+          const tx = Math.cos(tunaSpeed + offsetAngle) * (tunaRadius + idx * 1.0);
+          const tz = Math.sin(tunaSpeed + offsetAngle) * (tunaRadius + idx * 0.8);
+          const ty = -3.0 + Math.sin(clock * 1.5 + idx) * 1.5;
 
           tuna.position.set(tx, ty, tz);
           tuna.rotation.y = -(tunaSpeed + offsetAngle) + Math.PI / 2;
-          // Organic tail fin wag
-          tuna.rotation.y += Math.sin(clock * 10.0 + idx) * 0.18;
+          tuna.rotation.y += Math.sin(clock * 9.0 + idx) * 0.16;
         });
 
-        // 2. Majestic Manta Ray Gliding with Flapping Wings
-        const mantaAngle = clock * 0.35;
-        manta.position.x = Math.cos(mantaAngle) * 18.0;
-        manta.position.z = Math.sin(mantaAngle) * 18.0;
-        manta.position.y = 7.0 + Math.sin(clock * 1.2) * 1.4;
+        // 7. Majestic Manta Ray Gliding with Flapping Wings
+        const mantaAngle = clock * 0.32;
+        manta.position.x = Math.cos(mantaAngle) * 16.0;
+        manta.position.z = Math.sin(mantaAngle) * 16.0;
+        manta.position.y = 6.5 + Math.sin(clock * 1.1) * 1.2;
         manta.rotation.y = -mantaAngle + Math.PI / 2;
-        leftWing.rotation.z = Math.sin(clock * 2.2) * 0.35;
-        rightWing.rotation.z = -Math.sin(clock * 2.2) * 0.35;
+        leftWing.rotation.z = Math.sin(clock * 2.0) * 0.32;
+        rightWing.rotation.z = -Math.sin(clock * 2.0) * 0.32;
 
-        // 3. Mackerel Baitball Swirling Vortex
+        // 8. Mackerel Baitball Swirl
         mackerelMeshes.forEach((mack, idx) => {
-          const bAngle = clock * 1.8 + (idx / mackerelCount) * Math.PI * 2;
-          const bRadius = 4.2 + Math.sin(clock * 2.5 + idx) * 1.1;
-          const bY = 5.5 + Math.cos(clock * 1.6 + idx * 0.4) * 2.2;
+          const bAngle = clock * 1.6 + (idx / mackerelCount) * Math.PI * 2;
+          const bRadius = 4.0 + Math.sin(clock * 2.2 + idx) * 0.9;
+          const bY = 4.5 + Math.cos(clock * 1.5 + idx * 0.4) * 1.8;
 
           mack.position.set(Math.cos(bAngle) * bRadius, bY, Math.sin(bAngle) * bRadius);
           mack.rotation.y = -bAngle + Math.PI / 2;
         });
 
-        // 4. Jellyfish Pulsing & Vertical Drifting
+        // 9. Jellyfish Breathing Pulsation
         jellyMeshes.forEach((jelly, idx) => {
-          const pulse = 1.0 + Math.sin(clock * 3.0 + idx) * 0.22;
+          const pulse = 1.0 + Math.sin(clock * 2.8 + idx) * 0.2;
           jelly.scale.set(pulse, 1.0 / pulse, pulse);
-          jelly.position.y += Math.sin(clock * 1.2 + idx) * 0.015;
+          jelly.position.y += Math.sin(clock * 1.2 + idx) * 0.012;
         });
 
-        // Plankton Drift
-        planktonField.rotation.y += 0.0006;
+        // 10. Particulate Drift & Upward Current
+        planktonField.rotation.y += 0.0005;
 
-        // Camera Modes
+        // 11. Diver POV Buoyancy Sway & Camera Modes
+        const buoyancyBob = Math.sin(clock * 0.5) * 0.035;
+        const buoyancySway = Math.sin(clock * 0.35) * 0.012;
+
         if (cameraModeRef.current === 'cinematic') {
           // Guided Submarine Dive Tour
-          const tourAngle = clock * 0.25;
-          camera.position.x = Math.cos(tourAngle) * 26.0;
-          camera.position.z = Math.sin(tourAngle) * 26.0;
-          camera.position.y = -2.0 + Math.sin(clock * 0.4) * 8.0;
+          const tourAngle = clock * 0.22;
+          camera.position.x = Math.cos(tourAngle) * 24.0;
+          camera.position.z = Math.sin(tourAngle) * 24.0;
+          camera.position.y = -1.0 + Math.sin(clock * 0.35) * 7.0 + buoyancyBob;
+          camera.rotation.z = buoyancySway;
           camera.lookAt(0, -2, 0);
-          setCurrentDepthM(Math.round(Math.abs(camera.position.y - 16) * 4));
+          setCurrentDepthM(Math.round(Math.abs(camera.position.y - 15) * 3));
         } else if (cameraModeRef.current === 'swim') {
-          // First-Person Free-Swim
-          const moveSpeed = 0.4;
+          // First-Person Free-Swim with Buoyancy
+          const moveSpeed = 0.38;
           const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
           const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
 
@@ -746,21 +942,24 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
           if (keysPressed['s'] || keysPressed['arrowdown']) camera.position.addScaledVector(forward, -moveSpeed);
           if (keysPressed['a'] || keysPressed['arrowleft']) camera.position.addScaledVector(right, -moveSpeed);
           if (keysPressed['d'] || keysPressed['arrowright']) camera.position.addScaledVector(right, moveSpeed);
-          if (keysPressed[' ']) camera.position.y = Math.min(15.0, camera.position.y + moveSpeed);
-          if (keysPressed['shift'] || keysPressed['c']) camera.position.y = Math.max(-20.0, camera.position.y - moveSpeed);
+          if (keysPressed[' ']) camera.position.y = Math.min(14.0, camera.position.y + moveSpeed);
+          if (keysPressed['shift'] || keysPressed['c']) camera.position.y = Math.max(-17.0, camera.position.y - moveSpeed);
 
-          setCurrentDepthM(Math.round(Math.abs(camera.position.y - 16) * 4));
+          camera.position.y += buoyancyBob * 0.1;
+          camera.rotation.z = buoyancySway;
+          setCurrentDepthM(Math.round(Math.abs(camera.position.y - 15) * 3));
         } else {
           // Smooth Orbit Mode
           camera.position.x = Math.sin(cameraAngle) * Math.cos(cameraPitch) * cameraDist;
           camera.position.z = Math.cos(cameraAngle) * Math.cos(cameraPitch) * cameraDist;
-          camera.position.y = Math.sin(cameraPitch) * cameraDist;
+          camera.position.y = Math.sin(cameraPitch) * cameraDist + buoyancyBob;
+          camera.rotation.z = buoyancySway;
           camera.lookAt(0, 0, 0);
-          setCurrentDepthM(Math.round(Math.abs(camera.position.y - 16) * 4));
+          setCurrentDepthM(Math.round(Math.abs(camera.position.y - 15) * 3));
         }
       }
 
-      renderer.render(scene, camera);
+      composer.render();
     };
 
     animate();
@@ -772,6 +971,7 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       renderer.setSize(width, height);
+      composer.setSize(width, height);
     };
 
     window.addEventListener('resize', handleResize);
@@ -796,20 +996,20 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
   return (
     <div className="relative w-full h-full min-h-[540px] rounded-2xl overflow-hidden border border-cyan-500/40 bg-[#010915] shadow-2xl flex flex-col font-sans select-none">
       
-      {/* 3D Living Ocean WebGL Viewport */}
+      {/* 3D Living Ocean WebGL & Post-Processing Viewport */}
       <div ref={mountRef} className="flex-1 w-full h-full cursor-grab active:cursor-grabbing" />
 
-      {/* Dynamic Submarine Depth Tape / Gauge (Left HUD) */}
+      {/* Diver Depth HUD Gauge (Left) */}
       <div className="absolute top-20 left-4 z-20 hidden md:flex flex-col items-center bg-[#071322]/90 backdrop-blur-xl px-2.5 py-3 rounded-2xl border border-cyan-500/40 text-cyan-300 font-mono text-[10px] shadow-2xl space-y-2 pointer-events-none">
         <span className="text-[9px] font-bold text-slate-400 uppercase">DEPTH</span>
         <div className="text-sm font-black text-white font-heading">{currentDepthM}m</div>
         <div className="w-1.5 h-28 bg-slate-800 rounded-full overflow-hidden relative">
           <div 
             className="w-full bg-gradient-to-b from-cyan-400 via-teal-400 to-amber-400 absolute top-0 transition-all duration-300 rounded-full"
-            style={{ height: `${Math.min(100, (currentDepthM / 150) * 100)}%` }}
+            style={{ height: `${Math.min(100, (currentDepthM / 100) * 100)}%` }}
           />
         </div>
-        <span className="text-[8px] text-slate-400">150m</span>
+        <span className="text-[8px] text-slate-400">100m</span>
       </div>
 
       {/* Target Reticle Lock Indicator on Hover */}
@@ -822,7 +1022,7 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
         </div>
       )}
 
-      {/* Top Marine Atmosphere & Sensor Telemetry Bar */}
+      {/* Top Telemetry Banner */}
       <div className="absolute top-3 left-3 right-3 z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
         
         {/* Left Title Badge */}
@@ -836,11 +1036,11 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
                 Ocean Twin VR/AR
               </span>
               <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-teal-950 border border-teal-500/40 text-teal-300 font-mono">
-                LIVING 3D ECOSYSTEM
+                CINEMATIC LIVING 3D
               </span>
             </div>
             <p className="text-[10px] text-cyan-300/80 font-mono">
-              Tuna Shoals • Manta Ray • Baitballs • Sun Caustics &amp; Bathymetry
+              Soft God-Rays • Caustics • Manta Ray • Yellowfin Tuna • Sand Ripples
             </p>
           </div>
         </div>
@@ -934,26 +1134,26 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
           <button
             type="button"
             onClick={() => {
-              setCameraMode(cameraMode === 'orbit' ? 'swim' : cameraMode === 'swim' ? 'cinematic' : 'orbit');
+              setCameraMode(cameraMode === 'cinematic' ? 'swim' : cameraMode === 'swim' ? 'orbit' : 'cinematic');
             }}
             className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition shadow-xl cursor-pointer active:scale-95 ${
               cameraMode === 'cinematic'
-                ? 'bg-gradient-to-r from-amber-500/25 to-orange-500/25 border-amber-400 text-amber-200'
+                ? 'bg-gradient-to-r from-teal-500/30 to-cyan-500/30 border-teal-400 text-teal-200 shadow-glow-teal-sm'
                 : cameraMode === 'swim'
-                ? 'bg-teal-500/25 border-teal-400 text-teal-200 shadow-glow-teal-sm'
+                ? 'bg-sky-500/25 border-sky-400 text-sky-200'
                 : 'bg-[#09182a] border-cyan-500/30 text-slate-300 hover:text-white'
             }`}
           >
             {cameraMode === 'cinematic' ? (
-              <Camera className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+              <Camera className="w-3.5 h-3.5 text-teal-300 animate-pulse" />
             ) : (
-              <Compass className="w-3.5 h-3.5 text-teal-400" />
+              <Compass className="w-3.5 h-3.5 text-sky-400" />
             )}
             <span>
               {cameraMode === 'cinematic'
-                ? 'Cinematic Dive Tour'
+                ? 'Cinematic Diver Tour'
                 : cameraMode === 'swim'
-                ? 'Free-Swim WASD'
+                ? 'Diver Free-Swim (WASD)'
                 : 'Orbit Camera'}
             </span>
           </button>
