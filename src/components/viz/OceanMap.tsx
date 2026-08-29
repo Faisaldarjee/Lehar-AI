@@ -17,7 +17,7 @@ import {
   X 
 } from 'lucide-react';
 import type { FloatSummary, MapMarker, PFZAdvisory, SatelliteGridPoint, FishermanReport } from '../../types';
-import { getPFZAdvisories, getSatelliteGrid, fetchFishermenReports } from '../../services/api';
+import { getPFZAdvisories, getSatelliteGrid, fetchFishermenReports, getFloats } from '../../services/api';
 import { INDIAN_PORTS_DATABASE } from '../../data/indianPorts';
 
 // Coastal Clustered Port Representation for National & Regional Overview (Zoom <= 7)
@@ -494,33 +494,43 @@ export const OceanMap: React.FC<OceanMapProps> = ({
   const [pfzZones, setPfzZones] = useState<PFZAdvisory[]>(() => globalPfzCache || []);
   const [satelliteGrid, setSatelliteGrid] = useState<SatelliteGridPoint[]>(() => globalSatGridCache || []);
   const [catchReports, setCatchReports] = useState<FishermanReport[]>([]);
+  const [internalFloats, setInternalFloats] = useState<FloatSummary[]>([]);
 
-  // Load PFZ advisories, Satellite grid & Catch Reports on mount
+  const activeFloats = useMemo(() => {
+    return floats && floats.length > 0 ? floats : internalFloats;
+  }, [floats, internalFloats]);
+
+  // Load PFZ advisories, Satellite grid, Catch Reports & Floats on mount
   useEffect(() => {
     async function loadData() {
       try {
-        const [pfzRes, satRes, catchRes] = await Promise.all([
-          globalPfzCache ? { advisories: globalPfzCache } : getPFZAdvisories('all', 50).catch(() => ({ advisories: [] })),
-          globalSatGridCache ? { points: globalSatGridCache } : getSatelliteGrid(2).catch(() => ({ points: [] })),
+        const [pfzRes, satRes, catchRes, floatRes] = await Promise.all([
+          getPFZAdvisories('all', 60).catch(() => ({ advisories: [] })),
+          getSatelliteGrid(2).catch(() => ({ points: [] })),
           fetchFishermenReports(30).catch(() => ({ reports: [] })),
+          (!floats || floats.length === 0) ? getFloats().catch(() => ({ floats: [] })) : Promise.resolve({ floats: [] }),
         ]);
-        if (pfzRes && pfzRes.advisories && !globalPfzCache) {
+
+        if (pfzRes && pfzRes.advisories && pfzRes.advisories.length > 0) {
           globalPfzCache = pfzRes.advisories;
           setPfzZones(pfzRes.advisories);
         }
-        if (satRes && satRes.points && !globalSatGridCache) {
+        if (satRes && satRes.points && satRes.points.length > 0) {
           globalSatGridCache = satRes.points;
           setSatelliteGrid(satRes.points);
         }
-        if (catchRes && catchRes.reports) {
+        if (catchRes && catchRes.reports && catchRes.reports.length > 0) {
           setCatchReports(catchRes.reports);
+        }
+        if (floatRes && floatRes.floats && floatRes.floats.length > 0) {
+          setInternalFloats(floatRes.floats);
         }
       } catch (err) {
         console.warn('Map data fetch warning:', err);
       }
     }
     loadData();
-  }, []);
+  }, [floats]);
 
   // Handle focus on specific ocean sectors
   const handleFocusSector = (sector: 'arabian' | 'bengal' | 'equatorial' | 'south' | 'all') => {
@@ -829,7 +839,7 @@ export const OceanMap: React.FC<OceanMapProps> = ({
             }`}
           >
             <span className={`w-2 h-2 rounded-full ${showFloats ? 'bg-cyan-400 animate-pulse' : 'bg-slate-500'}`}></span>
-            <span>Floats ({floats.length})</span>
+            <span>Floats ({activeFloats.length})</span>
           </button>
 
           {/* 2. PFZ Fishing Advisories Toggle (Amber/Gold High Yield) */}
@@ -1116,10 +1126,10 @@ export const OceanMap: React.FC<OceanMapProps> = ({
         <MapSectorPanner target={targetSector} />
         <MapZoomWatcher onZoomChange={setCurrentZoom} />
 
-        {/* CartoDB Dark Matter Basemap */}
+        {/* Esri World Dark Gray Canvas Basemap (Zero Watermark / No API Key Required) */}
         <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-          maxZoom={19}
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+          maxZoom={16}
         />
 
         {/* SATELLITE SST HEATMAP OVERLAY LAYER */}
@@ -1586,7 +1596,7 @@ export const OceanMap: React.FC<OceanMapProps> = ({
 
         {/* Argo Float Markers */}
         {showFloats &&
-          floats.map((f, index) => {
+          activeFloats.map((f, index) => {
             const isSelected = selectedFloatId === f.float_id;
             const isHighlighted = highlightMarkers?.some((m) => m.float_id === f.float_id) ?? false;
             const icon = createFloatIcon(isHighlighted, isSelected);
