@@ -517,7 +517,10 @@ def _get_start_keyboard() -> dict:
                 {"text": "📍 Nearest ARGO Float", "callback_data": "cmd_nearest_float"}
             ],
             [
-                {"text": "🇮🇳 हिंदी एडवाइजरी", "callback_data": "cmd_lang_hi"},
+                {"text": "🎣 Log Catch / PFZ Feedback", "callback_data": "cmd_log_catch"},
+                {"text": "🇮🇳 हिंदी एडवाइजरी", "callback_data": "cmd_lang_hi"}
+            ],
+            [
                 {"text": "🌐 Project Details", "callback_data": "cmd_about"}
             ]
         ]
@@ -697,6 +700,21 @@ async def _handle_callback_query(client: httpx.AsyncClient, callback_query: dict
     elif data == "cmd_lang_hi":
         query = "Mumbai ke paas samundar ka taapman kya hai aur machhli pakadne ke liye kaunsa zone best hai aaj?"
         await _handle_text_query(client, chat_id, query, send_voice=True, lang="hi")
+    elif data == "cmd_log_catch":
+        prompt_msg = (
+            "🎣 *Post-Voyage Catch & PFZ Feedback Logging*\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "Namaste Captain! Please send your catch details or a voice note in ANY language:\n\n"
+            "• *Text Example (English):* `350kg Yellowfin Tuna near Sassoon Dock at 40m depth`\n"
+            "• *Text Example (Hindi):* `250 kilo bangda mila 25 meter pe, advisory achhi thi`\n"
+            "• *Text Example (Tamil):* `300kg vanjaram meen kidaithathu 35m depth`\n\n"
+            "🎙️ Or just send a voice note saying what you caught!"
+        )
+        await _telegram_request(client, "sendMessage", {
+            "chat_id": chat_id,
+            "text": prompt_msg,
+            "parse_mode": "Markdown"
+        })
     elif data == "cmd_about":
         about_text = (
             "🏆 *Lehar AI — Grand Finale Edition*\n"
@@ -718,6 +736,12 @@ async def _handle_text_query(
     """Handle free-form natural language query in any language with deep marine physics + voice output."""
     global _total_messages_handled
     _total_messages_handled += 1
+
+    # Check if this text is a post-voyage catch report or feedback
+    from .feedback_engine import is_likely_catch_feedback
+    if is_likely_catch_feedback(text):
+        await _handle_report_command(client, chat_id, "Captain", text)
+        return
 
     # Send typing action
     await _telegram_request(client, "sendChatAction", {"chat_id": chat_id, "action": "typing"})
@@ -803,20 +827,21 @@ async def _handle_text_query(
 
 async def _handle_report_command(client: httpx.AsyncClient, chat_id: int, first_name: str, text: str):
     """
-    Handle /report catch submission by coastal fishermen.
-    Example: /report 300kg Yellowfin Tuna near Sassoon Dock at 40m depth
+    Handle /report and conversational catch submissions in any Indian language.
+    Extracts species, weight, depth, and advisory feedback and responds in user's native language.
     """
-    from .db import save_fisherman_report, get_connection
-    from .species_dict import detect_species_in_query
+    from .feedback_engine import parse_and_process_feedback
+    from .db import get_connection
     
     clean_text = text.replace("/report", "").strip()
-    if not clean_text:
+    if not clean_text or len(clean_text) < 3:
         guide_msg = (
-            "📝 *How to Report Live Catch:*\n\n"
-            "Send your catch details to update the live community map:\n"
+            "📝 *How to Report Live Catch & Advisory Feedback:*\n\n"
+            "Send your catch details in ANY language to update the live community map:\n"
             "• `/report 400kg Bangda at 20m depth near Mumbai`\n"
-            "• `/report 250kg Tuna near Kochi 50m`\n\n"
-            "Or send a voice note saying your catch details!"
+            "• `250kg Tuna near Kochi at 50m depth`\n"
+            "• `300 kilo Surmai mila 30 meter pe`\n\n"
+            "🎙️ Or send a voice note saying your catch details!"
         )
         await _telegram_request(client, "sendMessage", {
             "chat_id": chat_id,
@@ -825,7 +850,7 @@ async def _handle_report_command(client: httpx.AsyncClient, chat_id: int, first_
         })
         return
 
-    # Extract location if mentioned
+    # Extract location if subscriber profile exists
     with get_connection() as conn:
         sub = conn.execute("SELECT latitude, longitude, harbour FROM telegram_subscribers WHERE chat_id = ?", (chat_id,)).fetchone()
     
@@ -833,28 +858,21 @@ async def _handle_report_command(client: httpx.AsyncClient, chat_id: int, first_
     lon = sub["longitude"] if sub and sub["longitude"] else 72.828
     harbour = sub["harbour"] if sub and sub["harbour"] else "Mumbai (Sassoon Dock)"
     
-    species_info = detect_species_in_query(clean_text)
-    species_name = species_info["common_name"] if species_info else "Pelagic Mixed Catch"
-    
-    # Extract quantity (e.g. 500kg, 200 kg)
-    qty_match = re.search(r"(\d+)\s*(kg|kilo|ton|quintal)?", clean_text, re.IGNORECASE)
-    quantity = float(qty_match.group(1)) if qty_match else 75.0
-    
-    # Extract depth (e.g. 30m, 50 meters)
-    depth_match = re.search(r"(\d+)\s*(m|meter|metre)", clean_text, re.IGNORECASE)
-    depth = float(depth_match.group(1)) if depth_match else 25.0
-    
-    report_id = save_fisherman_report(
-        latitude=lat,
-        longitude=lon,
-        species=species_name,
-        quantity_kg=quantity,
-        depth_m=depth,
-        reporter_id=f"tg_{chat_id}",
+    result = await parse_and_process_feedback(
+        text=clean_text,
+        chat_id=chat_id,
         reporter_name=first_name,
-        harbour=harbour,
-        notes=clean_text
+        default_lat=lat,
+        default_lon=lon,
+        default_harbour=harbour
     )
+    
+    report_id = result.get("report_id", 1)
+    species_name = result.get("species", "Pelagic Catch")
+    quantity = result.get("quantity_kg", 50.0)
+    depth = result.get("depth_m", 20.0)
+    localized_reply = result.get("localized_reply", "")
+    detected_lang = result.get("detected_language", "hi")
     
     reply = (
         f"✅ *Catch Report Verified & Logged!* (#FR-{report_id:04d})\n"
@@ -862,7 +880,8 @@ async def _handle_report_command(client: httpx.AsyncClient, chat_id: int, first_
         f"🎣 *Species:* _{species_name}_\n"
         f"⚖️ *Quantity:* *{quantity:.0f} kg* | Depth: *{depth:.0f}m*\n"
         f"⚓ *Port Sector:* {harbour} ({lat:.3f}°N, {lon:.3f}°E)\n\n"
-        f"🌐 *Thank you, Captain {first_name}!* Your report has been added to the **Lehar AI Live Community Catch Map Layer** to help fellow coastal fishermen and validate INCOIS PFZ forecasts."
+        f"💬 *Advisory Feedback:*\n_{localized_reply}_\n\n"
+        f"🌐 *Thank you, Captain {first_name}!* Your report has been added to the **Lehar AI Live Community Catch Map Layer** to validate INCOIS PFZ forecasts and assist fellow coastal fishermen."
     )
     
     await _telegram_request(client, "sendMessage", {
@@ -870,6 +889,11 @@ async def _handle_report_command(client: httpx.AsyncClient, chat_id: int, first_
         "text": reply,
         "parse_mode": "Markdown"
     })
+    
+    # Generate native spoken voice note confirmation
+    voice_bytes = await _synthesize_voice_audio(localized_reply, lang=detected_lang)
+    if voice_bytes:
+        await send_telegram_voice(chat_id, voice_bytes, caption=f"🔊 *Voice Confirmation ({detected_lang.upper()})*")
 
 
 async def run_telegram_bot():

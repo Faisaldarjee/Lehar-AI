@@ -211,3 +211,23 @@ async def create_report(payload: dict):
         "message": "Catch report registered and verified in Lehar AI Ocean Commons."
     }
 
+
+@router.post("/reports/conversational")
+async def process_conversational_feedback(payload: dict):
+    """Process natural language catch feedback in any Indian language (Hindi, Tamil, Telugu, Marathi, English, etc.)."""
+    from ..services.feedback_engine import parse_and_process_feedback
+    text = payload.get("text", "")
+    reporter_name = payload.get("reporter_name", "Captain Ramesh")
+    lat = float(payload.get("latitude", 18.915))
+    lon = float(payload.get("longitude", 72.828))
+    harbour = payload.get("harbour", "Mumbai (Sassoon Dock)")
+
+    result = await parse_and_process_feedback(
+        text=text,
+        reporter_name=reporter_name,
+        default_lat=lat,
+        default_lon=lon,
+        default_harbour=harbour
+    )
+    return result
+
