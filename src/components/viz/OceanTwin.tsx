@@ -4,6 +4,8 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { SSAOPass } from 'three/examples/jsm/postprocessing/SSAOPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { 
   Play, 
   Pause, 
@@ -411,6 +413,18 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
     );
     composer.addPass(bloomPass);
 
+    // Screen Space Ambient Occlusion - Cinematic depth realism
+    const ssaoPass = new SSAOPass(scene, camera, width, height);
+    ssaoPass.kernelRadius = 0.6;      // Larger radius for soft underwater ambient occlusion
+    ssaoPass.minDistance = 0.001;
+    ssaoPass.maxDistance = 0.025;     // Tighter for underwater details
+    ssaoPass.output = SSAOPass.OUTPUT.Default;
+    composer.addPass(ssaoPass);
+
+    // Final output pass (required for SSAO)
+    const outputPass = new OutputPass();
+    composer.addPass(outputPass);
+
     // Underwater Dive-Mask Chromatic & Barrel Shader Pass
     const lensPass = new ShaderPass(UnderwaterLensShader);
     lensPass.renderToScreen = true;
@@ -556,6 +570,72 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
 
     argoFloat.position.set(12, 12.0, -8);
     scene.add(argoFloat);
+
+    // 12. Educational CTD Data Overlay (Floating 3D Panels)
+    const createDataPanel = (label: string, value: string, color: number, offset: number) => {
+      const panelGroup = new THREE.Group();
+
+      // Background panel
+      const panelGeo = new THREE.PlaneGeometry(3.5, 0.8);
+      const panelMat = new THREE.MeshBasicMaterial({
+        color: 0x0a1929,
+        transparent: true,
+        opacity: 0.85,
+        side: THREE.DoubleSide,
+      });
+      const panel = new THREE.Mesh(panelGeo, panelMat);
+      panelGroup.add(panel);
+
+      // Label text (simulated with geometry)
+      const labelGeo = new THREE.PlaneGeometry(1.2, 0.2);
+      const labelMat = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0.9,
+        side: THREE.DoubleSide,
+      });
+      const labelMesh = new THREE.Mesh(labelGeo, labelMat);
+      labelMesh.position.set(-1.0, 0.2, 0.01);
+      panelGroup.add(labelMesh);
+
+      // Value text
+      const valueGeo = new THREE.PlaneGeometry(1.5, 0.3);
+      const valueMat = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.95,
+        side: THREE.DoubleSide,
+      });
+      const valueMesh = new THREE.Mesh(valueGeo, valueMat);
+      valueMesh.position.set(0.8, -0.15, 0.01);
+      panelGroup.add(valueMesh);
+
+      // Connect line to ARGO float
+      const lineGeo = new THREE.CylinderGeometry(0.005, 0.005, offset, 4);
+      const lineMat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.6 });
+      const line = new THREE.Mesh(lineGeo, lineMat);
+      line.position.set(0, -offset / 2, 0);
+      line.rotation.z = Math.PI / 2;
+      panelGroup.add(line);
+
+      panelGroup.position.set(0, offset, 0);
+      panelGroup.userData = { label, value, type: 'dataPanel' };
+
+      return panelGroup;
+    };
+
+    // Create CTD data panels
+    const temperaturePanel = createDataPanel('TEMPERATURE', `${telemetry.tempC}°C`, 0xf59e0b, 3.5);
+    const salinityPanel = createDataPanel('SALINITY', `${telemetry.salPSU} PSU`, 0x3b82f6, 2.5);
+    const depthPanel = createDataPanel('DEPTH', `${telemetry.depthM}m`, 0x10b981, 1.5);
+
+    const ctdOverlay = new THREE.Group();
+    ctdOverlay.add(temperaturePanel);
+    ctdOverlay.add(salinityPanel);
+    ctdOverlay.add(depthPanel);
+
+    ctdOverlay.position.set(12, 16.0, -8); // Above ARGO float
+    scene.add(ctdOverlay);
 
     // 11. ANATOMICAL 3D MARINE LIFE (NO MORE FLAT CONES!)
     
@@ -733,6 +813,43 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
     const planktonField = new THREE.Points(pGeo, pMat);
     scene.add(planktonField);
 
+    // 13. Bubble Stream Particle System (ARGO Float & Fish Respiration)
+    const bubbleCount = 200;
+    const bubbleGeo = new THREE.BufferGeometry();
+    const bubblePositions = new Float32Array(bubbleCount * 3);
+    const bubbleVelocities = new Float32Array(bubbleCount * 3);
+    const bubbleSizes = new Float32Array(bubbleCount);
+    const bubbleOpacities = new Float32Array(bubbleCount);
+
+    for (let i = 0; i < bubbleCount; i++) {
+      const idx = i * 3;
+      // Start bubbles at random positions near ARGO float and fish
+      bubblePositions[idx] = (Math.random() - 0.5) * 5 + 12; // ARGO x position
+      bubblePositions[idx + 1] = Math.random() * 5 + 10;     // Start at different depths
+      bubblePositions[idx + 2] = (Math.random() - 0.5) * 5 - 8; // ARGO z position
+
+      // Random upward velocity with slight horizontal drift
+      bubbleVelocities[idx] = (Math.random() - 0.5) * 0.02; // x drift
+      bubbleVelocities[idx + 1] = 0.08 + Math.random() * 0.04; // y speed (upward)
+      bubbleVelocities[idx + 2] = (Math.random() - 0.5) * 0.02; // z drift
+
+      bubbleSizes[i] = 0.08 + Math.random() * 0.12;
+      bubbleOpacities[i] = 0.4 + Math.random() * 0.4;
+    }
+
+    bubbleGeo.setAttribute('position', new THREE.BufferAttribute(bubblePositions, 3));
+    const bubbleMat = new THREE.PointsMaterial({
+      size: 0.1,
+      transparent: true,
+      opacity: 0.7,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      map: createParticleTexture(),
+    });
+
+    const bubbleField = new THREE.Points(bubbleGeo, bubbleMat);
+    scene.add(bubbleField);
+
     // 13. Interactive Raycast Target Inspect
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
@@ -782,10 +899,14 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
       }
     };
 
-    // 14. Free-Swim Navigation & Mouse Controls
+    // 14. Free-Swim Navigation & Mouse Controls (FULLY REWORKED)
     const keysPressed: Record<string, boolean> = {};
     const handleKeyDown = (e: KeyboardEvent) => {
       keysPressed[e.key.toLowerCase()] = true;
+      // Prevent page scroll when in swim mode
+      if (['w','a','s','d',' ','e','q','c','arrowup','arrowdown','arrowleft','arrowright'].includes(e.key.toLowerCase())) {
+        e.preventDefault();
+      }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       keysPressed[e.key.toLowerCase()] = false;
@@ -796,24 +917,58 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
 
     let isDragging = false;
     let prevMouse = { x: 0, y: 0 };
+    
+    // Orbit mode camera state
     let cameraAngle = 0.25;
     let cameraPitch = 0.15;
     let cameraDist = 26.0;
 
+    // Swim mode first-person state (Euler angles in radians)
+    let swimYaw = 0;       // horizontal rotation (left/right look)
+    let swimPitch = 0;     // vertical rotation (up/down look)
+    let swimPos = new THREE.Vector3(0, 1.6, 24);
+    let swimVelocity = new THREE.Vector3(0, 0, 0);
+    const SWIM_ACCEL = 0.08;
+    const SWIM_FRICTION = 0.88; // smooth deceleration
+    const SWIM_MAX_SPEED = 0.6;
+    const MOUSE_SENSITIVITY = 0.003;
+    let isPointerLocked = false;
+
     const handleMouseDown = (e: MouseEvent) => {
       isDragging = true;
       prevMouse = { x: e.clientX, y: e.clientY };
+      
+      // Request pointer lock in swim mode for seamless mouse look
+      if (cameraModeRef.current === 'swim' && !isPointerLocked) {
+        renderer.domElement.requestPointerLock?.();
+      }
     };
 
     const handleMouseMove = (e: MouseEvent) => {
       handlePointerMove(e);
-      if (!isDragging) return;
-      const dx = e.clientX - prevMouse.x;
-      const dy = e.clientY - prevMouse.y;
-
-      cameraAngle += dx * 0.005;
-      cameraPitch = Math.max(-0.65, Math.min(0.8, cameraPitch + dy * 0.004));
-      prevMouse = { x: e.clientX, y: e.clientY };
+      
+      if (cameraModeRef.current === 'swim') {
+        // In swim mode, always use mouse movement for look (pointer lock or drag)
+        if (isPointerLocked) {
+          swimYaw -= e.movementX * MOUSE_SENSITIVITY;
+          swimPitch -= e.movementY * MOUSE_SENSITIVITY;
+          swimPitch = Math.max(-1.2, Math.min(1.2, swimPitch));
+        } else if (isDragging) {
+          const dx = e.clientX - prevMouse.x;
+          const dy = e.clientY - prevMouse.y;
+          swimYaw -= dx * MOUSE_SENSITIVITY;
+          swimPitch -= dy * MOUSE_SENSITIVITY;
+          swimPitch = Math.max(-1.2, Math.min(1.2, swimPitch));
+          prevMouse = { x: e.clientX, y: e.clientY };
+        }
+      } else if (isDragging) {
+        // Orbit / cinematic mouse drag
+        const dx = e.clientX - prevMouse.x;
+        const dy = e.clientY - prevMouse.y;
+        cameraAngle += dx * 0.005;
+        cameraPitch = Math.max(-0.65, Math.min(0.8, cameraPitch + dy * 0.004));
+        prevMouse = { x: e.clientX, y: e.clientY };
+      }
     };
 
     const handleMouseUp = () => {
@@ -825,12 +980,38 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
       cameraDist = Math.max(6.0, Math.min(60.0, cameraDist + e.deltaY * 0.035));
     };
 
+    // Pointer lock change handler
+    const handlePointerLockChange = () => {
+      isPointerLocked = document.pointerLockElement === renderer.domElement;
+    };
+    document.addEventListener('pointerlockchange', handlePointerLockChange);
+
     const dom = renderer.domElement;
     dom.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
     dom.addEventListener('wheel', handleWheel, { passive: false });
     dom.addEventListener('click', handlePointerDown);
+
+    // Touch support for mobile swim
+    let touchStartPos = { x: 0, y: 0 };
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        touchStartPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }
+    };
+    const handleTouchMove = (e: TouchEvent) => {
+      if (cameraModeRef.current === 'swim' && e.touches.length === 1) {
+        const dx = e.touches[0].clientX - touchStartPos.x;
+        const dy = e.touches[0].clientY - touchStartPos.y;
+        swimYaw -= dx * MOUSE_SENSITIVITY * 0.5;
+        swimPitch -= dy * MOUSE_SENSITIVITY * 0.5;
+        swimPitch = Math.max(-1.2, Math.min(1.2, swimPitch));
+        touchStartPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }
+    };
+    dom.addEventListener('touchstart', handleTouchStart, { passive: true });
+    dom.addEventListener('touchmove', handleTouchMove, { passive: true });
 
     // 15. 60 FPS Physically-Inspired Underwater Render Loop
     let animId: number;
@@ -853,14 +1034,22 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
         fog.color.copy(currentFogColor);
         renderer.setClearColor(currentFogColor);
 
+        // Dynamic fog density based on depth (denser deeper = less visibility)
+        fog.density = 0.018 + depthNorm * 0.015;
+
+        // Dynamic sun intensity based on depth
+        sunDirectional.intensity = Math.max(0.2, 3.8 - depthNorm * 3.2);
+        ambientLight.intensity = Math.max(0.3, 1.1 - depthNorm * 0.6);
+
         // 2. Animated Caustic Pattern Scrolling on Seabed
         causticTexture.offset.x = (clock * 0.04) % 1;
         causticTexture.offset.y = (clock * 0.03) % 1;
 
         // 3. Volumetric God-Ray Light Shaft Pulsing & Noise
         godRayPlanes.forEach((ray, idx) => {
-          (ray.material as THREE.MeshBasicMaterial).opacity = 
-            0.06 + Math.sin(clock * 1.4 + idx * 0.8) * 0.025;
+          const rayOpacity = Math.max(0, 0.06 + Math.sin(clock * 1.4 + idx * 0.8) * 0.025);
+          // Fade god rays with depth
+          (ray.material as THREE.MeshBasicMaterial).opacity = rayOpacity * (1 - depthNorm * 0.8);
         });
 
         // 4. Water Surface Ripples
@@ -919,35 +1108,132 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
         // 10. Particulate Drift & Upward Current
         planktonField.rotation.y += 0.0005;
 
-        // 11. Diver POV Buoyancy Sway & Camera Modes
+        // 11. Bubble Stream Animation
+        const bubblePos = bubbleGeo.attributes.position.array as Float32Array;
+        const timeFactor = clock * 0.5;
+
+        for (let i = 0; i < bubbleCount; i++) {
+          const idx = i * 3;
+
+          // Update bubble position based on velocity
+          bubblePos[idx] += bubbleVelocities[idx];
+          bubblePos[idx + 1] += bubbleVelocities[idx + 1];
+          bubblePos[idx + 2] += bubbleVelocities[idx + 2];
+
+          // Add slight oscillation for natural movement
+          bubblePos[idx] += Math.sin(timeFactor + i * 0.1) * 0.002;
+          bubblePos[idx + 2] += Math.cos(timeFactor + i * 0.15) * 0.002;
+
+          // When bubble reaches surface, reset it to bottom
+          if (bubblePos[idx + 1] > 14.0) {
+            bubblePos[idx + 1] = 8.0;
+            bubblePos[idx] = (Math.random() - 0.5) * 15;
+            bubblePos[idx + 2] = (Math.random() - 0.5) * 15;
+
+            if (i % 3 === 0) {
+              bubblePos[idx] = 12 + (Math.random() - 0.5) * 2;
+              bubblePos[idx + 2] = -8 + (Math.random() - 0.5) * 2;
+            }
+            else if (i % 5 === 0 && tunaMeshes.length > 0) {
+              const tunaIdx = i % tunaMeshes.length;
+              bubblePos[idx] = tunaMeshes[tunaIdx].position.x;
+              bubblePos[idx + 1] = tunaMeshes[tunaIdx].position.y;
+              bubblePos[idx + 2] = tunaMeshes[tunaIdx].position.z;
+            }
+          }
+        }
+        bubbleGeo.attributes.position.needsUpdate = true;
+
+        // ============================================================
+        // 12. CAMERA MODES — Cinematic / Free-Swim (WASD) / Orbit
+        // ============================================================
         const buoyancyBob = Math.sin(clock * 0.5) * 0.035;
         const buoyancySway = Math.sin(clock * 0.35) * 0.012;
 
         if (cameraModeRef.current === 'cinematic') {
-          // Guided Submarine Dive Tour
+          // Guided Submarine Dive Tour — smooth cinematic orbit
           const tourAngle = clock * 0.22;
-          camera.position.x = Math.cos(tourAngle) * 24.0;
-          camera.position.z = Math.sin(tourAngle) * 24.0;
+          const tourRadius = 22.0 + Math.sin(clock * 0.15) * 4.0;
+          camera.position.x = Math.cos(tourAngle) * tourRadius;
+          camera.position.z = Math.sin(tourAngle) * tourRadius;
           camera.position.y = -1.0 + Math.sin(clock * 0.35) * 7.0 + buoyancyBob;
           camera.rotation.z = buoyancySway;
           camera.lookAt(0, -2, 0);
           setCurrentDepthM(Math.round(Math.abs(camera.position.y - 15) * 3));
+
         } else if (cameraModeRef.current === 'swim') {
-          // First-Person Free-Swim with Buoyancy
-          const moveSpeed = 0.38;
-          const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-          const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+          // =====================================================
+          // FIRST-PERSON FREE-SWIM — Euler-based mouse look + WASD
+          // =====================================================
+          
+          // Build forward direction from Euler yaw & pitch
+          const forward = new THREE.Vector3(
+            Math.sin(swimYaw) * Math.cos(swimPitch),
+            Math.sin(swimPitch),
+            Math.cos(swimYaw) * Math.cos(swimPitch)
+          ).normalize();
+          
+          // Horizontal forward (for WASD — no vertical component)
+          const flatForward = new THREE.Vector3(Math.sin(swimYaw), 0, Math.cos(swimYaw)).normalize();
+          
+          // Right vector
+          const right = new THREE.Vector3();
+          right.crossVectors(flatForward, new THREE.Vector3(0, 1, 0)).normalize();
 
-          if (keysPressed['w'] || keysPressed['arrowup']) camera.position.addScaledVector(forward, moveSpeed);
-          if (keysPressed['s'] || keysPressed['arrowdown']) camera.position.addScaledVector(forward, -moveSpeed);
-          if (keysPressed['a'] || keysPressed['arrowleft']) camera.position.addScaledVector(right, -moveSpeed);
-          if (keysPressed['d'] || keysPressed['arrowright']) camera.position.addScaledVector(right, moveSpeed);
-          if (keysPressed[' ']) camera.position.y = Math.min(14.0, camera.position.y + moveSpeed);
-          if (keysPressed['shift'] || keysPressed['c']) camera.position.y = Math.max(-17.0, camera.position.y - moveSpeed);
-
-          camera.position.y += buoyancyBob * 0.1;
-          camera.rotation.z = buoyancySway;
+          // Build acceleration from key input
+          const accel = new THREE.Vector3(0, 0, 0);
+          
+          if (keysPressed['w'] || keysPressed['arrowup']) {
+            accel.addScaledVector(flatForward, SWIM_ACCEL);
+          }
+          if (keysPressed['s'] || keysPressed['arrowdown']) {
+            accel.addScaledVector(flatForward, -SWIM_ACCEL);
+          }
+          if (keysPressed['a'] || keysPressed['arrowleft']) {
+            accel.addScaledVector(right, -SWIM_ACCEL);
+          }
+          if (keysPressed['d'] || keysPressed['arrowright']) {
+            accel.addScaledVector(right, SWIM_ACCEL);
+          }
+          
+          // Vertical (ascend/descend)
+          if (keysPressed[' '] || keysPressed['e']) {
+            accel.y += SWIM_ACCEL;
+          }
+          if (keysPressed['shift'] || keysPressed['c'] || keysPressed['q']) {
+            accel.y -= SWIM_ACCEL;
+          }
+          
+          // Apply acceleration and friction for smooth inertial movement
+          swimVelocity.add(accel);
+          swimVelocity.multiplyScalar(SWIM_FRICTION);
+          
+          // Clamp speed
+          if (swimVelocity.length() > SWIM_MAX_SPEED) {
+            swimVelocity.normalize().multiplyScalar(SWIM_MAX_SPEED);
+          }
+          
+          // Update position
+          swimPos.add(swimVelocity);
+          
+          // Clamp to world bounds
+          swimPos.y = Math.max(-17.0, Math.min(14.5, swimPos.y));
+          swimPos.x = Math.max(-55, Math.min(55, swimPos.x));
+          swimPos.z = Math.max(-55, Math.min(55, swimPos.z));
+          
+          // Apply position + natural buoyancy sway
+          camera.position.copy(swimPos);
+          camera.position.y += buoyancyBob * 0.15;
+          
+          // Apply look direction from Euler angles
+          const lookTarget = new THREE.Vector3().copy(swimPos).add(forward);
+          camera.lookAt(lookTarget);
+          
+          // Subtle diver roll sway
+          camera.rotation.z = buoyancySway * 0.5;
+          
           setCurrentDepthM(Math.round(Math.abs(camera.position.y - 15) * 3));
+          
         } else {
           // Smooth Orbit Mode
           camera.position.x = Math.sin(cameraAngle) * Math.cos(cameraPitch) * cameraDist;
@@ -957,6 +1243,11 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
           camera.lookAt(0, 0, 0);
           setCurrentDepthM(Math.round(Math.abs(camera.position.y - 15) * 3));
         }
+      }
+
+      // Update lens shader time uniform
+      if (lensPass.uniforms.uTime) {
+        lensPass.uniforms.uTime.value = clock;
       }
 
       composer.render();
@@ -986,6 +1277,12 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
       window.removeEventListener('mouseup', handleMouseUp);
       dom.removeEventListener('wheel', handleWheel);
       dom.removeEventListener('click', handlePointerDown);
+      dom.removeEventListener('touchstart', handleTouchStart);
+      dom.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('pointerlockchange', handlePointerLockChange);
+      if (isPointerLocked) {
+        document.exitPointerLock?.();
+      }
       if (currentMount && renderer.domElement) {
         currentMount.removeChild(renderer.domElement);
       }
@@ -1011,6 +1308,41 @@ export const OceanTwin: React.FC<OceanTwinProps> = ({
         </div>
         <span className="text-[8px] text-slate-400">100m</span>
       </div>
+
+      {/* Swim Mode Crosshair Reticle */}
+      {cameraMode === 'swim' && (
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none">
+          <div className="relative w-8 h-8">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1px] h-2.5 bg-cyan-400/60" />
+            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[1px] h-2.5 bg-cyan-400/60" />
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-2.5 h-[1px] bg-cyan-400/60" />
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2.5 h-[1px] bg-cyan-400/60" />
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-1 rounded-full bg-cyan-400/90" />
+          </div>
+        </div>
+      )}
+
+      {/* WASD Control Hint Overlay — appears only in Swim mode */}
+      {cameraMode === 'swim' && (
+        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 pointer-events-none animate-in fade-in duration-500">
+          <div className="flex flex-col items-center gap-1 bg-[#071322]/80 backdrop-blur-xl px-4 py-3 rounded-2xl border border-cyan-500/30 shadow-2xl">
+            <div className="flex items-center gap-0.5">
+              <div className="w-7 h-7 rounded-lg bg-cyan-500/20 border border-cyan-400/50 flex items-center justify-center text-cyan-300 font-bold text-xs font-mono">W</div>
+            </div>
+            <div className="flex items-center gap-0.5">
+              <div className="w-7 h-7 rounded-lg bg-cyan-500/20 border border-cyan-400/50 flex items-center justify-center text-cyan-300 font-bold text-xs font-mono">A</div>
+              <div className="w-7 h-7 rounded-lg bg-cyan-500/20 border border-cyan-400/50 flex items-center justify-center text-cyan-300 font-bold text-xs font-mono">S</div>
+              <div className="w-7 h-7 rounded-lg bg-cyan-500/20 border border-cyan-400/50 flex items-center justify-center text-cyan-300 font-bold text-xs font-mono">D</div>
+            </div>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-[9px] font-mono text-slate-400">
+                <span className="text-cyan-300 font-bold">SPACE</span> Ascend · <span className="text-cyan-300 font-bold">Q</span> Descend · <span className="text-cyan-300 font-bold">Mouse</span> Look
+              </span>
+            </div>
+            <span className="text-[8px] text-slate-500 mt-0.5">Click viewport to lock mouse look · ESC to release</span>
+          </div>
+        </div>
+      )}
 
       {/* Target Reticle Lock Indicator on Hover */}
       {hoveredObject && (

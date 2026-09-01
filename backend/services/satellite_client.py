@@ -19,6 +19,7 @@ import urllib.request
 import urllib.parse
 from pathlib import Path
 from datetime import datetime, timezone
+from typing import Optional, Any, Dict, List
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -60,31 +61,40 @@ def generate_synthetic_climatology_grid() -> dict:
     chl_field = [[0.0] * n_lon for _ in range(n_lat)]
     for i, lat in enumerate(lats):
         for j, lon in enumerate(lons):
-            # Baseline tropical Indian Ocean SST: 27.5°C to 29.8°C
-            # Upwelling zones (West Arabian sea, Malabar) have cooler SST (26.0 - 27.5°C)
-            # Bay of Bengal is warmer (28.5 - 30.0°C)
+            # Baseline tropical Indian Ocean SST: 27.2°C to 29.8°C
+            # Upwelling zones (Malabar, Saurashtra, Coromandel) have distinct thermal gradients
             dist_to_malabar = math.hypot(lat - 11.5, lon - 75.0)
+            dist_to_saurashtra = math.hypot(lat - 21.0, lon - 69.8)
             dist_to_oman = math.hypot(lat - 18.0, lon - 58.0)
             dist_to_mumbai = math.hypot(lat - 18.9, lon - 72.0)
             dist_to_bengal_plume = math.hypot(lat - 20.0, lon - 88.0)
+            dist_to_coromandel = math.hypot(lat - 13.0, lon - 80.5)
 
-            base_sst = 28.6 - (lat - 15.0) * 0.08 + math.sin(lon * 0.1) * 0.4
+            # Realistic thermal front boundaries across shelf transitions
+            base_sst = 28.5 - (lat - 15.0) * 0.14 + math.sin(lon * 0.25) * 0.65
             if dist_to_oman < 5.0:
-                base_sst -= (5.0 - dist_to_oman) * 0.35  # Upwelling cooling
+                base_sst -= (5.0 - dist_to_oman) * 0.55  # Strong Arabian upwelling
             if dist_to_malabar < 4.0:
-                base_sst -= (4.0 - dist_to_malabar) * 0.25
-            sst_field[i][j] = round(max(25.5, min(30.5, base_sst)), 2)
+                base_sst -= (4.0 - dist_to_malabar) * 0.48  # Malabar coastal upwelling front
+            if dist_to_saurashtra < 3.5:
+                base_sst -= (3.5 - dist_to_saurashtra) * 0.40  # Saurashtra shelf edge front
+            if dist_to_coromandel < 3.0:
+                base_sst += (3.0 - dist_to_coromandel) * 0.35  # Coromandel warm tongue
+            
+            sst_field[i][j] = round(max(25.0, min(30.8, base_sst)), 2)
 
-            # Chlorophyll-a (mg/m³): open ocean 0.15-0.40, coastal/upwelling/plumes 0.80-3.50
-            base_chl = 0.22 + 0.08 * math.sin(lat * 0.2) + 0.05 * math.cos(lon * 0.15)
+            # Chlorophyll-a (mg/m³): open ocean 0.15-0.40, coastal/upwelling/plumes 0.80-3.80
+            base_chl = 0.25 + 0.10 * math.sin(lat * 0.2) + 0.08 * math.cos(lon * 0.2)
             if dist_to_oman < 6.0:
-                base_chl += (6.0 - dist_to_oman) * 0.45  # Upwelling nutrient boost
+                base_chl += (6.0 - dist_to_oman) * 0.55
             if dist_to_malabar < 5.0:
-                base_chl += (5.0 - dist_to_malabar) * 0.35
+                base_chl += (5.0 - dist_to_malabar) * 0.50
+            if dist_to_saurashtra < 4.0:
+                base_chl += (4.0 - dist_to_saurashtra) * 0.45
             if dist_to_mumbai < 4.0:
-                base_chl += (4.0 - dist_to_mumbai) * 0.30
+                base_chl += (4.0 - dist_to_mumbai) * 0.38
             if dist_to_bengal_plume < 5.0:
-                base_chl += (5.0 - dist_to_bengal_plume) * 0.40
+                base_chl += (5.0 - dist_to_bengal_plume) * 0.55
             chl_field[i][j] = round(max(0.10, min(5.0, base_chl)), 3)
 
     # --- Pass 2: REAL neighbour finite-difference chlorophyll gradient magnitude (mg/m³ per degree),
@@ -175,8 +185,8 @@ def load_satellite_snapshot() -> dict:
 
 def get_nearest_satellite_data(lat: float, lon: float) -> dict:
     """
-    Find the nearest satellite grid point to the given coordinates (nearest-neighbor lookup).
-    Returns continuous SST, Chlorophyll-a concentration, gradient, and contributing data sources.
+    Continuous 4-point Inverse-Distance Weighted (IDW) interpolation across the 0.5° satellite grid.
+    Eliminates nearest-neighbor spatial plateaus and allows micro-spatial gradient & front extraction.
     """
     snapshot = load_satellite_snapshot()
     points = snapshot.get("points", [])
@@ -195,16 +205,56 @@ def get_nearest_satellite_data(lat: float, lon: float) -> dict:
             ]
         }
 
-    best_pt = min(points, key=lambda p: (p["lat"] - lat) ** 2 + (p["lon"] - lon) ** 2)
+    # Find the 4 closest grid neighbors
+    scored = []
+    for p in points:
+        d2 = (p["lat"] - lat) ** 2 + (p["lon"] - lon) ** 2
+        scored.append((d2, p))
+    scored.sort(key=lambda x: x[0])
+    top4 = scored[:4]
 
+    # Exact grid point match
+    if top4[0][0] < 1e-6:
+        best_pt = top4[0][1]
+        return {
+            "satellite_sst": best_pt["sst"],
+            "chlorophyll_mg_m3": best_pt["chlorophyll"],
+            "chlorophyll_gradient": best_pt["gradient"],
+            "thermal_front": best_pt["thermal_front"],
+            "chlorophyll_front": best_pt["chlorophyll_front"],
+            "pfz_potential": best_pt["pfz_potential"],
+            "data_confidence": "Modeled climatology (exact grid point)",
+            "data_sources": [
+                "Modeled SST climatology (offline snapshot)",
+                "Modeled Chlorophyll-a climatology (offline snapshot)"
+            ]
+        }
+
+    # Smooth 4-point Inverse Distance Weighting (IDW)
+    total_w = 0.0
+    weighted_sst = 0.0
+    weighted_chl = 0.0
+    weighted_grad = 0.0
+    for d2, p in top4:
+        w = 1.0 / max(d2, 1e-6)
+        total_w += w
+        weighted_sst += p["sst"] * w
+        weighted_chl += p["chlorophyll"] * w
+        weighted_grad += p["gradient"] * w
+
+    interp_sst = weighted_sst / total_w
+    interp_chl = weighted_chl / total_w
+    interp_grad = weighted_grad / total_w
+
+    best_pt = top4[0][1]
     return {
-        "satellite_sst": best_pt["sst"],
-        "chlorophyll_mg_m3": best_pt["chlorophyll"],
-        "chlorophyll_gradient": best_pt["gradient"],
+        "satellite_sst": round(interp_sst, 3),
+        "chlorophyll_mg_m3": round(interp_chl, 3),
+        "chlorophyll_gradient": round(interp_grad, 4),
         "thermal_front": best_pt["thermal_front"],
         "chlorophyll_front": best_pt["chlorophyll_front"],
         "pfz_potential": best_pt["pfz_potential"],
-        "data_confidence": "Modeled climatology (offline snapshot)",
+        "data_confidence": "Modeled climatology (IDW continuous interpolation)",
         "data_sources": [
             "Modeled SST climatology (offline snapshot)",
             "Modeled Chlorophyll-a climatology (offline snapshot)"
@@ -224,13 +274,14 @@ def get_satellite_grid(downsample_step: int = 1) -> list[dict]:
 
 
 def get_sst_at(lat: float, lon: float) -> Optional[float]:
-    """Get continuous SST (°C) at coordinates from cached satellite grid."""
+    """Get continuous smoothly interpolated SST (°C) at coordinates."""
     data = get_nearest_satellite_data(lat, lon)
     return data.get("satellite_sst", 28.5)
 
 
 def get_chlorophyll_at(lat: float, lon: float) -> Optional[float]:
-    """Get continuous Chlorophyll-a (mg/m³) at coordinates from cached satellite grid."""
+    """Get continuous smoothly interpolated Chlorophyll-a (mg/m³) at coordinates."""
     data = get_nearest_satellite_data(lat, lon)
     return data.get("chlorophyll_mg_m3", 0.85)
+
 
