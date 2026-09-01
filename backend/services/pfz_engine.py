@@ -8,8 +8,13 @@ Calculates high-probability pelagic fish aggregation zones by fusing:
 
 from __future__ import annotations
 import math
+import sqlite3
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+from typing import Optional, Callable, Tuple, List, Any, Dict
+
 from .db import get_connection
-from .satellite_client import get_nearest_satellite_data
+from .satellite_client import get_nearest_satellite_data, get_sst_at, get_chlorophyll_at
 
 # Comprehensive 34 Major & Minor Indian Fishing Harbours (name, lat, lon)
 HARBOURS = [
@@ -734,4 +739,356 @@ COASTAL_SECTOR_LINES = [
 def get_coastal_pfz_lines() -> list[dict]:
     """Return all coastal PFZ vector front lines."""
     return COASTAL_SECTOR_LINES
+
+
+# ===========================================================================
+# EXPLAINABLE AI (XAI) MULTI-FACTOR ATTRIBUTION ENGINE
+# Combines 4 oceanographic/ecological signals into one composite PFZ score,
+# and returns a full attribution breakdown so the frontend can render an
+# "XAI bar" showing exactly why a zone was flagged.
+#
+# Weights (tunable, sum = 1.0):
+#     SST Thermal Front   -> 0.40
+#     Chlorophyll-a Bloom -> 0.30
+#     Thermocline Depth   -> 0.20
+#     Catch Validation    -> 0.10
+# ===========================================================================
+
+WEIGHTS = {
+    "sst_thermal_front": 0.40,
+    "chlorophyll_bloom": 0.30,
+    "thermocline_depth": 0.20,
+    "catch_validation": 0.10,
+}
+
+SEARCH_RADIUS_KM = 25.0        # neighborhood radius for SST gradient / catch sampling
+CATCH_LOOKBACK_DAYS = 30       # how far back verified fishermen_reports are trusted
+EARTH_RADIUS_KM = 6371.0
+
+
+@dataclass
+class FactorScore:
+    """One line item in the XAI attribution bar."""
+    name: str
+    raw_value: Optional[float]        # actual physical measurement, for UI tooltip
+    raw_unit: str
+    normalized_score: float           # 0-100, how favorable this factor is
+    weight: float                     # 0-1
+    contribution_pct: float = 0.0     # share of FINAL composite score (filled after combine)
+    rationale: str = ""               # human-readable one-liner for the UI card
+
+
+@dataclass
+class PFZResult:
+    latitude: float
+    longitude: float
+    composite_score: float            # 0-100
+    classification: str               # "Low" | "Moderate" | "High" | "Very High"
+    factors: List[FactorScore]
+    species_hint: Optional[str] = None
+    generated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+    def to_dict(self) -> dict:
+        return {
+            "latitude": self.latitude,
+            "longitude": self.longitude,
+            "composite_score": round(self.composite_score, 1),
+            "classification": self.classification,
+            "species_hint": self.species_hint,
+            "generated_at": self.generated_at,
+            "xai_breakdown": [
+                {
+                    "factor": f.name,
+                    "raw_value": f.raw_value,
+                    "unit": f.raw_unit,
+                    "score": round(f.normalized_score, 1),
+                    "weight_pct": round(f.weight * 100, 0),
+                    "contribution_pct": round(f.contribution_pct, 1),
+                    "why": f.rationale,
+                }
+                for f in self.factors
+            ],
+        }
+
+
+# ---------------------------------------------------------------------------
+# Factor 1 — SST Thermal Front (40%)
+# Fish aggregate along sharp temperature gradients (fronts), not on smooth
+# SST. Approximate a front by sampling SST at N/S/E/W offsets and taking the
+# max gradient (°C/km).
+# ---------------------------------------------------------------------------
+def score_sst_thermal_front(
+    lat: float,
+    lon: float,
+    satellite_sst_fn: Callable[[float, float], Optional[float]],
+) -> FactorScore:
+    """satellite_sst_fn(lat, lon) -> sst_celsius or None. Wire to satellite_client.py cache."""
+    offset_deg = 0.15  # ~15-17km at Indian coastal latitudes, matches 0.5° cached grid
+    center = satellite_sst_fn(lat, lon)
+    offsets = {
+        "N": (offset_deg, 0.0),
+        "S": (-offset_deg, 0.0),
+        "E": (0.0, offset_deg),
+        "W": (0.0, -offset_deg),
+    }
+
+    gradients = []
+    if center is not None:
+        for dlat, dlon in offsets.values():
+            sample = satellite_sst_fn(lat + dlat, lon + dlon)
+            if sample is None:
+                continue
+            dist_km = haversine_km(lat, lon, lat + dlat, lon + dlon)
+            if dist_km > 0:
+                gradients.append(abs(sample - center) / dist_km)
+
+    max_gradient = max(gradients) if gradients else 0.0
+    normalized = min(100.0, (max_gradient / 0.20) * 100.0)
+
+    if max_gradient >= 0.15:
+        rationale = f"Strong thermal front ({max_gradient:.3f}°C/km) — likely current boundary, fish tend to aggregate."
+    elif max_gradient >= 0.05:
+        rationale = f"Moderate SST gradient ({max_gradient:.3f}°C/km) nearby — usable front signal."
+    else:
+        rationale = f"Weak SST gradient ({max_gradient:.3f}°C/km) — no strong thermal front detected."
+
+    return FactorScore(
+        name="SST Thermal Front",
+        raw_value=round(max_gradient, 4),
+        raw_unit="°C/km",
+        normalized_score=normalized,
+        weight=WEIGHTS["sst_thermal_front"],
+        rationale=rationale,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Factor 2 — NASA Chlorophyll-a Bloom (30%)
+# Higher chlorophyll = more phytoplankton = baitfish = pelagic predators.
+# Too high (>8 mg/m3) can flag a harmful algal bloom (HAB) risk -> penalize.
+# ---------------------------------------------------------------------------
+def score_chlorophyll_bloom(
+    lat: float,
+    lon: float,
+    satellite_chl_fn: Callable[[float, float], Optional[float]],
+) -> FactorScore:
+    chl = satellite_chl_fn(lat, lon)  # mg/m3
+    if chl is None:
+        return FactorScore(
+            "Chlorophyll-a Bloom", None, "mg/m³", 0.0,
+            WEIGHTS["chlorophyll_bloom"],
+            rationale="No chlorophyll satellite data available for this cell.",
+        )
+
+    if chl < 0.1:
+        normalized = (chl / 0.1) * 30.0
+        rationale = f"Very low chlorophyll ({chl:.2f} mg/m³) — nutrient-poor water, low bait density."
+    elif chl <= 3.0:
+        normalized = 40.0 + (chl / 3.0) * 60.0
+        rationale = f"Productive bloom ({chl:.2f} mg/m³) — strong bait-fish density indicator."
+    elif chl <= 8.0:
+        normalized = 100.0 - ((chl - 3.0) / 5.0) * 40.0
+        rationale = f"High chlorophyll ({chl:.2f} mg/m³) — productive but nearing bloom saturation."
+    else:
+        normalized = max(10.0, 60.0 - (chl - 8.0) * 5.0)
+        rationale = f"Very high chlorophyll ({chl:.2f} mg/m³) — possible harmful algal bloom (HAB) risk."
+
+    return FactorScore(
+        name="Chlorophyll-a Bloom",
+        raw_value=round(chl, 3),
+        raw_unit="mg/m³",
+        normalized_score=max(0.0, min(100.0, normalized)),
+        weight=WEIGHTS["chlorophyll_bloom"],
+        rationale=rationale,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Factor 3 — Thermocline Depth (20%)
+# Each target species has a preferred depth band.
+# Score = how close the ARGO-derived thermocline depth is to that band.
+# ---------------------------------------------------------------------------
+def score_thermocline_depth(
+    thermocline_depth_m: Optional[float],
+    species_depth_range_m: Tuple[float, float] = (20.0, 80.0),
+    species_name: str = "Yellowfin Tuna",
+) -> FactorScore:
+    if thermocline_depth_m is None:
+        return FactorScore(
+            "Thermocline Depth", None, "m", 0.0,
+            WEIGHTS["thermocline_depth"],
+            rationale="No nearby ARGO profile available to compute thermocline depth.",
+        )
+
+    lo, hi = species_depth_range_m
+    mid = (lo + hi) / 2.0
+    half_range = max((hi - lo) / 2.0, 1e-6)
+
+    if lo <= thermocline_depth_m <= hi:
+        distance_from_center = abs(thermocline_depth_m - mid)
+        normalized = 100.0 - (distance_from_center / half_range) * 20.0
+        rationale = (
+            f"Thermocline at {thermocline_depth_m:.0f}m sits within {species_name}'s "
+            f"preferred band ({lo:.0f}-{hi:.0f}m) — favorable feeding depth."
+        )
+    else:
+        distance_outside = min(abs(thermocline_depth_m - lo), abs(thermocline_depth_m - hi))
+        normalized = max(0.0, 60.0 - distance_outside * 1.5)
+        rationale = (
+            f"Thermocline at {thermocline_depth_m:.0f}m is outside {species_name}'s "
+            f"preferred band ({lo:.0f}-{hi:.0f}m) — species less likely at this depth."
+        )
+
+    return FactorScore(
+        name="Thermocline Depth",
+        raw_value=round(thermocline_depth_m, 1),
+        raw_unit="m",
+        normalized_score=max(0.0, min(100.0, normalized)),
+        weight=WEIGHTS["thermocline_depth"],
+        rationale=rationale,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Factor 4 — Catch Validation (10%)
+# The closed-loop differentiator: verified fishermen_reports near this point
+# in the last N days boost confidence in the prediction.
+# ---------------------------------------------------------------------------
+def score_catch_validation(lat: float, lon: float, db_conn: Optional[sqlite3.Connection] = None) -> FactorScore:
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=CATCH_LOOKBACK_DAYS)).isoformat()
+    
+    if db_conn is not None and hasattr(db_conn, "execute"):
+        cursor = db_conn.execute(
+            """
+            SELECT quantity_kg, latitude, longitude
+            FROM fishermen_reports
+            WHERE verified = 1 AND created_at >= ?
+            """,
+            (cutoff,),
+        )
+        rows = cursor.fetchall()
+    else:
+        with get_connection() as conn:
+            cursor = conn.execute(
+                """
+                SELECT quantity_kg, latitude, longitude
+                FROM fishermen_reports
+                WHERE verified = 1 AND created_at >= ?
+                """,
+                (cutoff,),
+            )
+            rows = cursor.fetchall()
+
+    nearby_catches = []
+    for r in rows:
+        quantity_kg = r["quantity_kg"] if isinstance(r, (sqlite3.Row, dict)) else r[0]
+        r_lat = r["latitude"] if isinstance(r, (sqlite3.Row, dict)) else r[1]
+        r_lon = r["longitude"] if isinstance(r, (sqlite3.Row, dict)) else r[2]
+        dist = haversine_km(lat, lon, r_lat, r_lon)
+        if dist <= SEARCH_RADIUS_KM:
+            nearby_catches.append(quantity_kg)
+
+    if not nearby_catches:
+        return FactorScore(
+            "Catch Validation", 0.0, "verified reports",
+            35.0,  # neutral prior — don't punish zones that just lack history yet
+            WEIGHTS["catch_validation"],
+            rationale=(
+                f"No verified catch reports within {SEARCH_RADIUS_KM:.0f}km in the last "
+                f"{CATCH_LOOKBACK_DAYS} days — prediction is model-only, unvalidated."
+            ),
+        )
+
+    avg_kg = sum(nearby_catches) / len(nearby_catches)
+    normalized = min(100.0, (avg_kg / 200.0) * 100.0)
+
+    return FactorScore(
+        name="Catch Validation",
+        raw_value=round(avg_kg, 1),
+        raw_unit="kg avg (verified)",
+        normalized_score=normalized,
+        weight=WEIGHTS["catch_validation"],
+        rationale=(
+            f"{len(nearby_catches)} verified catch report(s) within {SEARCH_RADIUS_KM:.0f}km "
+            f"averaging {avg_kg:.1f}kg — ground-truth supports this zone."
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Composite Classification & Solver
+# ---------------------------------------------------------------------------
+def classify_pfz_score(score: float) -> str:
+    if score >= 75:
+        return "Very High"
+    if score >= 55:
+        return "High"
+    if score >= 35:
+        return "Moderate"
+    return "Low"
+
+
+def get_thermocline_depth_near(lat: float, lon: float) -> Optional[float]:
+    """Find closest ARGO float in SQLite and compute its thermocline depth."""
+    with get_connection() as conn:
+        profile = conn.execute(
+            """
+            SELECT id, latitude, longitude
+            FROM argo_profiles
+            ORDER BY ((latitude - ?) * (latitude - ?) + (longitude - ?) * (longitude - ?)) ASC
+            LIMIT 1
+            """,
+            (lat, lat, lon, lon)
+        ).fetchone()
+
+        if not profile:
+            return 45.0
+        
+        therm = compute_thermocline_gradient(profile["id"])
+        return therm.get("thermocline_depth_m", 45.0)
+
+
+def compute_pfz_score(
+    lat: float,
+    lon: float,
+    satellite_sst_fn: Optional[Callable[[float, float], Optional[float]]] = None,
+    satellite_chl_fn: Optional[Callable[[float, float], Optional[float]]] = None,
+    thermocline_depth_m: Optional[float] = None,
+    db_conn: Optional[sqlite3.Connection] = None,
+    species_name: str = "Yellowfin Tuna",
+    species_depth_range_m: Tuple[float, float] = (20.0, 80.0),
+) -> PFZResult:
+    """
+    Main XAI Explainable Scoring Entry Point.
+    Returns composite score, classification, and factor attribution breakdown.
+    """
+    if satellite_sst_fn is None:
+        satellite_sst_fn = get_sst_at
+    if satellite_chl_fn is None:
+        satellite_chl_fn = get_chlorophyll_at
+    if thermocline_depth_m is None:
+        thermocline_depth_m = get_thermocline_depth_near(lat, lon)
+
+    factors = [
+        score_sst_thermal_front(lat, lon, satellite_sst_fn),
+        score_chlorophyll_bloom(lat, lon, satellite_chl_fn),
+        score_thermocline_depth(thermocline_depth_m, species_depth_range_m, species_name),
+        score_catch_validation(lat, lon, db_conn),
+    ]
+
+    weighted_sum = sum(f.normalized_score * f.weight for f in factors)
+    for f in factors:
+        contribution = f.normalized_score * f.weight
+        f.contribution_pct = (contribution / weighted_sum * 100.0) if weighted_sum > 0 else 0.0
+
+    return PFZResult(
+        latitude=lat,
+        longitude=lon,
+        composite_score=weighted_sum,
+        classification=classify_pfz_score(weighted_sum),
+        factors=factors,
+        species_hint=species_name,
+    )
+
+
 

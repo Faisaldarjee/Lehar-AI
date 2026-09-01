@@ -231,3 +231,19 @@ async def process_conversational_feedback(payload: dict):
     )
     return result
 
+
+@router.get("/pfz")
+async def get_pfz_attribution(
+    lat: float = Query(18.915, description="Latitude"),
+    lon: float = Query(72.828, description="Longitude"),
+    species: str = Query("Yellowfin Tuna", description="Target pelagic species")
+):
+    """
+    Explainable AI (XAI) Potential Fishing Zone (PFZ) Scoring & Factor Attribution.
+    Combines SST Thermal Front (40%), Chlorophyll Bloom (30%), Thermocline Depth (20%), and Catch Validation (10%).
+    """
+    from ..services.pfz_engine import compute_pfz_score
+    result = compute_pfz_score(lat=lat, lon=lon, species_name=species)
+    return result.to_dict()
+
+

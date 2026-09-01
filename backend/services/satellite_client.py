@@ -221,3 +221,16 @@ def get_satellite_grid(downsample_step: int = 1) -> list[dict]:
     if downsample_step <= 1:
         return points
     return points[::downsample_step]
+
+
+def get_sst_at(lat: float, lon: float) -> Optional[float]:
+    """Get continuous SST (°C) at coordinates from cached satellite grid."""
+    data = get_nearest_satellite_data(lat, lon)
+    return data.get("satellite_sst", 28.5)
+
+
+def get_chlorophyll_at(lat: float, lon: float) -> Optional[float]:
+    """Get continuous Chlorophyll-a (mg/m³) at coordinates from cached satellite grid."""
+    data = get_nearest_satellite_data(lat, lon)
+    return data.get("chlorophyll_mg_m3", 0.85)
+

@@ -66,3 +66,29 @@ def test_get_pfz_advisories_attaches_xai():
         assert "xai_attribution" in adv
         assert "total_score" in adv["xai_attribution"]
         assert adv["xai_attribution"]["total_score"] == adv["pfz_score"]
+
+
+def test_compute_pfz_score_xai_breakdown():
+    """Verify compute_pfz_score full 4-factor XAI breakdown matching Claude's engine."""
+    from backend.services.pfz_engine import compute_pfz_score
+    result = compute_pfz_score(lat=18.915, lon=72.828, species_name="Yellowfin Tuna")
+    d = result.to_dict()
+    
+    assert "composite_score" in d
+    assert "classification" in d
+    assert "xai_breakdown" in d
+    assert len(d["xai_breakdown"]) == 4
+    
+    factors = [f["factor"] for f in d["xai_breakdown"]]
+    assert "SST Thermal Front" in factors
+    assert "Chlorophyll-a Bloom" in factors
+    assert "Thermocline Depth" in factors
+    assert "Catch Validation" in factors
+    
+    for f in d["xai_breakdown"]:
+        assert "score" in f
+        assert "weight_pct" in f
+        assert "contribution_pct" in f
+        assert "why" in f
+        assert len(f["why"]) > 0
+
