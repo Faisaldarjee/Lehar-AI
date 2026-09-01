@@ -135,6 +135,26 @@ SPECIES_ECOLOGY = {
         "salinity_range": (33.5, 35.8),
         "gear": "Bottom Trawl / Drift Gillnet",
         "feeding_zone": "Subsurface chlorophyll transition boundaries"
+    },
+    "hilsa": {
+        "common_name": "Hilsa (Ilish)",
+        "scientific_name": "Tenualosa ilisha",
+        "optimal_sst": (25.0, 30.0),
+        "ideal_depth": (10.0, 40.0),
+        "min_do_ml_l": 2.8,
+        "salinity_range": (28.0, 32.0),
+        "gear": "Gillnet / Cast Net",
+        "feeding_zone": "Estuarine plume boundaries with freshwater mixing"
+    },
+    "indian_salmon": {
+        "common_name": "Rawas / Indian Salmon",
+        "scientific_name": "Eleutheronema tetradactylum",
+        "optimal_sst": (24.5, 28.2),
+        "ideal_depth": (15.0, 60.0),
+        "min_do_ml_l": 3.0,
+        "salinity_range": (32.0, 35.0),
+        "gear": "Bottom Trawl / Hook & Line",
+        "feeding_zone": "Continental shelf mud banks with moderate current"
     }
 }
 
@@ -739,6 +759,75 @@ COASTAL_SECTOR_LINES = [
 def get_coastal_pfz_lines() -> list[dict]:
     """Return all coastal PFZ vector front lines."""
     return COASTAL_SECTOR_LINES
+
+
+# ---------------------------------------------------------------------------
+# COMMERCIAL SPECIES CLASSIFICATION BASED ON MULTI-VARIABLE ECOLOGICAL NICHES
+# Adapted from friend's repository with improved species-specific thresholds
+# ---------------------------------------------------------------------------
+def determine_target_species(
+    fused_sst: float,
+    chlorophyll: float,
+    distance_from_shore_km: float,
+    latitude: float,
+    mixed_layer_depth_m: Optional[float] = None
+) -> list[str]:
+    """
+    Classify commercial marine species based on multi-variable ecological niches.
+    Returns list of matched species names.
+
+    Ecological niche boundaries adapted from ICAR-CMFRI & INCOIS regional fisheries guidelines.
+    """
+    matched_species = []
+
+    # 1. Tuna/Yellowfin (Kera/Aila) - Offshore pelagic species
+    if (distance_from_shore_km >= 120.0 or abs(latitude) <= 8.0) and 24.0 <= fused_sst <= 29.5:
+        matched_species.append("Yellowfin Tuna (Kera/Aila)")
+
+    # 2. Surmai/King Mackerel - Shelf edge predator
+    if (distance_from_shore_km <= 220.0 and
+        26.0 <= fused_sst <= 28.8 and
+        (mixed_layer_depth_m is None or mixed_layer_depth_m <= 60.0)):
+        matched_species.append("Surmai / King Mackerel")
+
+    # 3. Bangda/Indian Mackerel - Coastal upwelling species
+    if (distance_from_shore_km <= 160.0 and
+        chlorophyll >= 0.38 and
+        25.0 <= fused_sst <= 29.2):
+        matched_species.append("Bangda / Indian Mackerel (Ayala)")
+
+    # 4. Tarli/Indian Oil Sardine - High chlorophyll bloom species
+    if (distance_from_shore_km <= 130.0 and
+        chlorophyll >= 0.48 and
+        25.5 <= fused_sst <= 29.0):
+        matched_species.append("Tarli / Indian Oil Sardine (Mathi)")
+
+    # 5. Pomfret (Paplet/Vellavoli) - Latitudinal constraints
+    if (distance_from_shore_km <= 140.0 and
+        25.5 <= fused_sst <= 28.8 and
+        (latitude >= 14.5 or latitude <= -4.0)):
+        matched_species.append("Silver Pomfret (Paplet/Vellavoli)")
+
+    # 6. Hilsa/Ilish - Northern Bay of Bengal estuarine species
+    if (latitude >= 18.5 and
+        chlorophyll >= 0.50 and
+        25.0 <= fused_sst <= 30.0):
+        matched_species.append("Hilsa (Ilish)")
+
+    # 7. Rawas/Indian Salmon - Temperate shelf species
+    if (distance_from_shore_km <= 150.0 and
+        24.5 <= fused_sst <= 28.2 and
+        latitude >= 14.0):
+        matched_species.append("Rawas / Indian Salmon")
+
+    # Fallback defaults based on distance from shore
+    if not matched_species:
+        if distance_from_shore_km > 150.0:
+            matched_species = ["Yellowfin Tuna", "Indian Mackerel"]
+        else:
+            matched_species = ["King Mackerel", "Silver Pomfret"]
+
+    return matched_species
 
 
 # ===========================================================================
