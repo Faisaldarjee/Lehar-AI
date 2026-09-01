@@ -4,14 +4,22 @@ Processes multi-lingual voice & text catch feedback from coastal fishermen acros
 Extracts species, weight, depth, coordinates, and advisory accuracy ratings for INCOIS validation.
 """
 
+import os
 import json
 import logging
 import re
+from pathlib import Path
 from typing import Any, Dict, Optional
-from ..config import get_settings
+from dotenv import load_dotenv
+
 from .db import save_fisherman_report, get_connection
 from .species_dict import detect_species_in_query
-from .voice_agent import detect_script_language
+from .lang_detect import detect_script_language
+
+# Load backend/.env
+backend_env = Path(__file__).resolve().parent.parent / '.env'
+load_dotenv(dotenv_path=backend_env)
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +55,7 @@ async def parse_and_process_feedback(
     Parses conversational multi-lingual catch feedback using Groq LLaMA 3.3 with regex fallbacks.
     Persists the ground-truth report to SQLite and returns localized response text.
     """
-    settings = get_settings()
-    groq_key = settings.GROQ_API_KEY
+    groq_key = os.getenv("GROQ_API_KEY")
 
     # 1. Detect language metadata
     lang_meta = detect_script_language(text)
