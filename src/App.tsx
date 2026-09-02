@@ -2,7 +2,7 @@ import { useState, useEffect, lazy } from 'react';
 import { Navbar } from './components/layout/Navbar';
 import { ChatPanel } from './components/chat/ChatPanel';
 import { TelegramModal } from './components/common/TelegramModal';
-import { MarineBulletinModal } from './components/common/MarineBulletinModal';
+
 import { OceanAtmosphere } from './components/common/OceanAtmosphere';
 import { HudCornerBrackets } from './components/common/HudCornerBrackets';
 import { ViewBoundary } from './components/common/ErrorBoundary';
@@ -33,7 +33,6 @@ import {
   triggerAnomalyScan,
   getFloatTrajectory,
   getDepthProfile,
-  getPFZAdvisories,
 } from './services/api';
 
 import type {
@@ -42,7 +41,7 @@ import type {
   ChatMessage,
   FloatSummary,
   AnomalyAlert,
-  PFZAdvisory,
+
   ChartData,
   MapMarker,
   DepthMeasurement,
@@ -62,7 +61,7 @@ export default function App() {
   // Core Application Data State
   const [floats, setFloats] = useState<FloatSummary[]>([]);
   const [anomalies, setAnomalies] = useState<AnomalyAlert[]>([]);
-  const [pfzAdvisories, setPfzAdvisories] = useState<PFZAdvisory[]>([]);
+
   const [anomaliesAreSample, setAnomaliesAreSample] = useState<boolean>(false);
   const [isScanningAnomalies, setIsScanningAnomalies] = useState<boolean>(false);
 
@@ -70,7 +69,7 @@ export default function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isChatLoading, setIsChatLoading] = useState<boolean>(false);
   const [isTelegramModalOpen, setIsTelegramModalOpen] = useState<boolean>(false);
-  const [isBulletinModalOpen, setIsBulletinModalOpen] = useState<boolean>(false);
+
 
   // Smart Stage Visualization State (Chat View)
   const [stageView, setStageView] = useState<'map' | 'chart' | '3d'>('map');
@@ -92,11 +91,10 @@ export default function App() {
   useEffect(() => {
     async function initData() {
       try {
-        const [statsData, floatsData, anomaliesData, pfzData] = await Promise.all([
+        const [statsData, floatsData, anomaliesData] = await Promise.all([
           getStats().catch(() => null),
           getFloats().catch(() => ({ floats: [], count: 0 })),
           getAnomalies().catch(() => ({ anomalies: [] as AnomalyAlert[], count: 0, source: 'sample' as const })),
-          getPFZAdvisories('all', 30).catch(() => ({ advisories: [] })),
         ]);
 
         if (statsData) {
@@ -115,9 +113,7 @@ export default function App() {
           setAnomaliesAreSample(anomaliesData.source === 'sample');
         }
 
-        if (pfzData && pfzData.advisories) {
-          setPfzAdvisories(pfzData.advisories);
-        }
+
 
         // Pre-fetch initial sample depth profile for when charts are opened
         try {
@@ -310,7 +306,7 @@ export default function App() {
         onSelectRole={setUserRole}
         backendOnline={backendOnline}
         onOpenTelegramModal={() => setIsTelegramModalOpen(true)}
-        onOpenBulletinModal={() => setIsBulletinModalOpen(true)}
+
       />
 
       {/* Live Telegram Bot QR Modal for Judges & Field Demos */}
@@ -319,13 +315,7 @@ export default function App() {
         onClose={() => setIsTelegramModalOpen(false)}
       />
 
-      {/* 1-Click Official INCOIS Marine Advisory Bulletin Modal */}
-      <MarineBulletinModal
-        isOpen={isBulletinModalOpen}
-        onClose={() => setIsBulletinModalOpen(false)}
-        pfzAdvisories={pfzAdvisories}
-        anomalies={anomalies}
-      />
+
 
       {/* Main Interactive Workspace (Pinned Dashboard Layout — Zero Page Drift) */}
       <main className="flex-1 min-h-0 max-w-7xl w-full mx-auto p-2 sm:p-3 md:p-3.5 flex flex-col overflow-hidden">

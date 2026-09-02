@@ -11,7 +11,7 @@ Traditional oceanographic portals (e.g., INCOIS ERDDAP, NOAA CoastWatch) deliver
 3. **AnomalyRadar (Marine Heatwaves)**: Automated detection and Hobday (2016) classification of thermal and thermohaline anomalies (*Moderate, Strong, Severe, Extreme*) with 1-click 3D dive handoffs.
 4. **Living 3D / WebXR Ocean Twin**: Cinematic physically-inspired underwater ecosystem simulation (Subnautica/Abzu standard) with volumetric god-rays, scrolling caustics on rippled coral sand, anatomical countershaded Yellowfin Tuna shoals, flapping Manta Rays, baitballs, and WASD/VR first-person diver buoyancy.
 5. **OceanLens 3D**: Real-time vertical water-column cross-section slicing ($0\% \to 75\%$) showing the Thermocline, Halocline, and Pycnocline with interactive raycast probe HUD and 2-minute automated judge tour.
-6. **Field Delivery Channels**: Live Telegram Bot (`@LeharAIBot`) and WhatsApp Simulator supporting 7+ Indian languages with voice-in/voice-out, emergency SOS beacons, and automated INCOIS PDF Daily Marine Bulletin generation.
+6. **Field Delivery Channels**: Live Telegram Bot (`@LeharAIBot`) and WhatsApp Simulator supporting 7+ Indian languages with voice-in/voice-out and emergency SOS beacons.
 7. **Closed-Loop Crowdsourced Catch Feedback Engine**: Automated post-voyage check-in where fishermen report real catch data in ANY regional language (voice/text) to validate AI PFZ predictions with ground-truth data.
 
 ---
@@ -33,7 +33,7 @@ Traditional oceanographic portals (e.g., INCOIS ERDDAP, NOAA CoastWatch) deliver
 - **AI / LLM Engine**: Groq LLaMA 3.3 70B Versatile, Groq Whisper Large v3 Turbo (<300ms multilingual speech-to-text)
 - **Voice Output**: Edge-TTS Neural regional voices (`hi-IN`, `ta-IN`, `te-IN`, `mr-IN`, `bn-IN`, `gu-IN`, `ml-IN`, `kn-IN`, `en-IN`)
 - **Scientific Oceanography**: Custom Python vector RAG corpus, Hobday (2016) Marine Heatwave calculus, Mixed Layer Depth (MLD) thresholding, thermocline gradients ($dT/dz$), ICAR-CMFRI pelagic species ecological viability models
-- **Document Generation**: ReportLab (INCOIS Daily Marine Bulletin PDF)
+
 
 ---
 
@@ -66,7 +66,7 @@ SIH/
 │   │   ├── data.py                   # GET /api/stats, /api/reports, POST /api/reports/conversational
 │   │   ├── anomaly.py                # GET /api/anomalies (Real-time MHW & thermohaline anomaly feeds)
 │   │   ├── guardian.py               # GET /api/guardian (Harbour weather & advisory feeds)
-│   │   ├── bulletin.py               # GET /api/bulletin/download (INCOIS PDF bulletin generator)
+
 │   │   └── telegram.py               # GET /api/telegram/status, POST /api/telegram/broadcast
 │   └── services/
 │       ├── db.py                     # SQLite connection manager, schema initialization, read-only SQL executor
@@ -79,7 +79,7 @@ SIH/
 │       ├── chat_memory.py            # Multi-turn session context resolver
 │       ├── lang_detect.py            # Regional script & Indian language detector
 │       ├── marine_weather.py         # Open-Meteo Marine live swell, wave height & wind integration
-│       ├── pdf_bulletin.py           # Official INCOIS Daily Marine Advisory PDF generator
+
 │       ├── satellite_client.py       # NOAA MUR SST & NASA Chlorophyll-a ingestion & caching
 │       └── voice_agent.py            # Edge-TTS neural audio synthesis wrapper
 │

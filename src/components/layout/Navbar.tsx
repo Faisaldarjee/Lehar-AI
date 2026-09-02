@@ -9,7 +9,7 @@ import {
   Sparkles,
   Activity,
   Send,
-  FileText,
+
   Anchor,
   Microscope,
   GraduationCap,
@@ -24,7 +24,7 @@ interface NavbarProps {
   onSelectRole?: (role: UserRole) => void;
   backendOnline?: boolean;
   onOpenTelegramModal?: () => void;
-  onOpenBulletinModal?: () => void;
+
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -34,7 +34,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSelectRole,
   backendOnline = true,
   onOpenTelegramModal,
-  onOpenBulletinModal,
+
 }) => {
   const [demoOpen, setDemoOpen] = useState(false);
   const [roleOpen, setRoleOpen] = useState(false);
@@ -167,7 +167,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           })}
         </nav>
 
-        {/* Right Section: Adaptive Role Selector, Bulletin Button & Demonstrators */}
+        {/* Right Section: Adaptive Role Selector & Demonstrators */}
         <div className="flex items-center gap-2 shrink-0">
 
           {/* Backend / Edge Indicator */}
@@ -231,18 +231,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </div>
 
-          {/* Official INCOIS Bulletin Button */}
-          {onOpenBulletinModal && (
-            <button
-              type="button"
-              onClick={onOpenBulletinModal}
-              className="hidden md:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-teal-500/20 to-cyan-500/20 hover:from-teal-500/30 hover:to-cyan-500/30 border border-teal-400/40 text-teal-200 transition-all cursor-pointer active:scale-95 shadow-sm"
-              title="Generate Official INCOIS & Ministry of Earth Sciences Daily Marine Bulletin"
-            >
-              <FileText className="w-3.5 h-3.5 text-teal-300" />
-              <span>Bulletin</span>
-            </button>
-          )}
+
 
           {/* Demonstrators Dropdown Menu */}
           <div className="relative shrink-0" ref={dropdownRef}>

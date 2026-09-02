@@ -1,7 +1,7 @@
 """
 Lehar AI Backend — Oceanographic Vector RAG & Knowledge Service
 Provides semantic search and domain knowledge retrieval for oceanography concepts,
-INCOIS advisory bulletins, marine heatwave classifications, and WMO Argo float specifications.
+marine heatwave classifications, and WMO Argo float specifications.
 """
 
 from __future__ import annotations
