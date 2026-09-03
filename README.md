@@ -11,8 +11,10 @@
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI_0.115-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![React 19](https://img.shields.io/badge/Frontend-React_19_TypeScript-61DAFB?logo=react&logoColor=black)](https://react.dev)
 [![Groq LLaMA 3.3](https://img.shields.io/badge/AI_Engine-Groq_LLaMA_3.3_70B-F55036?logo=groq&logoColor=white)](https://groq.com)
-[![Three.js](https://img.shields.io/badge/3D_WebGL-Three.js-000000?logo=three.js&logoColor=white)](https://threejs.org)
-[![Leaflet](https://img.shields.io/badge/Spatial_Maps-Leaflet_1.9-199900?logo=leaflet&logoColor=white)](https://leafletjs.com)
+[![Research Dossier](https://img.shields.io/badge/Scientific_Validation-Research_Dossier_2026-4F46E5?logo=googlescholar&logoColor=white)](RESEARCH_REPORT.md)
+[![19/19 Tests](https://img.shields.io/badge/Pytest_Suite-19%2F19_Passed-10B981?logo=pytest&logoColor=white)](tests/)
+
+> 📄 **Official SIH Scientific Validation Dossier:** Read the complete empirical study, mathematical formulations, and validation calculus in our [**Empirical Oceanographic Research & Scientific Validation Report (RESEARCH_REPORT.md)**](RESEARCH_REPORT.md).
 
 </div>
 
