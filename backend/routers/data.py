@@ -232,7 +232,8 @@ async def process_conversational_feedback(payload: dict):
     return result
 
 
-@router.get("/pfz")
+@router.get("/pfz/xai")
+@router.get("/xai/pfz")
 async def get_pfz_attribution(
     lat: float = Query(18.915, description="Latitude"),
     lon: float = Query(72.828, description="Longitude"),

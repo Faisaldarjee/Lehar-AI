@@ -1128,11 +1128,15 @@ export const OceanMap: React.FC<OceanMapProps> = ({
         <MapSectorPanner target={targetSector} />
         <MapZoomWatcher onZoomChange={setCurrentZoom} />
 
-        {/* CartoDB Fastly Dark Matter Basemap (Zero Watermark / Deep Navy Ocean Aesthetic) */}
+        {/* ESRI World Dark Gray Canvas Basemap (Zero Watermark / No API Key Required / Deep Oceanic Navy) */}
         <TileLayer
-          url="https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png"
-          subdomains={['a', 'b', 'c', 'd']}
-          maxZoom={19}
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+          maxZoom={16}
+        />
+        <TileLayer
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}"
+          maxZoom={16}
+          opacity={0.65}
         />
 
         {/* SATELLITE SST HEATMAP OVERLAY LAYER (SMOOTH RADIANT OCEAN THERMAL FIELD) */}
