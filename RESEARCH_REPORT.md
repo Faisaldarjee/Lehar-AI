@@ -4,7 +4,7 @@
 **Problem Statement Title:** Autonomous Conversational Ocean Intelligence & Multi-Modal Marine Advisory Platform  
 **Team ID:** SIH2654 | **Team Name:** Ctrl Alt Elites  
 **Repository & Source Code:** [github.com/Faisaldarjee/Lehar-AI](https://github.com/Faisaldarjee/Lehar-AI)  
-**Live Production Prototype:** [lehar-ai.vercel.app](https://lehar-ai.vercel.app) (and local instance)  
+**Live Production Prototype:** [lehar-ai.onrender.com](https://lehar-ai.onrender.com)  
 **Telegram Field Gateway:** `@LeharAIBot`
 
 ---
