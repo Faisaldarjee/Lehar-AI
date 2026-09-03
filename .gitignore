@@ -31,6 +31,7 @@ backend/data/*.db-journal
 # Custom IDE Agents & Internal Pitch/Docs
 .agents/
 docs/
+!docs/RESEARCH_REPORT.md
 pitch/
 .vscode/*
 !.vscode/extensions.json
