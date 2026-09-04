@@ -31,8 +31,10 @@ backend/data/ocean_data.db
 
 # Custom IDE Agents & Internal Pitch/Docs
 .agents/
-docs/
+docs/*
 !docs/RESEARCH_REPORT.md
+!docs/images/
+!docs/images/*
 pitch/
 .vscode/*
 !.vscode/extensions.json

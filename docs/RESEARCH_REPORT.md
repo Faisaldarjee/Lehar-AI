@@ -253,40 +253,67 @@ According to comprehensive empirical field surveys conducted by the **National C
 
 ## 7. Future Horizon & Scalability Roadmap
 
-The architecture of Lehar AI was intentionally designed for modular national scaling and deeper integration with India's maritime infrastructure:
+The architecture of Lehar AI is engineered for modular capability scaling across India's maritime zones, progressing from coastal cellular advisory to deep-sea satellite telemetry and national ocean data federation:
 
+![Lehar AI Future Scalability Roadmap](images/future_architecture_roadmap.png)
+
+```mermaid
+flowchart LR
+    subgraph S1 ["Stage 01: Vessel Traffic & Safety"]
+        A1["Live AIS Ingestion"] --> A2["Collision Avoidance"]
+        A2 --> A3["IMBL Audio Geofence"]
+    end
+
+    subgraph S2 ["Stage 02: Deep-Sea Connectivity"]
+        B1["Beyond-Cellular Range"] --> B2["128-Byte Binary Payload"]
+        B2 --> B3["2-Way Hardware SOS"]
+    end
+
+    subgraph S3 ["Stage 03: Autonomous Vessel Edge"]
+        C1["Quantized SLM Engine"] --> C2["Zero-Internet Voice Queries"]
+        C2 --> C3["Local Bathymetry & Sync"]
+    end
+
+    subgraph S4 ["Stage 04: National Repository"]
+        D1["MoES NODC Direct API"] --> D2["SAMUDRA Platform Synergy"]
+        D2 --> D3["Crowdsourced Ground-Truth"]
+    end
+
+    S1 ==>|Spacecraft Telemetry| S2
+    S2 ==>|On-Vessel Mini-Hub| S3
+    S3 ==>|Harbor Cloud Sync| S4
+
+    classDef stage1 stroke:#00E5FF,stroke-width:2px,fill:#0B1728,color:#F8FAFC;
+    classDef stage2 stroke:#38BDF8,stroke-width:2px,fill:#0A1D36,color:#F8FAFC;
+    classDef stage3 stroke:#10B981,stroke-width:2px,fill:#07211B,color:#F8FAFC;
+    classDef stage4 stroke:#F59E0B,stroke-width:2px,fill:#1F1B0B,color:#F8FAFC;
+
+    class S1 stage1;
+    class S2 stage2;
+    class S3 stage3;
+    class S4 stage4;
 ```
-                  ┌────────────────────────────────────────┐
-                  │          FUTURE ROADMAP PHASES         │
-                  └────────────────────────────────────────┘
-                                      │
-         ┌────────────────────────────┼────────────────────────────┐
-         ▼                            ▼                            ▼
-  [Q3-Q4 2026]                   [2027]                       [2027-2028]
-  PHASE 1: AIS &                 PHASE 2: ISRO NavIC /        PHASE 3: Edge-AI
-  Satellite Fleet Radar          MSS Direct Broadcast         On-Vessel Mini Hub
-  • Real-time vessel AIS         • Beyond-cellular            • Quantized on-board LLM
-    collision alerts               satellite messaging         (Raspberry Pi / Jetson)
-  • Over-fishing quota bounds    • Direct NavIC receiver      • Zero-internet offline
-  • Exclusive Economic Zone        marine alerts via S-band     acoustic & radar intelligence
-    (EEZ) border alerts          • SOS beacon hardware        • Harbor auto-sync
-```
 
-### Phase 1: Real-Time AIS & EEZ Maritime Boundary Alerting (Q3–Q4 2026)
-- **Automatic Identification System (AIS) Data Ingestion:** Overlaying live vessel positioning to warn against bottom-trawling gear conflicts and localized overfishing.
-- **International Maritime Boundary Line (IMBL) Geofencing:** Automated vernacular audio warnings (*"Caution: You are 2 Nautical Miles from the IMBL"*) to prevent international maritime detentions.
+### Stage 1: Real-Time AIS & Marine Border Geofencing Safeguard
+- **Automatic Identification System (AIS) Packet Ingestion:** Decodes live NMEA / AIVDM vessel packet feeds to plot trawler positions and detect high-density traffic clusters.
+- **Proactive Collision Avoidance:** Calculates Closest Point of Approach (CPA) and Time to CPA (TCPA) to prevent vessel entanglements and gear loss in fog or zero-visibility sea conditions.
+- **International Maritime Boundary Line (IMBL) Geofencing:** Automated proximity triggers delivering high-priority vernacular audio warnings (*"Caution: You are 2 Nautical Miles from the International Maritime Boundary"*) in 9 coastal languages to prevent accidental foreign border detentions.
 
-### Phase 2: ISRO NavIC / MSS Satellite Direct-to-Device Integration (2027)
-- Coastal cell towers reach only 12–15 nautical miles offshore. For deep-sea voyages (up to 50–100 nautical miles), Lehar AI will interface with **ISRO's NavIC Satellite Messaging Service (MSS)**.
-- Compressed byte-encoded PFZ coordinates and cyclone alerts pushed directly to standard NavIC marine transponders onboard small craft without requiring cellular data.
+### Stage 2: ISRO NavIC / MSS Direct Satellite Link
+- **Beyond-Cellular Deep-Sea Connectivity:** Overcomes the 12–15 nautical mile line-of-sight limit of terrestrial 4G/5G cell towers, maintaining continuous telemetry across the full 200 NM Exclusive Economic Zone (EEZ) via ISRO's NavIC Satellite Messaging Service (MSS) on S-band.
+- **Ultra-Dense 128-Byte Binary Compression:** High-yield PFZ bounding polygons, SST gradient vectors, and severe storm alerts are compressed into micro-packets readable by low-cost onboard NavIC transponders without requiring active internet plans.
+- **Two-Way Hardware SOS Distress Telemetry:** Direct vessel-to-shore emergency beacon pinging received in real-time by Indian Coast Guard (ICG) Maritime Rescue Coordination Centres (MRCC).
 
-### Phase 3: Edge-AI Offline On-Vessel Mini-Hubs (2027–2028)
-- Packaging Lehar AI's AST query engine and quantized multilingual acoustic models into low-power edge computers (Raspberry Pi 5 / NVIDIA Jetson Orin Nano).
-- Vessels can conduct offline voice queries and local sonar bathymetric logging while at sea, automatically federating ground-truth catch data back to the central INCOIS cloud upon docking at harbor.
+### Stage 3: Edge-AI On-Vessel Mini-Hub Deployment
+- **Quantized On-Board SLM Engine:** Distilled 4-bit multilingual acoustic and AST query models packaged into ruggedized, low-power edge compute units (Raspberry Pi 5 / NVIDIA Jetson Orin Nano).
+- **Zero-Internet Dialect Interface:** Fishermen at deep sea conduct hands-free voice inquiries and receive instant synthesized speech guidance with sub-50ms local latency.
+- **Local Sonar Bathymetry & Harbor Auto-Sync:** Logs subsurface depth profiles, sea temperatures, and empirical catch locations onto encrypted onboard NVMe storage, automatically synchronizing data with INCOIS servers over harbor Wi-Fi/Bluetooth upon docking.
 
-### Phase 4: MoES National Ocean Data Integration (Production Scale)
-- Federation into the **National Oceanographic Data Centre (NODC)** and **SAMUDRA (Smart Access to Marine Users for Data Resources and Advisories)** framework.
-- Serving as the official conversational AI layer for India's Ministry of Earth Sciences.
+### Stage 4: MoES / INCOIS National Ocean Data Federation
+- **National Oceanographic Data Centre (NODC) Assimilation:** Direct bidirectional API federation with MoES high-performance data lakes for continuous assimilation of physical oceanographic datasets into central forecasting models.
+- **SAMUDRA Platform Synergy:** Seamless interoperability with INCOIS's flagship SAMUDRA mobile application, providing conversational voice intelligence to over 10 million coastal stakeholders.
+- **Federated Ground-Truth Neural Tuning:** Thousands of empirical catch reports act as distributed reinforcement signals, dynamically improving PFZ confidence calibration and thermocline shoaling predictions nationwide.
+
 
 ---
 

@@ -15,8 +15,27 @@ import type {
   GuardianStatusResponse
 } from '../types';
 
+/**
+ * Determine API base URL dynamically:
+ * - When hosted in production on a remote domain (e.g. *.onrender.com), use relative path ('')
+ *   so requests stay on the same HTTPS origin and never fail with Mixed-Content or connection refused.
+ * - In local development on localhost:5173, target the local FastAPI backend on 127.0.0.1:8000.
+ */
+function getApiBaseUrl(): string {
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+  if (typeof window !== 'undefined' && window.location) {
+    const hostname = window.location.hostname;
+    if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      return '';
+    }
+  }
+  return 'http://127.0.0.1:8000';
+}
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000',
+  baseURL: getApiBaseUrl(),
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 });
