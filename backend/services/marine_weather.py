@@ -81,9 +81,83 @@ def calculate_solunar_activity(dt: datetime | None = None) -> Dict[str, Any]:
         "solunar_score": score,
         "solunar_rating": rating,
         "moon_age_days": round(moon_age, 1),
-        # Typical dawn/dusk feeding windows (approximate, not location- or tide-table-specific).
         "major_window_morning": "~05:30–08:30 AM (typical dawn window)",
         "major_window_evening": "~05:00–08:00 PM (typical dusk window)"
+    }
+
+
+def calculate_solar_twilight(lat: float, lon: float, dt: Optional[datetime] = None) -> Dict[str, Any]:
+    """
+    Computes exact astronomical Civil Twilight (sun at 96° zenith) and Sunrise/Sunset (90.833° zenith)
+    using standard NOAA Solar Position Equations.
+    Yields location- and season-specific Crepuscular Feeding Windows for Indian marine pelagics.
+    """
+    from datetime import timedelta
+    if dt is None:
+        dt = datetime.now(timezone(timedelta(hours=5, minutes=30)))
+
+    day_of_year = dt.timetuple().tm_yday
+    # Fractional year in radians
+    gamma = 2.0 * math.pi / 365.0 * (day_of_year - 1 + (dt.hour - 12) / 24.0)
+
+    # Equation of time in minutes
+    eqtime = 229.18 * (
+        0.000075 + 0.001868 * math.cos(gamma) - 0.032077 * math.sin(gamma)
+        - 0.014615 * math.cos(2.0 * gamma) - 0.040849 * math.sin(2.0 * gamma)
+    )
+
+    # Solar declination in radians
+    decl = (
+        0.006918 - 0.399912 * math.cos(gamma) + 0.070257 * math.sin(gamma)
+        - 0.006758 * math.cos(2.0 * gamma) + 0.000907 * math.sin(2.0 * gamma)
+    )
+
+    lat_rad = math.radians(lat)
+    cos_czen = math.cos(math.radians(96.0))      # Civil twilight
+    cos_zen = math.cos(math.radians(90.833))    # Official sunrise/sunset
+
+    denom = math.cos(lat_rad) * math.cos(decl)
+    if abs(denom) < 1e-6:
+        denom = 1e-6
+
+    cos_ha_sr = (cos_zen - math.sin(lat_rad) * math.sin(decl)) / denom
+    cos_ha_tw = (cos_czen - math.sin(lat_rad) * math.sin(decl)) / denom
+
+    cos_ha_sr = max(-1.0, min(1.0, cos_ha_sr))
+    cos_ha_tw = max(-1.0, min(1.0, cos_ha_tw))
+
+    ha_sr_deg = math.degrees(math.acos(cos_ha_sr))
+    ha_tw_deg = math.degrees(math.acos(cos_ha_tw))
+
+    solar_noon_utc = 720.0 - (4.0 * lon) - eqtime
+    sunrise_utc = solar_noon_utc - (4.0 * ha_sr_deg)
+    dawn_utc = solar_noon_utc - (4.0 * ha_tw_deg)
+    sunset_utc = solar_noon_utc + (4.0 * ha_sr_deg)
+    dusk_utc = solar_noon_utc + (4.0 * ha_tw_deg)
+
+    def _format_time(utc_min: float) -> str:
+        ist_min = (utc_min + 330.0) % 1440.0
+        h = int(ist_min // 60)
+        m = int(ist_min % 60)
+        ampm = "AM" if h < 12 else "PM"
+        h12 = h % 12 or 12
+        return f"{h12:02d}:{m:02d} {ampm}"
+
+    dawn_str = _format_time(dawn_utc)
+    sunrise_str = _format_time(sunrise_utc)
+    sunset_str = _format_time(sunset_utc)
+    dusk_str = _format_time(dusk_utc)
+    morning_end = _format_time(sunrise_utc + 90.0)
+    evening_start = _format_time(sunset_utc - 60.0)
+
+    return {
+        "dawn_twilight": dawn_str,
+        "sunrise": sunrise_str,
+        "sunset": sunset_str,
+        "dusk_twilight": dusk_str,
+        "morning_feeding_window": f"{dawn_str} – {morning_end}",
+        "evening_feeding_window": f"{evening_start} – {dusk_str}",
+        "scientific_rationale": "ICAR-CMFRI Diel Vertical Migration (DVM) & slack tidal flux"
     }
 
 
@@ -93,6 +167,7 @@ def get_live_marine_weather(lat: float, lon: float) -> Dict[str, Any]:
     Provides robust fallback if offline.
     """
     solunar = calculate_solunar_activity()
+    twilight = calculate_solar_twilight(lat, lon)
 
     marine_url = (
         f"https://marine-api.open-meteo.com/v1/marine?"
@@ -212,6 +287,7 @@ def get_live_marine_weather(lat: float, lon: float) -> Dict[str, Any]:
         "safety_desc_bn": safety_bn,
         "safety_desc_ta": safety_ta,
         "solunar": solunar,
+        "twilight": twilight,
         "favorable_drift_heading": favorable_drift_heading
     }
 

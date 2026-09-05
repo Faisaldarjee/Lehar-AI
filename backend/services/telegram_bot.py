@@ -26,6 +26,7 @@ from groq import Groq
 import edge_tts
 
 from .nl2sql import process_chat_query
+from .chat_memory import get_session_memory
 from .pfz_engine import (
     nearest_harbour,
     haversine_km,
@@ -184,6 +185,33 @@ def _escape_md(text: str) -> str:
     if not text:
         return ""
     return re.sub(r'([_*`\[])', r'\\\1', str(text))
+
+
+def markdown_to_telegram_html(text: str) -> str:
+    """
+    Safely converts Markdown bold, italic, code, and links to Telegram-supported HTML.
+    HTML entities (&, <, >) in plain text are escaped first, then formatting tags are applied.
+    Zero parsing crash risk!
+    """
+    if not text:
+        return ""
+    # 1. Escape HTML special characters
+    t = str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    # 2. Convert markdown bold: **text** or __text__ -> <b>text</b>
+    t = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", t)
+    t = re.sub(r"__(.+?)__", r"<b>\1</b>", t)
+
+    # 3. Convert single *bold* (Telegram legacy markdown) -> <b>bold</b> (if not preceded/followed by word char)
+    t = re.sub(r"(?<!\w)\*([^*]+?)\*(?!\w)", r"<b>\1</b>", t)
+
+    # 4. Convert inline code: `code` -> <code>code</code>
+    t = re.sub(r"`([^`]+?)`", r"<code>\1</code>", t)
+
+    # 5. Convert markdown links: [text](url) -> <a href="url">text</a>
+    t = re.sub(r"\[([^\]]+)\]\((https?://[^\)]+)\)", r'<a href="\2">\1</a>', t)
+
+    return t
 
 
 def register_or_update_subscriber(
@@ -395,7 +423,8 @@ async def send_telegram_message(
 async def send_telegram_voice(
     chat_id: int | str,
     audio_bytes: bytes,
-    caption: str = "🔊 *Lehar AI Voice Advisory*"
+    caption: str = "🔊 <b>Lehar AI Voice Advisory</b>",
+    parse_mode: str = "HTML"
 ) -> bool:
     """Send a native voice note (.ogg/.mp3) to Telegram chat."""
     token = get_bot_token()
@@ -403,7 +432,7 @@ async def send_telegram_voice(
         return False
     client = _get_http_client()
     files = {"voice": ("voice.mp3", audio_bytes, "audio/mpeg")}
-    data = {"chat_id": chat_id, "caption": caption, "parse_mode": "Markdown"}
+    data = {"chat_id": chat_id, "caption": caption, "parse_mode": parse_mode}
     try:
         res = await client.post(
             f"https://api.telegram.org/bot{token}/sendVoice",
@@ -579,6 +608,42 @@ def _get_start_keyboard() -> dict:
             ]
         ]
     }
+
+
+def _get_contextual_keyboard(
+    sector_slug: str = "mumbai",
+    query_route: str = "species_advisory",
+    target_lat: float | None = None,
+    target_lon: float | None = None
+) -> dict:
+    """Generates 2-3 dynamic smart action chips based on conversation context."""
+    buttons = []
+    first_row = []
+
+    # Format clean slug (alphanumeric only)
+    clean_slug = re.sub(r"[^a-zA-Z0-9_]", "", sector_slug.lower().replace(" ", "_"))[:20] or "mumbai"
+
+    if query_route in ("species_advisory", "general_sql", "hybrid"):
+        first_row.append({"text": "🌊 Wave & Wind", "callback_data": f"chip_wave_{clean_slug}"})
+        first_row.append({"text": "⏰ Feeding Time", "callback_data": f"chip_twilight_{clean_slug}"})
+        first_row.append({"text": "⛽ Fuel Saved", "callback_data": f"chip_fuel_{clean_slug}"})
+    else:  # weather / safety
+        first_row.append({"text": "🐟 Fish Prospects", "callback_data": f"chip_fish_{clean_slug}"})
+        first_row.append({"text": "⏰ Feeding Time", "callback_data": f"chip_twilight_{clean_slug}"})
+        first_row.append({"text": "🛡️ Safety Status", "callback_data": f"chip_safety_{clean_slug}"})
+
+    buttons.append(first_row)
+
+    second_row = []
+    if target_lat and target_lon:
+        maps_url = f"https://maps.google.com/?q={target_lat:.4f},{target_lon:.4f}"
+        second_row.append({"text": "🗺️ Google Maps", "url": maps_url})
+
+    second_row.append({"text": "📋 Main Menu", "callback_data": "cmd_main_menu"})
+    second_row.append({"text": "🆘 SOS", "callback_data": "cmd_sos_trigger"})
+    buttons.append(second_row)
+
+    return {"inline_keyboard": buttons}
 
 
 async def _handle_start_command(client: httpx.AsyncClient, chat_id: int, first_name: str):
@@ -1007,6 +1072,34 @@ async def _handle_callback_query(client: httpx.AsyncClient, callback_query: dict
             })
         except Exception as ex:
             logger.debug(f"[SOS Resolve] Error: {ex}")
+    elif data == "cmd_main_menu":
+        await _telegram_request(client, "sendMessage", {
+            "chat_id": chat_id,
+            "text": "🌊 <b>Lehar AI Marine Intelligence Menu</b>\nSelect an ocean capability below or ask any question in any language:",
+            "parse_mode": "HTML",
+            "reply_markup": _get_start_keyboard()
+        })
+    elif data.startswith("chip_wave_"):
+        loc = data.replace("chip_wave_", "").replace("_", " ").title()
+        query = f"{loc} me live wave height, wind speed aur samundar ka haal kaisa hai?"
+        await _handle_text_query(client, chat_id, query, send_voice=True)
+    elif data.startswith("chip_twilight_"):
+        loc = data.replace("chip_twilight_", "").replace("_", " ").title()
+        query = f"{loc} me machhli pakadne ka best twilight window aur dawn dusk feeding time kab hai?"
+        await _handle_text_query(client, chat_id, query, send_voice=True)
+    elif data.startswith("chip_fuel_"):
+        loc = data.replace("chip_fuel_", "").replace("_", " ").title()
+        query = f"{loc} ke PFZ tak voyage economics, diesel consumption aur fuel cost savings kitni hogi?"
+        await _handle_text_query(client, chat_id, query, send_voice=True)
+    elif data.startswith("chip_fish_"):
+        loc = data.replace("chip_fish_", "").replace("_", " ").title()
+        query = f"{loc} ke paas best fishing zone, species prospects aur SST thermocline kaisa hai?"
+        await _handle_text_query(client, chat_id, query, send_voice=True)
+    elif data.startswith("chip_safety_"):
+        loc = data.replace("chip_safety_", "").replace("_", " ").title()
+        query = f"{loc} me fishing safety status, seasonal ban aur cyclone hazard alerts kya hain?"
+        await _handle_text_query(client, chat_id, query, send_voice=True)
+
 
 
 async def _handle_text_query(
@@ -1096,24 +1189,22 @@ async def _handle_text_query(
         if not answer or len(answer.strip()) < 20:
             answer = "Currently no specific data available for this query. Please try asking about a specific coastal area like Mumbai, Chennai, or Kochi."
 
-        # Build clean Telegram markdown response. Escape the raw LLM answer so stray
-        # Markdown entity chars can't trigger a 400 'can't parse entities' (silent drop).
-        safe_answer = _escape_md(answer)
-        response_text = f"🌊 *Lehar AI Operational Advisory:*\n\n{safe_answer}"
+        # Convert LLM narrative response into Telegram-compliant HTML
+        html_answer = markdown_to_telegram_html(answer)
 
-        if result.get("hero_stat") and result["hero_stat"].get("value"):
-            hs = result["hero_stat"]
-            response_text += f"\n\n📊 *Key Ocean Metric:* `{hs.get('label', '')}: {hs.get('value', '')} {hs.get('unit') or ''}`"
-
+        # Append species ecological focus if detected and not already mentioned
         if result.get("species_detected"):
             sp = result['species_detected'].lower().replace(" ", "_")
             if sp in SPECIES_ECOLOGY:
                 ec = SPECIES_ECOLOGY[sp]
-                response_text += f"\n🐟 *Species Focus:* _{ec['common_name']}_\n• *Optimal SST:* `{ec['optimal_sst'][0]}°C - {ec['optimal_sst'][1]}°C`\n• *Ideal Depth:* `{ec['ideal_depth'][0]}m - {ec['ideal_depth'][1]}m` ({ec['gear']})"
-            else:
-                response_text += f"\n🐟 *Species Focus:* _{result['species_detected'].title()}_"
+                if ec['common_name'].lower() not in answer.lower():
+                    html_answer += (
+                        f"\n\n🐟 <b>Species Focus:</b> <i>{ec['common_name']}</i>\n"
+                        f"• <b>Optimal SST:</b> <code>{ec['optimal_sst'][0]}°C - {ec['optimal_sst'][1]}°C</code>\n"
+                        f"• <b>Ideal Depth:</b> <code>{ec['ideal_depth'][0]}m - {ec['ideal_depth'][1]}m</code> ({ec['gear']})"
+                    )
 
-        # If query resulted in specific map coordinates, offer location pin & navigation URL
+        # If query resulted in specific map coordinates, offer coordinates and navigation link
         markers = result.get("map_markers") or []
         target_lat, target_lon = None, None
         if markers and len(markers) > 0:
@@ -1123,15 +1214,36 @@ async def _handle_text_query(
             if lat and lon:
                 target_lat, target_lon = lat, lon
                 maps_url = f"https://maps.google.com/?q={lat:.4f},{lon:.4f}"
-                response_text += f"\n\n📍 *Target Coordinates:* `{lat:.3f}°N, {lon:.3f}°E`\n👉 [Open Navigation in Google Maps]({maps_url})"
+                html_answer += f"\n\n📍 <b>Target Coordinates:</b> <code>{lat:.3f}°N, {lon:.3f}°E</code>\n👉 <a href=\"{maps_url}\">Open Navigation in Google Maps</a>"
 
-        await _telegram_request(client, "sendMessage", {
-            "chat_id": chat_id,
-            "text": response_text,
-            "parse_mode": "Markdown",
-            "reply_markup": _get_start_keyboard(),
-            "disable_web_page_preview": False
-        })
+        # Determine active sector for contextual chips
+        session = get_session_memory(f"tg_{chat_id}")
+        sector_slug = (session.active_location if session and session.active_location else "mumbai")
+        query_route = result.get("query_route") or "species_advisory"
+
+        context_keyboard = _get_contextual_keyboard(
+            sector_slug=sector_slug,
+            query_route=query_route,
+            target_lat=target_lat,
+            target_lon=target_lon
+        )
+
+        try:
+            await _telegram_request(client, "sendMessage", {
+                "chat_id": chat_id,
+                "text": html_answer,
+                "parse_mode": "HTML",
+                "reply_markup": context_keyboard,
+                "disable_web_page_preview": False
+            })
+        except Exception as html_err:
+            logger.warning(f"[Telegram HTML Parse Error] Fallback to plain text: {html_err}")
+            await _telegram_request(client, "sendMessage", {
+                "chat_id": chat_id,
+                "text": answer,
+                "reply_markup": context_keyboard,
+                "disable_web_page_preview": False
+            })
 
         if target_lat and target_lon:
             await send_telegram_location(chat_id, target_lat, target_lon)
@@ -1148,7 +1260,7 @@ async def _handle_text_query(
         if send_voice:
             voice_bytes = await _synthesize_voice_audio(answer, lang=detected_lang)
             if voice_bytes:
-                await send_telegram_voice(chat_id, voice_bytes, caption="🔊 *Lehar AI Spoken Summary*")
+                await send_telegram_voice(chat_id, voice_bytes, caption="🔊 <b>Lehar AI Spoken Summary</b>", parse_mode="HTML")
 
     except Exception as err:
         import traceback

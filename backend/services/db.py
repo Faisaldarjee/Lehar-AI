@@ -8,6 +8,7 @@ import sqlite3
 import os
 import re
 import logging
+from datetime import datetime, timezone, timedelta
 from contextlib import contextmanager
 from typing import Any, Optional, Dict, List
 
@@ -164,6 +165,23 @@ def init_db():
                 recorded_at TEXT DEFAULT (datetime('now'))
             );
 
+            CREATE TABLE IF NOT EXISTS seasonal_fishing_bans (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                zone_code TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
+                start_month INTEGER NOT NULL,
+                start_day INTEGER NOT NULL,
+                end_month INTEGER NOT NULL,
+                end_day INTEGER NOT NULL,
+                notification_year INTEGER DEFAULT 2026,
+                authority TEXT DEFAULT 'Department of Fisheries, Ministry of Fisheries, Animal Husbandry & Dairying',
+                notification_ref TEXT DEFAULT 'F.No. 31035/2026-Fy (Marine Conservation Notification)',
+                restricted_vessels TEXT DEFAULT 'Mechanized fishing vessels and motorized trawlers',
+                exempt_vessels TEXT DEFAULT 'Traditional non-motorized artisanal fishing craft',
+                states_covered TEXT,
+                created_at TEXT DEFAULT (datetime('now'))
+            );
+
             CREATE INDEX IF NOT EXISTS idx_profiles_float_id ON argo_profiles(float_id);
             CREATE INDEX IF NOT EXISTS idx_profiles_location ON argo_profiles(latitude, longitude);
             CREATE INDEX IF NOT EXISTS idx_profiles_date ON argo_profiles(date);
@@ -177,6 +195,7 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_hazard_valid ON hazard_zones(valid_until);
             CREATE INDEX IF NOT EXISTS idx_sos_status ON sos_alerts(status);
             CREATE INDEX IF NOT EXISTS idx_location_history_chat ON location_history(chat_id, recorded_at);
+            CREATE INDEX IF NOT EXISTS idx_seasonal_bans_zone ON seasonal_fishing_bans(zone_code);
         """)
         conn.commit()
 
@@ -189,6 +208,8 @@ def init_db():
 
         # Seed initial demo hazard zones if table is empty
         seed_demo_hazards_if_empty(conn)
+        # Seed 2026 CMFRI seasonal bans if table is empty
+        seed_seasonal_bans_if_empty(conn)
     print(f"[DB] Database initialized at {get_db_path()}")
 
 
@@ -212,6 +233,110 @@ def seed_demo_hazards_if_empty(conn: Optional[sqlite3.Connection] = None):
     else:
         with get_connection() as c:
             _seed(c)
+
+
+def seed_seasonal_bans_if_empty(conn: Optional[sqlite3.Connection] = None):
+    """Seed configurable 2026 CMFRI / MoFAHD marine fisheries seasonal conservation bans."""
+    def _seed(c):
+        count = c.execute("SELECT COUNT(*) FROM seasonal_fishing_bans").fetchone()[0]
+        if count == 0:
+            c.execute(
+                """
+                INSERT INTO seasonal_fishing_bans 
+                (zone_code, name, start_month, start_day, end_month, end_day, notification_year, authority, notification_ref, restricted_vessels, exempt_vessels, states_covered)
+                VALUES 
+                (
+                    'west_coast', 
+                    'West Coast Monsoon Marine Fisheries Conservation Ban', 
+                    6, 1, 7, 31, 2026, 
+                    'Department of Fisheries, Ministry of Fisheries, Animal Husbandry & Dairying', 
+                    'F.No. 31035/2026-Fy (West Coast Marine Order)', 
+                    'Mechanized fishing boats and motorized trawlers', 
+                    'Traditional non-motorized artisanal fishing craft', 
+                    'Gujarat, Maharashtra, Goa, Karnataka, Kerala'
+                ),
+                (
+                    'east_coast', 
+                    'East Coast Marine Fisheries Uniform Conservation Ban', 
+                    4, 15, 6, 14, 2026, 
+                    'Department of Fisheries, Ministry of Fisheries, Animal Husbandry & Dairying', 
+                    'F.No. 31035/2026-Fy (East Coast Uniform Ban)', 
+                    'Mechanized fishing boats and motorized trawlers', 
+                    'Traditional non-motorized artisanal fishing craft', 
+                    'Tamil Nadu, Andhra Pradesh, Odisha, West Bengal, Puducherry'
+                )
+                """
+            )
+            c.commit()
+
+    if conn is not None:
+        _seed(conn)
+    else:
+        with get_connection() as c:
+            _seed(c)
+
+
+def get_active_seasonal_ban(lat: float, lon: float, dt: Optional[datetime] = None) -> Optional[dict[str, Any]]:
+    """
+    Check if coordinates fall under an active CMFRI/Govt seasonal fishing ban.
+    Coastline overlap resolution at Southern Tip (Kanyakumari):
+    - lon < 77.55°E: West Coast (Arabian Sea rules: June 1 – July 31)
+    - lon >= 77.55°E: East Coast (Bay of Bengal rules: April 15 – June 14)
+    """
+    if dt is None:
+        dt = datetime.now(timezone(timedelta(hours=5, minutes=30)))
+
+    target_zone = "west_coast" if lon < 77.55 else "east_coast"
+    current_tuple = (dt.month, dt.day)
+
+    try:
+        with get_connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM seasonal_fishing_bans WHERE zone_code = ?",
+                (target_zone,)
+            ).fetchone()
+
+            if not row:
+                return None
+
+            start_tuple = (row["start_month"], row["start_day"])
+            end_tuple = (row["end_month"], row["end_day"])
+
+            is_active = (start_tuple <= current_tuple <= end_tuple)
+
+            month_names = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+            start_str = f"{row['start_day']} {month_names[row['start_month']]}"
+            end_str = f"{row['end_day']} {month_names[row['end_month']]}"
+            period_str = f"{start_str} – {end_str}, {row['notification_year']}"
+
+            advisory_en = (
+                f"⚠️ Marine Conservation Notice: Mechanized trawling is restricted in this sector ({period_str}) "
+                f"as per {row['authority']} for spawning stock rejuvenation. Traditional artisanal / non-motorized craft "
+                f"are exempt under state rules. Please verify with your local Fisheries Office."
+            )
+            advisory_hi = (
+                f"⚠️ मत्स्य संरक्षण सूचना: {row['authority']} के {row['notification_year']} आदेशानुसार "
+                f"इस क्षेत्र में {period_str} तक मशीनीकृत ट्रॉलरों पर मौसमी रोक लागू है। पारंपरिक गैर-मशीनीकृत नौकाओं को "
+                f"राज्य नियमों के तहत छूट है। कृपया स्थानीय मत्स्य विभाग से पुष्टि करें।"
+            )
+
+            return {
+                "is_active": is_active,
+                "zone_code": target_zone,
+                "name": row["name"],
+                "period_str": period_str,
+                "notification_year": row["notification_year"],
+                "authority": row["authority"],
+                "restricted_vessels": row["restricted_vessels"],
+                "exempt_vessels": row["exempt_vessels"],
+                "states_covered": row["states_covered"],
+                "advisory_en": advisory_en,
+                "advisory_hi": advisory_hi
+            }
+    except Exception as e:
+        logger.debug(f"[Seasonal Ban DB] Check error: {e}")
+        return None
+
 
 
 def get_active_hazards() -> list[dict[str, Any]]:

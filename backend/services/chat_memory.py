@@ -12,13 +12,37 @@ from .species_dict import detect_species_in_query
 
 
 KNOWN_COASTAL_LOCATIONS = [
-    "mumbai", "bombay", "maharashtra", "konkan", "goa", "ratnagiri", "alibaug", "मुंबई", "मुम्बई", "महाराष्ट्र", "कोकण", "रत्नागिरी",
-    "kochi", "cochin", "kerala", "lakshadweep", "malabar", "mangalore", "karnataka", "कोच्चि", "केरल", "കൊച്ചി", "കേരളം",
-    "chennai", "madras", "tamil nadu", "tuticorin", "thoothukudi", "coromandel", "चेन्नई", "तमिलनाडु", "சென்னை", "தமிழ்நாடு",
-    "visakhapatnam", "vizag", "andhra", "odisha", "paradip", "विशाखापट्टनम", "वाइज़ैग", "आंध्र", "ओडिशा", "విశాఖపట్నం", "ఆంధ్ర", "ଓଡ଼ିଶା",
-    "bengal", "west bengal", "kolkata", "hooghly", "digha", "sundarbans", "बंगाल", "पश्चिम बंगाल", "कोलकाता", "বাঙলা", "কলকাতা", "দীঘা",
-    "gujarat", "porbandar", "veraval", "saurashtra", "okha", "गुजरात", "वेरावल", "પોરબંદર", "ગુજરાત", "વેરાવળ",
-    "arabian sea", "bay of bengal", "अरब सागर", "बंगाल की खाड़ी"
+    # Gujarat
+    "veraval", "porbandar", "okha", "dwarka", "mangrol", "jakhau", "mandvi", "kandla", "mundra", "saurashtra", "kutch", "gujarat",
+    "વેરાવળ", "પોરબંદર", "ઓખા", "દ્વારકા", "માંગરોળ", "ગુજરાત", "वेरावल", "पोरबंदर", "ओखा", "द्वारका", "गुजरात",
+    # Maharashtra
+    "mumbai", "bombay", "sassoon", "versova", "ratnagiri", "malvan", "alibaug", "alibag", "murud", "harnai", "dahanu", "sindhudurg", "konkan", "maharashtra",
+    "मुंबई", "मुम्बई", "ससून", "वर्सोवा", "रत्नागिरी", "मालवण", "अलिबाग", "सिंधुदुर्ग", "कोकण", "महाराष्ट्र",
+    # Goa
+    "goa", "panaji", "malim", "vasco", "cortalim", "mormugao", "गोवा", "पणजी",
+    # Karnataka
+    "karwar", "baithkol", "malpe", "udupi", "mangalore", "mangaluru", "honnavar", "bhatkal", "karnataka",
+    "कारवार", "मंगलोर", "उडुपी", "ಮಾಲ್ಪೆ", "ಮಂಗಳೂರು", "ಕಾರವಾರ", "ಕರ್ನಾಟಕ",
+    # Kerala
+    "kochi", "cochin", "munambam", "beypore", "kozhikode", "calicut", "kollam", "neendakara", "vizhinjam", "trivandrum", "thoppumpady", "malabar", "kerala",
+    "കൊച്ചി", "ബേപ്പൂർ", "കോഴിക്കോട്", "കൊല്ലം", "നീണ്ടകര", "വിഴിഞ്ഞം", "കേരളം", "कोच्चि", "केरल", "कालीकट", "कोझिकोड",
+    # Tamil Nadu & Puducherry
+    "chennai", "madras", "kasimedu", "royapuram", "tuticorin", "thoothukudi", "rameswaram", "rameshwaram", "mandapam", "nagapattinam", "cuddalore", "kanyakumari", "colachel", "coromandel", "tamil nadu",
+    "சென்னை", "காசிமேடு", "தூத்துக்குடி", "ராமேஸ்வரம்", "நாகப்பட்டினம்", "கடலூர்", "கன்னியாகுமரி", "தமிழ்நாடு", "चेन्नई", "तमिलनाडु", "रामेश्वरम", "तूतीकोरिन", "कन्याकुमारी",
+    # Andhra Pradesh
+    "visakhapatnam", "vizag", "kakinada", "machilipatnam", "nizampatnam", "krishnapatnam", "andhra", "andhra pradesh",
+    "విశాఖపట్నం", "కాకినాడ", "మచిలీపట్నం", "ఆంధ్ర", "विशाखापट्टनम", "वाइज़ैग", "काकीनाडा", "मछलीपट्टनम", "आंध्र",
+    # Odisha
+    "paradip", "paradeep", "dhamra", "chandipur", "puri", "gopalpur", "odisha", "orissa",
+    "ପାରାଦ୍ୱୀପ", "ଧାମରା", "ପୁରୀ", "ଓଡ଼ିଶା", "पारादीप", "धामरा", "पुरी", "ओडिशा",
+    # West Bengal
+    "digha", "sankarpur", "kakdwip", "frasergunj", "diamond harbour", "sundarbans", "kolkata", "calcutta", "hooghly", "bengal", "west bengal",
+    "দীঘা", "শঙ্করপুর", "কাকদ্বীপ", "সুন্দরবন", "কলকাতা", "বাঙলা", "পশ্চিমবঙ্গ", "दीघा", "सुंदरबन", "कोलकाता", "बंगाल",
+    # Island Territories
+    "port blair", "andaman", "nicobar", "kavaratti", "agatti", "lakshadweep", "पोर्ट ब्लेयर", "अंडमान", "लक्षद्वीप",
+    # Maritime Basins
+    "arabian sea", "bay of bengal", "indian ocean", "gulf of kutch", "gulf of khambhat", "gulf of mannar", "palk strait",
+    "अरब सागर", "बंगाल की खाड़ी", "हिन्द महासागर", "மன்னார் வளைகுடா"
 ]
 
 
@@ -230,12 +254,17 @@ def resolve_query_context(session_id: str | None, current_query: str) -> tuple[s
 
     is_follow_up = any(re.search(p, current_query, flags=re.IGNORECASE) for p in coreference_patterns)
 
-    # Resolve Location Coreference
+    # Resolve Location Coreference & Context Switching
     if not cur_loc and session.active_location and (is_follow_up or len(current_query.split()) <= 6):
         # Inject active location
         resolved_query = f"{current_query} (Context: near {session.active_location.capitalize()})"
         context_meta["carried_location"] = session.active_location
     elif cur_loc:
+        if session.active_location and session.active_location.lower() != cur_loc.lower():
+            # Explicit Location Switch detected! Reset dependent transient states
+            session.active_float_id = None
+            session.active_parameter = None
+            context_meta["location_switched"] = True
         session.active_location = cur_loc
 
     # Resolve Float ID Coreference
@@ -295,4 +324,32 @@ def update_session_memory(
 
     # Persist to SQLite
     _persist_session_to_db(session, turn)
+
+
+def get_session_memory(session_id: str | None) -> SessionContext:
+    """Convenience alias for get_or_create_session."""
+    return get_or_create_session(session_id)
+
+
+def resolve_query_with_context(session_id: str | None, current_query: str) -> str:
+    """Convenience wrapper returning the resolved query string."""
+    resolved, _ = resolve_query_context(session_id, current_query)
+    return resolved
+
+
+def clear_session_memory(session_id: str | None) -> None:
+    """Reset and clear session memory in RAM and database."""
+    if not session_id:
+        return
+    if session_id in SESSION_STORE:
+        del SESSION_STORE[session_id]
+    try:
+        from .db import get_connection
+        with get_connection() as conn:
+            conn.execute("DELETE FROM chat_messages WHERE session_id = ?", (session_id,))
+            conn.execute("DELETE FROM chat_sessions WHERE session_id = ?", (session_id,))
+            conn.commit()
+    except Exception as e:
+        print(f"[ChatMemory] DB clear fallback: {e}")
+
 

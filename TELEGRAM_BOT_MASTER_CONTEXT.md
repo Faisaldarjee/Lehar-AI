@@ -526,3 +526,66 @@ The bot features a comprehensive 3-pillar safety suite engineered for real coast
     ```
 * **Catch Feedback Verification:** `GET https://lehar-ai.onrender.com/api/reports`
 * **Health Check:** `GET https://lehar-ai.onrender.com/health` (Reports active profiles & floats).
+
+---
+
+## 14. Zero-Hallucination & Intelligence Architecture (Grand Finale Standard)
+
+To meet the rigorous standards of INCOIS oceanographers and fisheries scientists, the bot strictly adheres to a **facts-in, narration-out** pipeline. Generative models are forbidden from calculating or estimating physical ocean values.
+
+### 14.1. Ground-Truth Fact Synthesis
+* **Deterministic Pre-Computation:** Before prompting any LLM, exact physical metrics are computed via deterministic Python engines:
+  * `SST` (°C) & `MLD` (m) from INCOIS ARGO NetCDF profiles.
+  * `Wave Height` ($H_s$), `Wind Speed`, and `Safety Status` from Open-Meteo ECMWF physics.
+  * `Species Viability Score` (%) & `Gear Depth` (m) from ICAR-CMFRI ecology models.
+  * `Voyage Economics` (Diesel L, ₹ saved, $\text{CO}_2$ offset) via haversine distance calculus.
+  * `Morning & Evening Twilight Feeding Windows` via NOAA Solar Position equations.
+  * `Active Seasonal Ban` from the 2026 CMFRI regulatory table.
+* **Immutable Facts Block:** The synthesized numbers are injected into the prompt wrapped inside `VERIFIED_TELEMETRY_FACTS`.
+
+### 14.2. Post-Generation Numeric Validation Layer (`validate_no_hallucination`)
+* Even with system prompts, smaller/faster models can occasionally invent numbers.
+* A strict post-generation verification regex (`extract_numeric_tokens`) scans the LLM output:
+  * Compares every number in the LLM output against the known ground-truth facts block.
+  * Exempts only safe universal tokens (bullet indices 1-5, year 2026, standard percentages 0-100%).
+  * If **any** unverified metric appears (e.g. LLM generates "34.5°C" or "₹9500"), validation fails instantly.
+
+### 14.3. Silent Deterministic Template Fallback (`render_deterministic_advisory`)
+* If validation fails or all LLM cascade attempts time out, the bot **silently falls back** to a 100% deterministic template formatted in the user's native language (Hindi, Marathi, Tamil, Telugu, Bengali, Gujarati, English).
+* Zero ungrounded numbers can ever reach the fisherman.
+
+### 14.4. NOAA Astronomical Solar Twilight Engine (`calculate_solar_twilight`)
+* Replaced hardcoded time ranges with true solar position astronomical formulas (NOAA equation of time & solar declination):
+  $$\gamma = \frac{2\pi}{365} \left(\text{day\_of\_year} - 1 + \frac{\text{hour} - 12}{24}\right)$$
+* Dynamically calculates solar noon, civil dawn (zenith 96°), official sunrise/sunset (zenith 90.833°), and civil dusk for the exact `lat`, `lon`, and calendar date.
+* Location-aware: Veraval, Mumbai, and Chennai receive scientifically distinct, real feeding windows.
+
+### 14.5. Configurable 2026 CMFRI Seasonal Fishing Bans
+* Table `seasonal_fishing_bans` stores regulatory closure dates:
+  * **West Coast:** June 1 – July 31, 2026 (Monsoon ban).
+  * **East Coast:** April 15 – June 14, 2026 (Summer ban).
+* **Dual-Tier Vessel Messaging:** Explicitly informs fishermen that mechanized trawlers are restricted while traditional artisanal/non-motorized crafts are exempt under state rules.
+* **Southern Tip Boundary Resolution:** At Kanyakumari / Cape Comorin where coasts converge, a strict longitude boundary (`lon < 77.55°E` $\rightarrow$ West Coast; `lon \ge 77.55°E` $\rightarrow$ East Coast) resolves the governing jurisdiction.
+
+### 14.6. Resilient Model Cascade (`timeout=2.0s`)
+* To guarantee `< 1.0s` response latency and prevent network hangs, each model attempt has a hard 2-second timeout cap:
+  1. `qwen/qwen3.8-27b` (Primary high-fidelity Indic/Hinglish reasoning)
+  2. `openai/gpt-oss-120b` (Secondary high-capacity fallback)
+  3. `openai/gpt-oss-20b` (Fast compact fallback)
+  4. `llama-3.3-70b-versatile` (Groq flagship fallback)
+  5. `llama-3.1-8b-instant` (Ultra-fast emergency fallback)
+  6. `render_deterministic_advisory` (Instant zero-LLM fail-safe)
+
+### 14.7. Multi-Turn Memory with Location Switch Detection
+* Expanded `KNOWN_COASTAL_LOCATIONS` to 60+ Indian fishing harbours and landing centers in English and native Indic scripts.
+* When a fisherman switches locations (e.g. *"Ab Chennai ka batao"* after asking about Mumbai), the memory engine detects the new port, resets transient location bindings, and binds subsequent pronoun queries (*"wahan..."*) to the new location.
+
+### 14.8. Telegram HTML Formatting & Dynamic Action Chips
+* Converted output pipeline from legacy Markdown escaping to clean Telegram HTML (`markdown_to_telegram_html` with `<b>`, `<i>`, `<code>`, `<a>` and escaped `&`, `<`, `>`).
+* Attaches 2–3 contextual action chips per advisory:
+  * `[🌊 Wave & Wind]`
+  * `[⏰ Feeding Time]`
+  * `[⛽ Fuel Saved]`
+  * `[🗺️ Google Maps]`
+  * `[📋 Main Menu]` / `[🆘 SOS]`
+
