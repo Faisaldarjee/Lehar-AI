@@ -495,11 +495,17 @@ def validate_no_hallucination(llm_output: str, facts: dict[str, Any]) -> bool:
     return True
 
 
-def render_deterministic_advisory(facts: dict[str, Any], lang_code: str = "en") -> str:
+def render_deterministic_advisory(facts: dict[str, Any], lang_code: str = "en", user_name: Optional[str] = None) -> str:
     """
     Deterministic Advisory Renderer (Zero LLM Latency & Zero Hallucination Guarantee).
     Uses 100% verified ground-truth facts.
     """
+    clean_name = user_name.strip() if user_name and user_name.strip() else ""
+    if clean_name and clean_name.lower() != "captain":
+        salutation = clean_name if clean_name.lower().startswith("captain ") else f"Captain {clean_name}"
+    else:
+        salutation = "Captain"
+
     sec = facts.get("sector_name", "Indian Coastal Waters")
     sst = facts.get("sst_c", 28.4)
     mld = facts.get("mld_m", 30.0)
@@ -524,7 +530,7 @@ def render_deterministic_advisory(facts: dict[str, Any], lang_code: str = "en") 
 
     if lang_code in ("hi", "hi-latin"):
         return (
-            f"🌊 {sec} के लिए महासागरीय परामर्श:\n\n"
+            f"🌊 {salutation}, {sec} के लिए महासागरीय परामर्श:\n\n"
             f"✅ परिचालन निर्णय: समुद्र में मछली पकड़ने के लिए स्थिति {rating} ({viab}% स्कोर) है।\n\n"
             f"📊 सत्यापित समुद्र भौतिकी:\n"
             f"• 🌡️ SST: {sst}°C | MLD: {mld}m (मिश्रित परत)\n"
@@ -541,7 +547,7 @@ def render_deterministic_advisory(facts: dict[str, Any], lang_code: str = "en") 
         )
     elif lang_code == "mr":
         return (
-            f"🌊 {sec} सागरी सल्लागार:\n\n"
+            f"🌊 {salutation}, {sec} सागरी सल्लागार:\n\n"
             f"✅ निर्णय: मासेमारीसाठी परिस्थिती {rating} ({viab}% अनुकूल) आहे.\n\n"
             f"📊 समुद्र स्थिती:\n"
             f"• 🌡️ SST: {sst}°C | MLD: {mld}m\n"
@@ -556,7 +562,7 @@ def render_deterministic_advisory(facts: dict[str, Any], lang_code: str = "en") 
         )
     elif lang_code == "ta":
         return (
-            f"🌊 {sec} கடல்சார் வழிகாட்டுதல்:\n\n"
+            f"🌊 {salutation}, {sec} கடல்சார் வழிகாட்டுதல்:\n\n"
             f"✅ நிலை: மீன்பிடிக்க சாதகமான சூழல் ({viab}% வாய்ப்பு).\n\n"
             f"📊 நேரடி கடல் தரவு:\n"
             f"• 🌡️ வெப்பநிலை: {sst}°C | ஆழம்: {mld}m\n"
@@ -569,7 +575,7 @@ def render_deterministic_advisory(facts: dict[str, Any], lang_code: str = "en") 
         )
     elif lang_code == "te":
         return (
-            f"🌊 {sec} సముద్ర సలహా:\n\n"
+            f"🌊 {salutation}, {sec} సముద్ర సలహా:\n\n"
             f"✅ స్థితి: వేటకు అత్యంత అనుకూలం ({viab}% స్కోరు).\n\n"
             f"📊 సముద్ర గణాంకాలు:\n"
             f"• 🌡️ ఉష్ణోగ్రత: {sst}°C | MLD: {mld}m\n"
@@ -582,7 +588,7 @@ def render_deterministic_advisory(facts: dict[str, Any], lang_code: str = "en") 
         )
     elif lang_code == "bn":
         return (
-            f"🌊 {sec} সামুদ্রিক পরামর্শ:\n\n"
+            f"🌊 {salutation}, {sec} সামুদ্রিক পরামর্শ:\n\n"
             f"✅ সিদ্ধান্ত: মাছ ধরার জন্য পরিস্থিতি {rating} ({viab}% অনুকূল)।\n\n"
             f"📊 সরাসরি সমুদ্রের তথ্য:\n"
             f"• 🌡️ তাপমাত্রা: {sst}°C | MLD: {mld}m\n"
@@ -595,7 +601,7 @@ def render_deterministic_advisory(facts: dict[str, Any], lang_code: str = "en") 
         )
     elif lang_code == "gu":
         return (
-            f"🌊 {sec} દરિયાઈ સલાહ:\n\n"
+            f"🌊 {salutation}, {sec} દરિયાઈ સલાહ:\n\n"
             f"✅ નિર્ણય: માછીમારી માટે સ્થિતિ {rating} ({viab}% સ્કોર) છે.\n\n"
             f"📊 સપાટી ડેટા:\n"
             f"• 🌡️ SST: {sst}°C | MLD: {mld}m\n"
@@ -609,7 +615,7 @@ def render_deterministic_advisory(facts: dict[str, Any], lang_code: str = "en") 
 
     # Default English / Hinglish fallback
     return (
-        f"🌊 Marine Operational Advisory | {sec}:\n\n"
+        f"🌊 Marine Operational Advisory | {sec} (for {salutation}):\n\n"
         f"✅ Operational Verdict: Sea conditions are {rating} ({viab}% score) for fishing.\n\n"
         f"📊 Verified Ocean Telemetry:\n"
         f"• 🌡️ SST: {sst}°C | MLD: {mld}m (Mixed Layer Depth)\n"
@@ -626,16 +632,17 @@ def render_deterministic_advisory(facts: dict[str, Any], lang_code: str = "en") 
     )
 
 
-def generate_summary(user_query: str, sql: str, results: list[dict], language: str = "en") -> str:
+def generate_summary(user_query: str, sql: str, results: list[dict], language: str = "en", user_name: Optional[str] = None) -> str:
     """Format raw SQL results into a rich, species-specific answer in the user's native language."""
-    return format_answer(user_query, results, language)
+    return format_answer(user_query, results, language, user_name=user_name)
 
 
 def format_answer(
     user_query: str,
     results: list[dict],
     language: str = "en",
-    species: Optional[dict] = None
+    species: Optional[dict] = None,
+    user_name: Optional[str] = None
 ) -> str:
     """
     Format query results into rich, zero-hallucination, species-specific advisory.
@@ -644,6 +651,12 @@ def format_answer(
     """
     if not results:
         return "No hydrographic data available for this query sector."
+
+    clean_name = user_name.strip() if user_name and user_name.strip() else ""
+    if clean_name and clean_name.lower() != "captain":
+        salutation = clean_name if clean_name.lower().startswith("captain ") else f"Captain {clean_name}"
+    else:
+        salutation = "Captain"
 
     lang_info = detect_script_language(user_query)
     code = lang_info.get("code", "en")
@@ -675,7 +688,7 @@ VERIFIED TELEMETRY FACTS (IMMUTABLE GROUND TRUTH):
 STRICT ZERO-HALLUCINATION RULES:
 1. {lang_info['system_instruction']}
 2. You must ONLY cite the exact numbers provided in VERIFIED TELEMETRY FACTS above. Never invent or estimate any temperature, wave height, depth, percentage, or currency figure.
-3. If speaking in Hindi or Hinglish, be natural, respectful, and authoritative (address as 'Captain' or 'Bhai').
+3. Address the mariner respectfully by their official title and name '{salutation}' (e.g. '{salutation}, the current telemetry confirms...' or in Hindi: 'नमस्ते {salutation}!').
 4. Answer directly with:
    - 1-line verdict (e.g. favorable or cautious)
    - Live sea physics (SST, waves, wind)
@@ -691,7 +704,7 @@ STRICT ZERO-HALLUCINATION RULES:
                 chat_completion = client.chat.completions.create(
                     messages=[
                         {"role": "system", "content": prompt_context},
-                        {"role": "user", "content": f"Brief the captain concisely on this verified ocean telemetry:\n{user_query}"}
+                        {"role": "user", "content": f"Brief {salutation} concisely on this verified ocean telemetry:\n{user_query}"}
                     ],
                     model=model_name,
                     temperature=0.2,
@@ -713,7 +726,7 @@ STRICT ZERO-HALLUCINATION RULES:
         logger.warning(f"[Groq Error] Falling back to deterministic template: {e}")
 
     # Fallback to deterministic template
-    return render_deterministic_advisory(facts, code)
+    return render_deterministic_advisory(facts, code, user_name=user_name)
 
 
 def compute_structured_stats(results: list[dict], user_query: str) -> tuple[dict | None, list[dict], int]:
@@ -1057,7 +1070,8 @@ def generate_species_summary(
 async def process_chat_query(
     user_query: str,
     language: str = "en-IN",
-    session_id: str | None = None
+    session_id: str | None = None,
+    user_name: Optional[str] = None
 ) -> dict:
     """
     Full pipeline: Context Resolution → Intent Router (SQL / RAG / Species / Hybrid)
@@ -1087,7 +1101,8 @@ async def process_chat_query(
                 weather=weather,
                 sector_name=sector_name,
                 user_query=resolved_query,
-                lang_code=lang_meta.get("code", "en")
+                lang_code=lang_meta.get("code", "en"),
+                user_name=user_name
             )
 
             map_markers = [{
@@ -1187,7 +1202,7 @@ async def process_chat_query(
             viability["observed_sst"] = avg_sst
             loc_str = format_lat_lon(latitudes[0], longitudes[0]) if latitudes and longitudes else "Coastal Sector"
 
-            summary = format_answer(resolved_query, results, language, species=species)
+            summary = format_answer(resolved_query, results, language, species=species, user_name=user_name)
 
             vernacular_tag = species["common_name"].split("(")[-1].rstrip(")")
             common_tag = species["common_name"].split("(")[0].strip()
@@ -1230,7 +1245,7 @@ async def process_chat_query(
             }
 
         # Step 5: Standard Hydrographic SQL / Hybrid Output
-        summary = generate_summary(resolved_query, sql, results, language)
+        summary = generate_summary(resolved_query, sql, results, language, user_name=user_name)
         hero_stat, stats, reading_count = compute_structured_stats(results, resolved_query)
 
         # If hybrid query, attach relevant ocean knowledge context sources

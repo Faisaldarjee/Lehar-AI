@@ -301,7 +301,8 @@ async def send_proactive_guardian_alert(subscriber: dict, alert: dict) -> bool:
     """Dispatches a real-time proactive Guardian alert card + spoken voice note to a specific Telegram subscriber."""
     chat_id = subscriber["chat_id"]
     first_name = subscriber.get("first_name", "Captain")
-    safe_first_name = _escape_md(first_name)
+    display_name = format_mariner_name(first_name)
+    safe_first_name = _escape_md(display_name)
     is_safety = alert.get("type") == "safety"
     harbour = subscriber.get("harbour", "Coast")
 
@@ -348,14 +349,14 @@ async def send_proactive_guardian_alert(subscriber: dict, alert: dict) -> bool:
         # 2. Synthesize Personalized Voice Note
         if is_safety:
             voice_script = (
-                f"Namaste {first_name}! Yeh Lehar Guardian ka zaroori ocean safety alert hai. "
+                f"Namaste {display_name}! Yeh Lehar Guardian ka zaroori ocean safety alert hai. "
                 f"Aapke harbour {harbour} se {int(dist_km)} kilometer door samundar me severe temperature anomaly detect hui hai. "
                 f"Chhoti naav samundar me savdhani bartein."
             )
         else:
             sp_name = alert.get("species") or "machhli"
             voice_script = (
-                f"Namaste {first_name}! Yeh Lehar Guardian fishing opportunity alert hai. "
+                f"Namaste {display_name}! Yeh Lehar Guardian fishing opportunity alert hai. "
                 f"Aapke dock se {int(dist_km)} kilometer door {sp_name} ke liye high-yield zone bana hai. "
                 f"Pani ka taapman aur thermocline depth anukool hai."
             )
@@ -799,7 +800,7 @@ async def _handle_sos_command(
 
     # Send spoken alarm voice advisory in Hindi
     voice_script = (
-        f"Namaste Captain {first_name}! Aapka emergency SOS alert number {sos_id} record ho gaya hai. "
+        f"Namaste {display_name}! Aapka emergency SOS alert number {sos_id} record ho gaya hai. "
         f"Indian Coast Guard helpline 1554 aur VHF Channel 16 par contact karein. Nearest safe port {nearest_h['harbour']} hai."
     )
     voice_bytes = await _synthesize_voice_audio(voice_script, lang="hi")
@@ -1044,15 +1045,19 @@ async def _handle_callback_query(client: httpx.AsyncClient, callback_query: dict
     chat_id = message["chat"]["id"]
     data = callback_query.get("data", "")
 
+    user_from = callback_query.get("from") or {}
+    first_name = user_from.get("first_name") or message.get("chat", {}).get("first_name") or get_subscriber_first_name(chat_id, default="Captain")
+    display_name = format_mariner_name(first_name)
+
     if data == "cmd_pfz":
         query = "Show me the top 3 potential fishing zones near the Indian coast with the best SST and chlorophyll today"
-        await _handle_text_query(client, chat_id, query, send_voice=True)
+        await _handle_text_query(client, chat_id, query, send_voice=True, first_name=first_name)
     elif data == "cmd_temp":
         query = "Show the latest sea surface temperature and salinity near Mumbai coast from ARGO floats today"
-        await _handle_text_query(client, chat_id, query, send_voice=True)
+        await _handle_text_query(client, chat_id, query, send_voice=True, first_name=first_name)
     elif data == "cmd_storm":
         query = "Are there any active marine heatwaves, extreme thermal anomalies, or storm warnings in the Indian Ocean?"
-        await _handle_text_query(client, chat_id, query, send_voice=True)
+        await _handle_text_query(client, chat_id, query, send_voice=True, first_name=first_name)
     elif data == "cmd_nearest_float":
         await _telegram_request(client, "sendMessage", {
             "chat_id": chat_id,
@@ -1061,12 +1066,12 @@ async def _handle_callback_query(client: httpx.AsyncClient, callback_query: dict
         })
     elif data == "cmd_lang_hi":
         query = "Mumbai ke paas samundar ka taapman kya hai aur machhli pakadne ke liye kaunsa zone best hai aaj?"
-        await _handle_text_query(client, chat_id, query, send_voice=True, lang="hi")
+        await _handle_text_query(client, chat_id, query, send_voice=True, lang="hi", first_name=first_name)
     elif data == "cmd_log_catch":
         prompt_msg = (
             "🎣 *Post-Voyage Catch & PFZ Feedback Logging*\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "Namaste Captain! Please send your catch details or a voice note in ANY language:\n\n"
+            f"Namaste {display_name}! Please send your catch details or a voice note in ANY language:\n\n"
             "• *Text Example (English):* `350kg Yellowfin Tuna near Sassoon Dock at 40m depth`\n"
             "• *Text Example (Hindi):* `250 kilo bangda mila 25 meter pe, advisory achhi thi`\n"
             "• *Text Example (Tamil):* `300kg vanjaram meen kidaithathu 35m depth`\n\n"
@@ -1126,23 +1131,23 @@ async def _handle_callback_query(client: httpx.AsyncClient, callback_query: dict
     elif data.startswith("chip_wave_"):
         loc = data.replace("chip_wave_", "").replace("_", " ").title()
         query = f"{loc} me live wave height, wind speed aur samundar ka haal kaisa hai?"
-        await _handle_text_query(client, chat_id, query, send_voice=True)
+        await _handle_text_query(client, chat_id, query, send_voice=True, first_name=first_name)
     elif data.startswith("chip_twilight_"):
         loc = data.replace("chip_twilight_", "").replace("_", " ").title()
         query = f"{loc} me machhli pakadne ka best twilight window aur dawn dusk feeding time kab hai?"
-        await _handle_text_query(client, chat_id, query, send_voice=True)
+        await _handle_text_query(client, chat_id, query, send_voice=True, first_name=first_name)
     elif data.startswith("chip_fuel_"):
         loc = data.replace("chip_fuel_", "").replace("_", " ").title()
         query = f"{loc} ke PFZ tak voyage economics, diesel consumption aur fuel cost savings kitni hogi?"
-        await _handle_text_query(client, chat_id, query, send_voice=True)
+        await _handle_text_query(client, chat_id, query, send_voice=True, first_name=first_name)
     elif data.startswith("chip_fish_"):
         loc = data.replace("chip_fish_", "").replace("_", " ").title()
         query = f"{loc} ke paas best fishing zone, species prospects aur SST thermocline kaisa hai?"
-        await _handle_text_query(client, chat_id, query, send_voice=True)
+        await _handle_text_query(client, chat_id, query, send_voice=True, first_name=first_name)
     elif data.startswith("chip_safety_"):
         loc = data.replace("chip_safety_", "").replace("_", " ").title()
         query = f"{loc} me fishing safety status, seasonal ban aur cyclone hazard alerts kya hain?"
-        await _handle_text_query(client, chat_id, query, send_voice=True)
+        await _handle_text_query(client, chat_id, query, send_voice=True, first_name=first_name)
 
 
 
@@ -1225,7 +1230,7 @@ async def _handle_text_query(
     await _telegram_request(client, "sendChatAction", {"chat_id": chat_id, "action": "typing"})
 
     try:
-        result = await process_chat_query(text, language="auto", session_id=f"tg_{chat_id}")
+        result = await process_chat_query(text, language="auto", session_id=f"tg_{chat_id}", user_name=first_name)
 
         # Check if the pipeline returned an error
         if result.get("error"):

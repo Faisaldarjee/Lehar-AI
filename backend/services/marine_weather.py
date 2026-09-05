@@ -296,7 +296,8 @@ def format_marine_weather_response(
     weather: Dict[str, Any],
     sector_name: str,
     user_query: str,
-    lang_code: str = "en"
+    lang_code: str = "en",
+    user_name: Optional[str] = None
 ) -> Dict[str, Any]:
     """Formats live marine weather and safety metrics into structured response matching UI schema."""
     h_m = weather["wave_height_m"]
@@ -306,44 +307,50 @@ def format_marine_weather_response(
     badge = weather["safety_badge"]
     sol = weather["solunar"]
 
+    clean_name = user_name.strip() if user_name and user_name.strip() else ""
+    if clean_name and clean_name.lower() != "captain":
+        salutation = clean_name if clean_name.lower().startswith("captain ") else f"Captain {clean_name}"
+    else:
+        salutation = "Captain"
+
     # Localized Natural Summaries
     if lang_code in ("hi", "hi-latin"):
         answer = (
-            f"{sector_name} में वर्तमान लहरों की ऊंचाई {h_m} मीटर ({wv_dir} दिशा) और हवा की गति {w_kn} नॉट ({w_dir}) है। "
+            f"नमस्ते {salutation}! {sector_name} में वर्तमान लहरों की ऊंचाई {h_m} मीटर ({wv_dir} दिशा) और हवा की गति {w_kn} नॉट ({w_dir}) है। "
             f"सुरक्षा स्थिति: {weather['safety_desc_hi']}। "
             f"मछली पकड़ने का सर्वोत्तम समय: {sol['major_window_morning']} (चंद्रमा गतिविधि: {sol['solunar_score']}%)।"
         )
     elif lang_code == "mr":
         answer = (
-            f"{sector_name} भागात सध्या लाटांची उंची {h_m} मीटर ({wv_dir}) आणि वाऱ्याचा वेग {w_kn} नॉट ({w_dir}) आहे. "
+            f"नमस्कार {salutation}! {sector_name} भागात सध्या लाटांची उंची {h_m} मीटर ({wv_dir}) आणि वाऱ्याचा वेग {w_kn} नॉट ({w_dir}) आहे. "
             f"सुरक्षा स्थिती: {weather['safety_desc_mr']}। "
             f"मासेमारीसाठी उत्तम वेळ: {sol['major_window_morning']} (चंद्र प्रभाव: {sol['solunar_score']}%)।"
         )
     elif lang_code == "bn":
         answer = (
-            f"{sector_name} অঞ্চলে বর্তমান ঢেউয়ের উচ্চতা {h_m} মিটার এবং বাতাসের গতি {w_kn} নট ({w_dir})। "
+            f"নমস্কার {salutation}! {sector_name} অঞ্চলে বর্তমান ঢেউয়ের উচ্চতা {h_m} মিটার এবং বাতাসের গতি {w_kn} নট ({w_dir})। "
             f"নিরাপত্তা অবস্থা: {weather['safety_desc_bn']}। "
             f"মাছ ধরার সেরা সময়: {sol['major_window_morning']} (সক্রিয়তা: {sol['solunar_score']}%)।"
         )
     elif lang_code == "ta":
         answer = (
-            f"{sector_name} பகுதியில் தற்போதைய அலை உயரம் {h_m} மீ மற்றும் காற்றின் வேகம் {w_kn} நாட்ஸ் ({w_dir}) ஆகும். "
+            f"வணக்கம் {salutation}! {sector_name} பகுதியில் தற்போதைய அலை உயரம் {h_m} மீ மற்றும் காற்றின் வேகம் {w_kn} நாட்ஸ் ({w_dir}) ஆகும். "
             f"பாதுகாப்பு நிலை: {weather['safety_desc_ta']}। "
             f"மீன்பிடிக்க சிறந்த நேரம்: {sol['major_window_morning']} (சாதக விகிதம்: {sol['solunar_score']}%)।"
         )
     elif lang_code == "te":
         answer = (
-            f"{sector_name} ప్రాంతంలో ప్రస్తుత అలల ఎత్తు {h_m} మీటర్లు మరియు గాలి వేగం {w_kn} నాట్స్ ({w_dir}). "
+            f"నమస్కారం {salutation}! {sector_name} ప్రాంతంలో ప్రస్తుత అలల ఎత్తు {h_m} మీటర్లు మరియు గాలి వేగం {w_kn} నాట్స్ ({w_dir}). "
             f"చేపల వేటకు ఉత్తమ సమయం: {sol['major_window_morning']} (సొల్యూనార్ స్కోరు: {sol['solunar_score']}%)."
         )
     elif lang_code == "gu":
         answer = (
-            f"{sector_name} વિસ્તારમાં વર્તમાન મોજાંની ઊંચાઈ {h_m} મીટર અને પવનની ગતિ {w_kn} નોટ્સ ({w_dir}) છે. "
+            f"નમસ્તે {salutation}! {sector_name} વિસ્તારમાં વર્તમાન મોજાંની ઊંચાઈ {h_m} મીટર અને પવનની ગતિ {w_kn} નોટ્સ ({w_dir}) છે. "
             f"માછીમારી માટે શ્રેષ્ઠ સમય: {sol['major_window_morning']} (સોલ્યુનાર સ્કોર: {sol['solunar_score']}%)."
         )
     else:
         answer = (
-            f"Live marine conditions for {sector_name}: Significant wave height is {h_m} m ({wv_dir} swell) with winds at {w_kn} knots from {w_dir}. "
+            f"{salutation}, live marine conditions for {sector_name}: Significant wave height is {h_m} m ({wv_dir} swell) with winds at {w_kn} knots from {w_dir}. "
             f"Operational safety status: {weather['safety_desc_en']} "
             f"Solunar peak feeding window: {sol['major_window_morning']} ({sol['solunar_score']}% feeding index)."
         )
