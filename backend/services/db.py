@@ -7,8 +7,11 @@ Read-only query execution for safety.
 import sqlite3
 import os
 import re
+import logging
 from contextlib import contextmanager
-from typing import Any
+from typing import Any, Optional, Dict, List
+
+logger = logging.getLogger(__name__)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "argo_indian_ocean.db")
 
@@ -121,6 +124,46 @@ def init_db():
                 created_at TEXT DEFAULT (datetime('now'))
             );
 
+            CREATE TABLE IF NOT EXISTS hazard_zones (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                hazard_type TEXT CHECK(hazard_type IN ('cyclone', 'high_wave', 'storm_surge', 'marine_heatwave')),
+                center_lat REAL NOT NULL,
+                center_lon REAL NOT NULL,
+                radius_km REAL NOT NULL,
+                severity TEXT CHECK(severity IN ('watch', 'warning', 'severe', 'critical')),
+                source TEXT DEFAULT 'IMD/NOAA',
+                wave_height_m REAL,
+                wind_speed_kmh REAL,
+                valid_until TEXT NOT NULL,
+                created_at TEXT DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS sos_alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id INTEGER NOT NULL,
+                reporter_name TEXT DEFAULT 'Vessel Captain',
+                latitude REAL NOT NULL,
+                longitude REAL NOT NULL,
+                harbour TEXT,
+                vessel_name TEXT DEFAULT 'Fishing Vessel (Artisanal)',
+                status TEXT DEFAULT 'active' CHECK(status IN ('active', 'acknowledged', 'resolved')),
+                coast_guard_station TEXT,
+                notes TEXT,
+                triggered_at TEXT DEFAULT (datetime('now')),
+                acknowledged_at TEXT,
+                resolved_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS location_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id INTEGER NOT NULL,
+                latitude REAL NOT NULL,
+                longitude REAL NOT NULL,
+                wave_height_recorded REAL,
+                recorded_at TEXT DEFAULT (datetime('now'))
+            );
+
             CREATE INDEX IF NOT EXISTS idx_profiles_float_id ON argo_profiles(float_id);
             CREATE INDEX IF NOT EXISTS idx_profiles_location ON argo_profiles(latitude, longitude);
             CREATE INDEX IF NOT EXISTS idx_profiles_date ON argo_profiles(date);
@@ -131,9 +174,193 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(last_updated);
             CREATE INDEX IF NOT EXISTS idx_reports_location ON fishermen_reports(latitude, longitude);
             CREATE INDEX IF NOT EXISTS idx_reports_created ON fishermen_reports(created_at);
+            CREATE INDEX IF NOT EXISTS idx_hazard_valid ON hazard_zones(valid_until);
+            CREATE INDEX IF NOT EXISTS idx_sos_status ON sos_alerts(status);
+            CREATE INDEX IF NOT EXISTS idx_location_history_chat ON location_history(chat_id, recorded_at);
         """)
         conn.commit()
+
+        # Idempotent migration for persistent debounce column
+        try:
+            conn.execute("ALTER TABLE telegram_subscribers ADD COLUMN last_weather_alert_at TEXT")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+
+        # Seed initial demo hazard zones if table is empty
+        seed_demo_hazards_if_empty(conn)
     print(f"[DB] Database initialized at {get_db_path()}")
+
+
+def seed_demo_hazards_if_empty(conn: Optional[sqlite3.Connection] = None):
+    """Seed initial realistic hazard zones on Indian coastline for judge demonstrations."""
+    def _seed(c):
+        count = c.execute("SELECT COUNT(*) FROM hazard_zones").fetchone()[0]
+        if count == 0:
+            c.execute(
+                """
+                INSERT INTO hazard_zones (title, hazard_type, center_lat, center_lon, radius_km, severity, source, wave_height_m, wind_speed_kmh, valid_until)
+                VALUES 
+                ('Saurashtra Coast High Swell Warning', 'high_wave', 20.45, 69.45, 110.0, 'warning', 'IMD/NOAA', 3.9, 58.0, datetime('now', '+3 days')),
+                ('Central Bay of Bengal Squall Watch', 'cyclone', 14.80, 83.20, 95.0, 'watch', 'IMD', 3.2, 64.0, datetime('now', '+3 days'))
+                """
+            )
+            c.commit()
+
+    if conn is not None:
+        _seed(conn)
+    else:
+        with get_connection() as c:
+            _seed(c)
+
+
+def get_active_hazards() -> list[dict[str, Any]]:
+    """Retrieve unexpired hazard zones sorted by descending severity priority."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT *,
+                CASE severity 
+                    WHEN 'critical' THEN 4 
+                    WHEN 'severe' THEN 3 
+                    WHEN 'warning' THEN 2 
+                    WHEN 'watch' THEN 1 
+                    ELSE 0 
+                END as severity_rank
+            FROM hazard_zones
+            WHERE valid_until > datetime('now')
+            ORDER BY severity_rank DESC, created_at DESC
+            """
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def create_hazard_zone(
+    title: str,
+    hazard_type: str,
+    center_lat: float,
+    center_lon: float,
+    radius_km: float,
+    severity: str = "warning",
+    source: str = "IMD/NOAA",
+    wave_height_m: Optional[float] = None,
+    wind_speed_kmh: Optional[float] = None,
+    valid_hours: int = 48
+) -> int:
+    """Inserts a new marine hazard zone into SQLite."""
+    with get_connection() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO hazard_zones (title, hazard_type, center_lat, center_lon, radius_km, severity, source, wave_height_m, wind_speed_kmh, valid_until)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', ?))
+            """,
+            (title, hazard_type, center_lat, center_lon, radius_km, severity, source, wave_height_m, wind_speed_kmh, f"+{valid_hours} hours")
+        )
+        conn.commit()
+        return cur.lastrowid
+
+
+def create_sos_alert(
+    chat_id: int,
+    latitude: float,
+    longitude: float,
+    reporter_name: str = "Vessel Captain",
+    harbour: str = "",
+    vessel_name: str = "Fishing Vessel",
+    coast_guard_station: str = "",
+    notes: str = ""
+) -> int:
+    """Log an immediate emergency distress beacon into SQLite."""
+    with get_connection() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO sos_alerts (chat_id, reporter_name, latitude, longitude, harbour, vessel_name, status, coast_guard_station, notes, triggered_at)
+            VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, datetime('now'))
+            """,
+            (chat_id, reporter_name, latitude, longitude, harbour, vessel_name, coast_guard_station, notes)
+        )
+        conn.commit()
+        return cur.lastrowid
+
+
+def get_active_sos_alerts(limit: int = 50) -> list[dict[str, Any]]:
+    """Get active and acknowledged SOS distress beacons for Coast Guard Control Room Feed."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM sos_alerts
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (limit,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def acknowledge_sos_alert(sos_id: int, notes: str = "") -> bool:
+    """Acknowledge a distress beacon with timestamp and patrol craft details."""
+    with get_connection() as conn:
+        conn.execute(
+            """
+            UPDATE sos_alerts
+            SET status = 'acknowledged', acknowledged_at = datetime('now'),
+                notes = CASE WHEN ? != '' THEN notes || ' | ' || ? ELSE notes END
+            WHERE id = ?
+            """,
+            (notes, notes, sos_id)
+        )
+        conn.commit()
+        return True
+
+
+def resolve_sos_alert(sos_id: int) -> bool:
+    """Mark distress beacon as resolved."""
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE sos_alerts SET status = 'resolved', resolved_at = datetime('now') WHERE id = ?",
+            (sos_id,)
+        )
+        conn.commit()
+        return True
+
+
+def log_location_history(chat_id: int, lat: float, lon: float, wave_height: Optional[float] = None):
+    """Records a breadcrumb in location_history with wave height for trend detection."""
+    try:
+        with get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO location_history (chat_id, latitude, longitude, wave_height_recorded, recorded_at)
+                VALUES (?, ?, ?, ?, datetime('now'))
+                """,
+                (chat_id, lat, lon, wave_height)
+            )
+            conn.commit()
+    except Exception as e:
+        logger.debug(f"[DB] Error logging location history: {e}")
+
+
+def purge_old_location_history():
+    """48-Hour TTL cleanup: deletes stale breadcrumbs to keep SQLite light and performant."""
+    try:
+        with get_connection() as conn:
+            conn.execute("DELETE FROM location_history WHERE recorded_at < datetime('now', '-48 hours')")
+            conn.commit()
+    except Exception as e:
+        logger.debug(f"[DB] Error purging old location history: {e}")
+
+
+def update_subscriber_weather_alert_time(chat_id: int):
+    """Updates last weather alert timestamp for persistent debounce across restarts."""
+    try:
+        with get_connection() as conn:
+            conn.execute(
+                "UPDATE telegram_subscribers SET last_weather_alert_at = datetime('now') WHERE chat_id = ?",
+                (chat_id,)
+            )
+            conn.commit()
+    except Exception as e:
+        logger.debug(f"[DB] Error updating subscriber weather alert time: {e}")
 
 
 def save_fisherman_report(

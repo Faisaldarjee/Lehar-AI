@@ -3,15 +3,33 @@ Lehar AI Backend — FastAPI Application Entry Point
 AI-Powered Conversational Interface for ARGO Ocean Data Discovery.
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+import asyncio
 import os
+import httpx
 
 from .services.db import init_db
 from .services.anomaly_detector import run_anomaly_scan
 from .services.telegram_bot import start_telegram_bot_task, stop_telegram_bot_task
-from .routers import chat, data, anomaly, pfz, satellite, guardian, telegram
+from .routers import chat, data, anomaly, pfz, satellite, guardian, telegram, safety
+
+
+async def _keep_alive_daemon():
+    """Periodically pings the public endpoint every 10 minutes to prevent Render free-tier from sleeping."""
+    base_url = os.getenv("RENDER_EXTERNAL_URL", os.getenv("BASE_URL", "https://lehar-ai.onrender.com")).rstrip("/")
+    ping_url = f"{base_url}/health"
+    await asyncio.sleep(45)  # Initial delay
+    while True:
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.get(ping_url)
+                if resp.status_code == 200:
+                    print(f"[Keep-Alive Daemon] Self-ping successful: {ping_url} (HTTP {resp.status_code})")
+        except Exception as e:
+            print(f"[Keep-Alive Daemon] Self-ping notice: {e}")
+        await asyncio.sleep(600)  # Ping every 10 minutes
 
 
 @asynccontextmanager
@@ -24,9 +42,12 @@ async def lifespan(app: FastAPI):
     run_anomaly_scan(reset_existing=True, max_profiles=200)
     print("[Lehar AI] Launching Telegram Bot Gateway (@LeharAIBot)...")
     start_telegram_bot_task()
+    print("[Lehar AI] Launching Keep-Alive Zero-Sleep Daemon...")
+    keep_alive_task = asyncio.create_task(_keep_alive_daemon())
     print("[Lehar AI] Backend ready!")
     yield
     print("[Lehar AI] Shutting down...")
+    keep_alive_task.cancel()
     stop_telegram_bot_task()
 
 
@@ -64,6 +85,20 @@ app.include_router(pfz.router)
 app.include_router(satellite.router)
 app.include_router(guardian.router)
 app.include_router(telegram.router)
+app.include_router(safety.router)
+
+
+@app.post("/api/telegram/webhook")
+async def telegram_webhook(request: Request):
+    """
+    Receives incoming Telegram updates via HTTPS webhook.
+    Enables zero-sleep inbound traffic on Render and matches WhatsApp Webhook pattern!
+    """
+    from .services.telegram_bot import process_telegram_update
+    payload = await request.json()
+    if payload:
+        asyncio.create_task(process_telegram_update(None, payload))
+    return {"ok": True}
 
 
 @app.get("/api/info")
