@@ -23,23 +23,72 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-FEEDBACK_KEYWORDS = [
-    "kg", "kilo", "ton", "quintal", "pakda", "mila", "caught", "catch", "depth", "meter",
-    "meter", "fish", "machhli", "tuna", "bangda", "pomfret", "surmai", "rawas", "sardine",
-    "prawn", "chingri", "ayala", "vanjaram", "mathi", "koduva", "pfz", "advisory", "good",
-    "achha", "kharab", "bohot", "badiya", "nandri", "dhanyawad", "report", "log"
+QUESTION_INDICATORS = [
+    "?", "where", "kahan", "kidhar", "how", "kaise", "kaisa", "what", "kya",
+    "which", "kaunsa", "kaunsi", "when", "kab", "who", "kaun", "why", "kyun",
+    "can we", "can i", "could we", "is there", "are there", "tell me", "batao",
+    "bataiye", "dikhao", "show me", "find", "search", "dhoondo", "milega", "milegi",
+    "mil sakti", "mil sakta", "milenge", "hoga", "sakte hain", "karna hai", "chahiye",
+    "weather", "forecast", "taapman", "temperature", "advisory", "wave", "lahar",
+    "rate", "bhav", "price", "market",
+    "enga", "engae", "eppadi", "enna", "endha", "ekkada", "ela", "enti", "eppudu",
+    "evide", "engane", "entha", "kothay", "kemon", "kuthe", "kasa", "kay", "malshe"
 ]
+
+CATCH_VERBS = [
+    "caught", "harvested", "landed", "hauled", "fished",
+    "pakda", "pakdi", "pakde", "pakad liya", "mila hai", "mili hai", "mila tha", "mili thi", "laaye", "nikala",
+    "saapadla", "pakadla", "dharla",
+    "pidithom", "pidithen", "kidaithathu", "patnam", "labhichu", "dhorlam", "pelam",
+    "catch report", "logged catch", "reporting catch"
+]
+
+QTY_PATTERN = re.compile(
+    r"\b\d+(\.\d+)?\s*(kg|kgs|kilo|kilos|ton|tons|tonne|tonnes|quintal|quintals|peti|crate|crates|box|boxes|किलो|टन|கிலோ|குவிண்டால்)\b",
+    re.IGNORECASE
+)
+
+
+def format_mariner_title(name: Optional[str]) -> str:
+    """Format a mariner's name with Captain title without duplicates like 'Captain Captain'."""
+    if not name or not name.strip():
+        return "Captain"
+    clean = name.strip()
+    if clean.lower() == "captain":
+        return "Captain"
+    if clean.lower().startswith("captain "):
+        return clean
+    if clean.lower().startswith("capt.") or clean.lower().startswith("capt "):
+        return clean
+    return f"Captain {clean}"
 
 
 def is_likely_catch_feedback(text: str) -> bool:
-    """Check if the incoming user text is a post-voyage catch report or advisory feedback."""
-    text_lower = text.lower()
-    if text_lower.startswith("/report") or text_lower.startswith("report"):
+    """
+    Strict classifier to determine if incoming message is a post-voyage catch report.
+    Returns True ONLY if:
+      1. Explicit command: starts with /report, /catch, or /logcatch.
+      2. OR conversational catch submission:
+         - Contains ZERO question/inquiry markers (e.g. 'where', 'kahan', 'how', '?').
+         - Contains an explicit catch action verb (e.g. 'caught', 'pakda', 'landed').
+         - Contains a numeric quantity with weight/crate unit (e.g. '250kg', '2 ton').
+    """
+    text_lower = text.lower().strip()
+    if text_lower.startswith("/report") or text_lower.startswith("/catch") or text_lower.startswith("/logcatch"):
         return True
-    
-    # Check for presence of catch units + species or fishing terms
-    matches = sum(1 for kw in FEEDBACK_KEYWORDS if kw in text_lower)
-    return matches >= 2
+
+    # 1. Any question or advisory inquiry immediately disqualifies it as a catch submission
+    if any(q_kw in text_lower for q_kw in QUESTION_INDICATORS):
+        return False
+
+    # 2. Must contain an explicit catch action verb
+    has_catch_verb = any(v_kw in text_lower for v_kw in CATCH_VERBS)
+    if not has_catch_verb:
+        return False
+
+    # 3. Must contain an explicit numeric quantity with unit
+    has_quantity = bool(QTY_PATTERN.search(text))
+    return has_quantity
 
 
 async def parse_and_process_feedback(
@@ -54,6 +103,7 @@ async def parse_and_process_feedback(
     """
     Parses conversational multi-lingual catch feedback using Groq LLaMA 3.3 with regex fallbacks.
     Persists the ground-truth report to SQLite and returns localized response text.
+    Zero hallucinated defaults: if quantity/depth are omitted, they remain None.
     """
     groq_key = os.getenv("GROQ_API_KEY")
 
@@ -64,8 +114,8 @@ async def parse_and_process_feedback(
 
     extracted_data = {
         "species": "Pelagic Mixed Catch",
-        "quantity_kg": 75.0,
-        "depth_m": 25.0,
+        "quantity_kg": None,
+        "depth_m": None,
         "satisfaction_score": 5,
         "notes": text,
         "harbour": default_harbour,
@@ -81,10 +131,11 @@ async def parse_and_process_feedback(
             system_prompt = (
                 "You are an expert marine fisheries data extractor for INCOIS India. "
                 "Extract fishing catch report details from the user message in ANY Indian language into strict JSON. "
+                "If quantity or depth are NOT mentioned, return null for them. DO NOT INVENT OR GUESS NUMBERS. "
                 "JSON Schema: {\n"
                 '  "species": string (common name e.g. Yellowfin Tuna, Indian Mackerel, Silver Pomfret),\n'
-                '  "quantity_kg": number (e.g. 250.0),\n'
-                '  "depth_m": number (e.g. 35.0),\n'
+                '  "quantity_kg": number or null,\n'
+                '  "depth_m": number or null,\n'
                 '  "satisfaction_score": integer (1 to 5 based on sentiment),\n'
                 '  "harbour": string (mentioned harbour/city or empty),\n'
                 '  "localized_thank_you": string (Warm, respectful 2-sentence confirmation in the USER\'S EXACT LANGUAGE thanking Captain for logging catch and validating INCOIS PFZ)\n'
@@ -108,12 +159,21 @@ async def parse_and_process_feedback(
 
             if parsed.get("species"):
                 extracted_data["species"] = parsed["species"]
-            if parsed.get("quantity_kg"):
-                extracted_data["quantity_kg"] = float(parsed["quantity_kg"])
-            if parsed.get("depth_m"):
-                extracted_data["depth_m"] = float(parsed["depth_m"])
+            if parsed.get("quantity_kg") is not None:
+                try:
+                    extracted_data["quantity_kg"] = float(parsed["quantity_kg"])
+                except (ValueError, TypeError):
+                    pass
+            if parsed.get("depth_m") is not None:
+                try:
+                    extracted_data["depth_m"] = float(parsed["depth_m"])
+                except (ValueError, TypeError):
+                    pass
             if parsed.get("satisfaction_score"):
-                extracted_data["satisfaction_score"] = int(parsed["satisfaction_score"])
+                try:
+                    extracted_data["satisfaction_score"] = int(parsed["satisfaction_score"])
+                except (ValueError, TypeError):
+                    pass
             if parsed.get("harbour") and len(parsed["harbour"]) > 2:
                 extracted_data["harbour"] = parsed["harbour"]
             if parsed.get("localized_thank_you"):
@@ -123,32 +183,43 @@ async def parse_and_process_feedback(
             logger.debug(f"[Feedback Engine] LLM extraction fallback to regex: {e}")
 
     # 3. Deterministic Regex Fallback for Species, Quantity & Depth
-    if "localized_reply" not in extracted_data:
-        # Regex quantity
-        qty_m = re.search(r"(\d+)\s*(kg|kilo|ton|quintal)?", text, re.IGNORECASE)
+    if extracted_data.get("quantity_kg") is None:
+        qty_m = QTY_PATTERN.search(text)
         if qty_m:
-            extracted_data["quantity_kg"] = float(qty_m.group(1))
+            num_val = re.search(r"\d+(\.\d+)?", qty_m.group(0))
+            if num_val:
+                extracted_data["quantity_kg"] = float(num_val.group(0))
 
-        # Regex depth
-        depth_m = re.search(r"(\d+)\s*(m|meter|metre)", text, re.IGNORECASE)
+    if extracted_data.get("depth_m") is None:
+        depth_m = re.search(r"(\d+(\.\d+)?)\s*(m|meter|metre|feet|ft)\b", text, re.IGNORECASE)
         if depth_m:
             extracted_data["depth_m"] = float(depth_m.group(1))
 
-        # Species matching
+    if extracted_data.get("species") == "Pelagic Mixed Catch":
         sp = detect_species_in_query(text)
         if sp:
             extracted_data["species"] = sp["common_name"]
 
-        # Localized default confirmations
+    display_captain = format_mariner_title(reporter_name)
+
+    if "localized_reply" not in extracted_data:
+        qty_parts = []
+        if extracted_data["quantity_kg"] is not None:
+            qty_parts.append(f"{extracted_data['quantity_kg']:.0f}kg")
+        qty_parts.append(extracted_data["species"])
+        if extracted_data["depth_m"] is not None:
+            qty_parts.append(f"at {extracted_data['depth_m']:.0f}m depth")
+        qty_str = " ".join(qty_parts)
+
         greetings = {
-            "hi": f"धन्यवाद कैप्टन {reporter_name}! आपका कैच रिपोर्ट ({extracted_data['quantity_kg']:.0f}kg {extracted_data['species']}) वेरिफाई होकर लाइव मैप पर दर्ज हो गया है। INCOIS PFZ एडवाइजरी को वैलिडेट करने के लिए आभार!",
-            "ta": f"நன்றி கேப்டன் {reporter_name}! உங்கள் மீன்பிடி அறிக்கை ({extracted_data['quantity_kg']:.0f}kg {extracted_data['species']}) வெற்றிகரமாக சேமிக்கப்பட்டது. INCOIS PFZ ஆலோசனைக்கு உதவியதற்கு நன்றி!",
-            "te": f"ధన్యవాదాలు కెప్టెన్ {reporter_name}! మీ క్యాచ్ రిపోర్ట్ ({extracted_data['quantity_kg']:.0f}kg {extracted_data['species']}) విజయవంతంగా నమోదైంది.",
-            "mr": f"धन्यवाद कॅप्टन {reporter_name}! आपला मासेमारी अहवाल ({extracted_data['quantity_kg']:.0f}kg {extracted_data['species']}) थेट नकाशावर जतन केला आहे.",
-            "ml": f"നന്ദി ക്യാപ്റ്റൻ {reporter_name}! നിങ്ങളുടെ ക്യാച്ച് റിപ്പോർട്ട് ({extracted_data['quantity_kg']:.0f}kg {extracted_data['species']}) വിജയകരമായി രേഖപ്പെടുത്തി.",
-            "bn": f"ধন্যবাদ ক্যাপ্টেন {reporter_name}! আপনার মাছ ধরার রিপোর্ট ({extracted_data['quantity_kg']:.0f}kg {extracted_data['species']}) সফলভাবে যুক্ত হয়েছে।",
-            "gu": f"આભાર કેપ્ટન {reporter_name}! તમારો પકડાયેલ માછલીનો અહેવાલ ({extracted_data['quantity_kg']:.0f}kg {extracted_data['species']}) લાઈવ નકશા પર સાચવવામાં આવ્યો છે.",
-            "en": f"Thank you, Captain {reporter_name}! Your verified catch report of {extracted_data['quantity_kg']:.0f}kg {extracted_data['species']} at {extracted_data['depth_m']:.0f}m has been pinned to the Lehar AI Live Community Map.",
+            "hi": f"धन्यवाद {display_captain}! आपका कैच रिपोर्ट ({qty_str}) वेरिफाई होकर लाइव मैप पर दर्ज हो गया है। INCOIS PFZ एडवाइजरी को वैलिडेट करने के लिए आभार!",
+            "ta": f"நன்றி {display_captain}! உங்கள் மீன்பிடி அறிக்கை ({qty_str}) வெற்றிகரமாக சேமிக்கப்பட்டது. INCOIS PFZ ஆலோசனைக்கு உதவியதற்கு நன்றி!",
+            "te": f"ధన్యవాదాలు {display_captain}! మీ క్యాచ్ రిపోర్ట్ ({qty_str}) విజయవంతంగా నమోదైంది.",
+            "mr": f"धन्यवाद {display_captain}! आपला मासेमारी अहवाल ({qty_str}) थेट नकाशावर जतन केला आहे.",
+            "ml": f"നന്ദി {display_captain}! നിങ്ങളുടെ ക്യാച്ച് റിപ്പോർട്ട് ({qty_str}) വിജയകരമായി രേഖപ്പെടുത്തി.",
+            "bn": f"ধন্যবাদ {display_captain}! আপনার মাছ ধরার রিপোর্ট ({qty_str}) সফলভাবে যুক্ত হয়েছে।",
+            "gu": f"આભાર {display_captain}! તમારો પકડાયેલ માછલીનો અહેવાલ ({qty_str}) લાઈવ નકશા પર સાચવવામાં આવ્યો છે.",
+            "en": f"Thank you, {display_captain}! Your verified catch report of {qty_str} has been pinned to the Lehar AI Live Community Map.",
         }
         extracted_data["localized_reply"] = greetings.get(detected_lang_code, greetings["hi"])
 
@@ -157,10 +228,10 @@ async def parse_and_process_feedback(
         latitude=extracted_data["latitude"],
         longitude=extracted_data["longitude"],
         species=extracted_data["species"],
-        quantity_kg=extracted_data["quantity_kg"],
-        depth_m=extracted_data["depth_m"],
+        quantity_kg=extracted_data["quantity_kg"] if extracted_data["quantity_kg"] is not None else 0.0,
+        depth_m=extracted_data["depth_m"] if extracted_data["depth_m"] is not None else 0.0,
         reporter_id=f"tg_{chat_id}" if chat_id else "web_user",
-        reporter_name=reporter_name,
+        reporter_name=display_captain,
         harbour=extracted_data["harbour"],
         notes=f"Rating: {extracted_data['satisfaction_score']}/5 | {text}"
     )

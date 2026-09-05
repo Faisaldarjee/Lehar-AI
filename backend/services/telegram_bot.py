@@ -254,6 +254,39 @@ def register_or_update_subscriber(
         logger.warning(f"[Telegram DB] Error updating subscriber #{chat_id}: {e}")
 
 
+def format_mariner_name(first_name: Optional[str]) -> str:
+    """
+    Safely format a mariner's name with Captain title without duplicates like 'Captain Captain'.
+    Examples:
+      'Faisal' -> 'Captain Faisal'
+      'Captain Faisal' -> 'Captain Faisal'
+      'Captain' -> 'Captain'
+      '' or None -> 'Captain'
+    """
+    if not first_name or not first_name.strip():
+        return "Captain"
+    clean = first_name.strip()
+    if clean.lower() == "captain":
+        return "Captain"
+    if clean.lower().startswith("captain ") or clean.lower().startswith("capt.") or clean.lower().startswith("capt "):
+        return clean
+    return f"Captain {clean}"
+
+
+def get_subscriber_first_name(chat_id: int, default: str = "Captain") -> str:
+    """Retrieve subscriber's registered first name from DB if available."""
+    try:
+        with get_connection() as conn:
+            row = conn.execute("SELECT first_name FROM telegram_subscribers WHERE chat_id = ?", (chat_id,)).fetchone()
+            if row and row["first_name"] and row["first_name"].strip():
+                fname = row["first_name"].strip()
+                if fname.lower() != "captain":
+                    return fname
+    except Exception:
+        pass
+    return default
+
+
 def get_all_subscribers() -> list[dict]:
     """Retrieve all registered Telegram subscribers for proactive alert delivery."""
     try:
@@ -649,9 +682,12 @@ def _get_contextual_keyboard(
 async def _handle_start_command(client: httpx.AsyncClient, chat_id: int, first_name: str):
     """Handle /start greeting with rich introductory banner & instant voice welcome."""
     username = get_bot_username()
-    safe_first_name = _escape_md(first_name)
+    if not first_name or first_name.strip().lower() == "captain":
+        first_name = get_subscriber_first_name(chat_id, default="Captain")
+    display_name = format_mariner_name(first_name)
+    safe_display_name = _escape_md(display_name)
     welcome_text = (
-        f"🌊 *Namaste {safe_first_name}! Welcome to Lehar AI (@{username})*\n"
+        f"🌊 *Namaste {safe_display_name}! Welcome to Lehar AI (@{username})*\n"
         f"_Know the Sea. Know the Way._\n\n"
         f"I am your *24/7 AI Marine Intelligence Assistant*, developed for **INCOIS & Ministry of Earth Sciences (SIH26040)**.\n\n"
         f"⚡ *What you can do:*\n"
@@ -670,7 +706,7 @@ async def _handle_start_command(client: httpx.AsyncClient, chat_id: int, first_n
 
     # Synthesize crisp welcome voice note
     voice_bytes = await _synthesize_voice_audio(
-        f"Namaste {first_name}! Welcome to Lehar AI Marine Intelligence. You can speak to me in your voice, send your location, or type SOS in an emergency.",
+        f"Namaste {display_name}! Welcome to Lehar AI Marine Intelligence. You can speak to me in your voice, send your location, or type SOS in an emergency.",
         lang="en"
     )
     if voice_bytes:
@@ -694,6 +730,10 @@ async def _handle_sos_command(
         _pending_escalations[chat_id].cancel()
         _pending_escalations.pop(chat_id, None)
 
+    if not first_name or first_name.strip().lower() == "captain":
+        first_name = get_subscriber_first_name(chat_id, default="Captain")
+    display_name = format_mariner_name(first_name)
+
     # 2. Resolve coordinates from parameter or last known subscriber location
     if lat is None or lon is None:
         with get_connection() as conn:
@@ -716,13 +756,13 @@ async def _handle_sos_command(
         chat_id=chat_id,
         latitude=lat,
         longitude=lon,
-        reporter_name=first_name,
+        reporter_name=display_name,
         harbour=harbour_name,
         coast_guard_station=cg_station,
         notes=notes or "Emergency distress beacon received"
     )
 
-    safe_first_name = _escape_md(first_name)
+    safe_first_name = _escape_md(display_name)
     maps_url = f"https://maps.google.com/?q={lat:.4f},{lon:.4f}"
 
     # 4. Instant distress response card to fisherman (<1s)
@@ -949,8 +989,11 @@ async def _handle_location(client: httpx.AsyncClient, chat_id: int, lat: float, 
         await send_telegram_voice(chat_id, voice_bytes, caption="🔊 *Live Ocean Voice Advisory*")
 
 
-async def _handle_voice_message(client: httpx.AsyncClient, chat_id: int, voice_file_id: str):
+async def _handle_voice_message(client: httpx.AsyncClient, chat_id: int, voice_file_id: str, first_name: Optional[str] = None):
     """Processes incoming user voice note via Groq Whisper Large v3 Turbo in <300ms."""
+    if not first_name or first_name.strip().lower() == "captain":
+        first_name = get_subscriber_first_name(chat_id, default="Captain")
+
     await _telegram_request(client, "sendChatAction", {"chat_id": chat_id, "action": "record_voice"})
     
     # Download audio bytes
@@ -982,7 +1025,7 @@ async def _handle_voice_message(client: httpx.AsyncClient, chat_id: int, voice_f
     })
 
     # Run query and send both text + voice response
-    await _handle_text_query(client, chat_id, transcribed_text, send_voice=True)
+    await _handle_text_query(client, chat_id, transcribed_text, send_voice=True, first_name=first_name)
 
 
 async def _handle_callback_query(client: httpx.AsyncClient, callback_query: dict):
@@ -1048,7 +1091,8 @@ async def _handle_callback_query(client: httpx.AsyncClient, callback_query: dict
         if chat_id in _pending_escalations:
             _pending_escalations[chat_id].cancel()
             _pending_escalations.pop(chat_id, None)
-        first_name = message["chat"].get("first_name", "Captain")
+        user_from = callback_query.get("from") or message.get("chat") or {}
+        first_name = user_from.get("first_name") or get_subscriber_first_name(chat_id, default="Captain")
         await _handle_sos_command(client, chat_id, first_name)
     elif data == "cmd_sos_confirm_no":
         # Cancel pending fail-safe timer
@@ -1107,16 +1151,20 @@ async def _handle_text_query(
     chat_id: int,
     text: str,
     send_voice: bool = True,
-    lang: str = "en"
+    lang: str = "en",
+    first_name: Optional[str] = None
 ):
     """Handle free-form natural language query in any language with deep marine physics + voice output."""
     global _total_messages_handled
     _total_messages_handled += 1
 
+    if not first_name or first_name.strip().lower() == "captain":
+        first_name = get_subscriber_first_name(chat_id, default="Captain")
+
     # Check for explicit SOS / Mayday commands
     text_lower = text.lower().strip()
     if text_lower.startswith("/sos") or text_lower.startswith("/mayday"):
-        await _handle_sos_command(client, chat_id, "Captain")
+        await _handle_sos_command(client, chat_id, first_name)
         return
 
     # Check for emergency distress keywords in conversational messages (False-positive immune)
@@ -1151,12 +1199,12 @@ async def _handle_text_query(
             if chat_id in _pending_escalations:
                 _pending_escalations[chat_id].cancel()
 
-            async def _escalate_fail_safe(cid=chat_id, q_text=text):
+            async def _escalate_fail_safe(cid=chat_id, q_text=text, fname=first_name):
                 try:
                     await asyncio.sleep(90)
                     logger.warning(f"[SOS Fail-Safe] 90s timeout expired for #{cid}. Auto-escalating.")
                     await _handle_sos_command(
-                        client, cid, "Captain",
+                        client, cid, fname,
                         notes=f"[AUTO-ESCALATED FAIL-SAFE: 90s timeout after: {q_text[:60]}]"
                     )
                 except asyncio.CancelledError:
@@ -1170,7 +1218,7 @@ async def _handle_text_query(
     # Check if this text is a post-voyage catch report or feedback
     from .feedback_engine import is_likely_catch_feedback
     if is_likely_catch_feedback(text):
-        await _handle_report_command(client, chat_id, "Captain", text)
+        await _handle_report_command(client, chat_id, first_name, text)
         return
 
     # Send typing action
@@ -1282,7 +1330,7 @@ async def _handle_report_command(client: httpx.AsyncClient, chat_id: int, first_
     from .feedback_engine import parse_and_process_feedback
     from .db import get_connection
     
-    clean_text = text.replace("/report", "").strip()
+    clean_text = text.replace("/report", "").replace("/catch", "").strip()
     if not clean_text or len(clean_text) < 3:
         guide_msg = (
             "📝 *How to Report Live Catch & Advisory Feedback:*\n\n"
@@ -1290,7 +1338,7 @@ async def _handle_report_command(client: httpx.AsyncClient, chat_id: int, first_
             "• `/report 400kg Bangda at 20m depth near Mumbai`\n"
             "• `250kg Tuna near Kochi at 50m depth`\n"
             "• `300 kilo Surmai mila 30 meter pe`\n\n"
-            "🎙️ Or send a voice note saying your catch details!"
+            "🎙️ Or send a voice note saying what you caught with quantity in kg!"
         )
         await _telegram_request(client, "sendMessage", {
             "chat_id": chat_id,
@@ -1298,6 +1346,12 @@ async def _handle_report_command(client: httpx.AsyncClient, chat_id: int, first_
             "parse_mode": "Markdown"
         })
         return
+
+    # Resolve accurate subscriber name
+    if not first_name or first_name.strip().lower() == "captain":
+        resolved_name = get_subscriber_first_name(chat_id, default="Captain")
+    else:
+        resolved_name = first_name.strip()
 
     # Extract location if subscriber profile exists
     with get_connection() as conn:
@@ -1310,7 +1364,7 @@ async def _handle_report_command(client: httpx.AsyncClient, chat_id: int, first_
     result = await parse_and_process_feedback(
         text=clean_text,
         chat_id=chat_id,
-        reporter_name=first_name,
+        reporter_name=resolved_name,
         default_lat=lat,
         default_lon=lon,
         default_harbour=harbour
@@ -1318,19 +1372,23 @@ async def _handle_report_command(client: httpx.AsyncClient, chat_id: int, first_
     
     report_id = result.get("report_id", 1)
     species_name = result.get("species", "Pelagic Catch")
-    quantity = result.get("quantity_kg", 50.0)
-    depth = result.get("depth_m", 20.0)
+    quantity = result.get("quantity_kg")
+    depth = result.get("depth_m")
     localized_reply = result.get("localized_reply", "")
     detected_lang = result.get("detected_language", "hi")
     
+    qty_display = f"{quantity:.0f} kg" if quantity and quantity > 0 else "Recorded Catch"
+    depth_display = f"{depth:.0f}m" if depth and depth > 0 else "Surface / Mixed Depth"
+    mariner_display = format_mariner_name(resolved_name)
+
     reply = (
         f"✅ *Catch Report Verified & Logged!* (#FR-{report_id:04d})\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"🎣 *Species:* _{species_name}_\n"
-        f"⚖️ *Quantity:* *{quantity:.0f} kg* | Depth: *{depth:.0f}m*\n"
+        f"⚖️ *Quantity:* *{qty_display}* | Depth: *{depth_display}*\n"
         f"⚓ *Port Sector:* {harbour} ({lat:.3f}°N, {lon:.3f}°E)\n\n"
         f"💬 *Advisory Feedback:*\n_{localized_reply}_\n\n"
-        f"🌐 *Thank you, Captain {first_name}!* Your report has been added to the **Lehar AI Live Community Catch Map Layer** to validate INCOIS PFZ forecasts and assist fellow coastal fishermen."
+        f"🌐 *Lehar AI Live Community Map Updated:* Validating INCOIS PFZ forecasts for {mariner_display} and fellow coastal fishermen."
     )
     
     await _telegram_request(client, "sendMessage", {
@@ -1422,10 +1480,12 @@ async def run_telegram_bot():
                             continue
 
                         chat_id = message["chat"]["id"]
-                        first_name = message["chat"].get("first_name", "Captain")
+                        user_obj = message.get("from") or message.get("chat") or {}
+                        first_name = user_obj.get("first_name", "").strip()
+                        if not first_name:
+                            first_name = get_subscriber_first_name(chat_id, default="Captain")
 
-                        # Auto-Register / Update Subscriber
-                        username_val = message["chat"].get("username", "")
+                        username_val = user_obj.get("username", "")
                         register_or_update_subscriber(chat_id, first_name=first_name, username=username_val)
 
                         # Process Telegram update via unified helper
@@ -1468,8 +1528,12 @@ async def process_telegram_update(client: Optional[httpx.AsyncClient], u: dict):
         return
 
     chat_id = message["chat"]["id"]
-    first_name = message["chat"].get("first_name", "Captain")
-    username_val = message["chat"].get("username", "")
+    user_obj = message.get("from") or message.get("chat") or {}
+    first_name = user_obj.get("first_name", "").strip()
+    if not first_name:
+        first_name = get_subscriber_first_name(chat_id, default="Captain")
+
+    username_val = user_obj.get("username", "")
 
     # Auto-Register / Update Subscriber
     register_or_update_subscriber(chat_id, first_name=first_name, username=username_val)
@@ -1492,13 +1556,13 @@ async def process_telegram_update(client: Optional[httpx.AsyncClient], u: dict):
     # Voice Message (Voice In)
     if "voice" in message:
         voice_file_id = message["voice"]["file_id"]
-        _spawn_task(_handle_voice_message(client, chat_id, voice_file_id))
+        _spawn_task(_handle_voice_message(client, chat_id, voice_file_id, first_name=first_name))
         return
 
     # Audio File Message (Voice In)
     if "audio" in message:
         audio_file_id = message["audio"]["file_id"]
-        _spawn_task(_handle_voice_message(client, chat_id, audio_file_id))
+        _spawn_task(_handle_voice_message(client, chat_id, audio_file_id, first_name=first_name))
         return
 
     # Text Message
@@ -1510,12 +1574,12 @@ async def process_telegram_update(client: Optional[httpx.AsyncClient], u: dict):
         _spawn_task(_handle_start_command(client, chat_id, first_name))
     elif text.startswith("/help"):
         _spawn_task(_handle_start_command(client, chat_id, first_name))
-    elif text.startswith("/report"):
+    elif text.startswith("/report") or text.startswith("/catch"):
         _spawn_task(_handle_report_command(client, chat_id, first_name, text))
     elif text.startswith("/sos") or text.startswith("/mayday"):
         _spawn_task(_handle_sos_command(client, chat_id, first_name))
     else:
-        _spawn_task(_handle_text_query(client, chat_id, text, send_voice=True))
+        _spawn_task(_handle_text_query(client, chat_id, text, send_voice=True, first_name=first_name))
 
 
 async def run_guardian_proactive_watchdog():
