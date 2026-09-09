@@ -627,7 +627,7 @@ export default function App() {
 
       {/* Clean Footer Bar */}
       <footer className="border-t border-abyssal-900 bg-abyssal-950/90 px-4 py-1.5 text-center text-[10px] text-slate-500 shrink-0">
-        <p>Lehar AI 1.0 • Know the Sea. Know the Way. • Team Ctrl Alt Elites • Developed for INCOIS & Ministry of Earth Sciences (SIH26040)</p>
+        <p>Lehar AI 1.0 • Know the Sea. Know the Way. • Team Ctrl Alt Elites • Developed for INCOIS & Ministry of Earth Sciences (SIH26067)</p>
       </footer>
 
     </div>

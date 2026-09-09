@@ -1,5 +1,5 @@
 # ==============================================================================
-# Lehar AI — Multi-Stage Production Dockerfile (SIH26040)
+# Lehar AI — Multi-Stage Production Dockerfile (SIH26067)
 # Stage 1: Build React 19 + TypeScript + Vite Frontend Static Bundle
 # Stage 2: Serve Unified FastAPI Backend + Static SPA from Python 3.12 Slim
 # ==============================================================================

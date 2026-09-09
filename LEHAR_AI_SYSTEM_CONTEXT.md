@@ -1,5 +1,5 @@
 # LEHAR AI — Complete System Context & Technical Architecture Blueprint
-> **SIH Problem Statement (SIH26040)**: Autonomous Conversational Ocean Intelligence & Multi-Modal Marine Advisory Platform for INCOIS (Indian National Centre for Ocean Information Services) & Ministry of Earth Sciences (MoES).
+> **SIH Problem Statement (SIH26067)**: Develop a web-based interactive 3D visualization platform that integrates numerical ocean model outputs and in-situ observations (Theme: Disaster Management) for INCOIS & Ministry of Earth Sciences (MoES).
 
 ---
 

@@ -111,7 +111,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div
           className="flex items-center space-x-3 cursor-pointer group shrink-0 select-none"
           onClick={() => onSelectMode('chat')}
-          title="Lehar AI — SIH26040 | Team: Ctrl Alt Elites | INCOIS ARGO Intelligence"
+          title="Lehar AI — SIH26067 | Team: Ctrl Alt Elites | INCOIS ARGO Intelligence"
         >
           <div className="relative ocean-breathing">
             <img

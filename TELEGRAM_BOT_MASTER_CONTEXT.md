@@ -5,7 +5,7 @@
 
 ## 1. Executive Summary & Problem Context
 
-* **Project:** Lehar AI — "Know the Sea. Know the Way" (SIH Problem Statement: SIH26040).
+* **Project:** Lehar AI — "Know the Sea. Know the Way" (SIH Problem Statement: SIH26067).
 * **Target Users:** Indian artisanal, motorized, and mechanized coastal fishermen (operating out of ports such as Sassoon Dock/Mumbai, Cochin, Chennai, Visakhapatnam, Veraval, Mangalore, etc.) and INCOIS ocean scientists.
 * **Core Problem:** 
   * Traditional marine advisory portals rely on desktop web GIS dashboards and static PDF bulletins that coastal fishermen cannot easily interpret while navigating rough seas.

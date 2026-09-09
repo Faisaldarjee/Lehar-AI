@@ -690,7 +690,7 @@ async def _handle_start_command(client: httpx.AsyncClient, chat_id: int, first_n
     welcome_text = (
         f"🌊 *Namaste {safe_display_name}! Welcome to Lehar AI (@{username})*\n"
         f"_Know the Sea. Know the Way._\n\n"
-        f"I am your *24/7 AI Marine Intelligence Assistant*, developed for **INCOIS & Ministry of Earth Sciences (SIH26040)**.\n\n"
+        f"I am your *24/7 AI Marine Intelligence Assistant*, developed for **INCOIS & Ministry of Earth Sciences (SIH26067)**.\n\n"
         f"⚡ *What you can do:*\n"
         f"• 🎙️ *Send a Voice Note* in Hindi, Marathi, Tamil, Telugu or English\n"
         f"• 💬 *Ask any ocean question* in natural text\n"
@@ -1085,7 +1085,7 @@ async def _handle_callback_query(client: httpx.AsyncClient, callback_query: dict
     elif data == "cmd_about":
         about_text = (
             "🏆 *Lehar AI — Grand Finale Edition*\n"
-            "• *Team:* Ctrl Alt Elites (SIH26040)\n"
+            "• *Team:* Ctrl Alt Elites (SIH26067)\n"
             "• *Ministry:* Ministry of Earth Sciences & INCOIS\n"
             "• *Tech:* 72,000+ In-Situ ARGO NetCDF Measurements + NOAA Daily SST + NASA VIIRS Chlorophyll-a + Groq Llama 3.3 70B.\n"
             "• *Website:* `http://localhost:5173`"
@@ -1445,14 +1445,14 @@ async def run_telegram_bot():
             await _telegram_request(client, "setMyDescription", {
                 "description": (
                     "🌊 Lehar AI (@LeharAIBot) — Know the Sea. Know the Way.\n\n"
-                    "India's First Conversational Marine Intelligence Assistant developed for INCOIS & Ministry of Earth Sciences (SIH26040).\n\n"
+                    "India's First Conversational Marine Intelligence Assistant developed for INCOIS & Ministry of Earth Sciences (SIH26067).\n\n"
                     "🎙️ Send a voice note or ask questions in 9 Indic languages, or share your GPS location to get your nearest ARGO Float & Gold Fishing Zone!"
                 )
             })
 
             # Setup short description
             await _telegram_request(client, "setMyShortDescription", {
-                "short_description": "🌊 24/7 Voice & Multimodal Ocean Intelligence for Coastal Fishermen (INCOIS / SIH26040)."
+                "short_description": "🌊 24/7 Voice & Multimodal Ocean Intelligence for Coastal Fishermen (INCOIS / SIH26067)."
             })
         else:
             logger.warning("[Telegram Bot] Failed to verify bot token with Telegram API.")

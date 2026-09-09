@@ -1,7 +1,7 @@
 # LEHAR AI (लहर) — Empirical Oceanographic Research, Multi-Modal Architecture & Scientific Validation Dossier
 
-**Smart India Hackathon 2026** | **Problem Statement:** SIH26040  
-**Problem Statement Title:** Autonomous Conversational Ocean Intelligence & Multi-Modal Marine Advisory Platform  
+**Smart India Hackathon 2026** | **Problem Statement:** SIH26067 (Theme: Disaster Management)  
+**Problem Statement Title:** Develop a web-based interactive 3D visualization platform that integrates numerical ocean model outputs and in-situ observations  
 **Team ID:** SIH2654 | **Team Name:** Ctrl Alt Elites  
 **Repository & Source Code:** [github.com/Faisaldarjee/Lehar-AI](https://github.com/Faisaldarjee/Lehar-AI)  
 **Live Production Prototype:** [lehar-ai.onrender.com](https://lehar-ai.onrender.com)  

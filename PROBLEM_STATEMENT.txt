@@ -1,13 +1,14 @@
 # SIH 2026 — Problem Statement
 
-- **Problem Statement ID:** SIH26040
-- **Problem Statement Title:** FloatChat – AI-Powered Conversational Interface for ARGO Ocean Data Discovery and Visualization
-- **Theme:** Miscellaneous (Ocean Technology)
+- **Problem Statement ID:** SIH26067
+- **Problem Statement Title:** Develop a web-based interactive 3D visualization platform that integrates numerical ocean model outputs and in-situ observations.
+- **Theme:** Disaster Management
+- **Organization:** Ministry of Earth Sciences (MoES) / INCOIS
 - **PS Category:** Software
 - **Team Name:** Ctrl Alt Elites
 
 ## Description
-Build an AI-powered conversational interface (FloatChat) that makes 4000+ Argo ocean float data accessible to non-technical users through natural language queries (voice + text), multilingual support (Hindi, Tamil, Telugu, English), and interactive 3D ocean visualizations.
+Develop an advanced web-based interactive 3D platform that integrates numerical ocean model outputs (SST, current vectors, chlorophyll, waves) with in-situ observational datasets (Argo floats, moored buoys) at standardized daily temporal and 0.25° spatial resolution, enabling dynamic exploration of ocean state variables and proactive disaster management across the Arabian Sea and Bay of Bengal.
 
 ## Core Features (Approved)
 1. OceanVoice — Voice-first interface (Web Speech API + Whisper)

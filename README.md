@@ -2,7 +2,7 @@
 
 # 🌊 Lehar AI — Know the Sea. Know the Way.
 ### AI-Powered Conversational Intelligence & Multimodal Discovery for Global ARGO Ocean Data
-**Smart India Hackathon 2026 • Problem Statement SIH26040 • Ministry of Earth Sciences (MoES / INCOIS)**
+**Smart India Hackathon 2026 • Problem Statement SIH26067 • Ministry of Earth Sciences (MoES / INCOIS)**
 
 <p align="center">
   <img src="public/logo.png" alt="Lehar AI Logo" width="160" style="border-radius: 24px;" />
@@ -108,7 +108,7 @@ Visit **`http://localhost:5173`** to access the live dashboard.
 ---
 
 ## 👥 Team: Ctrl Alt Elites
-* **Problem Statement:** SIH26040 — AI-Powered Conversational Interface for ARGO Ocean Data Discovery and Visualization
+* **Problem Statement:** SIH26067 — Develop a web-based interactive 3D visualization platform that integrates numerical ocean model outputs and in-situ observations (Theme: Disaster Management)
 * **Institution/Organization:** INCOIS • Ministry of Earth Sciences (MoES), Govt. of India
 
 ---
