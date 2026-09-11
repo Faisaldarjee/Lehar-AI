@@ -49,15 +49,15 @@ def create_architecture_diagram():
 
     # 2. Top Header Section
     draw.text((60, 36), "LEHAR AI", fill=(0, 242, 254, 255), font=font_title)
-    draw.text((215, 36), "— 4D OCEAN DIGITAL TWIN & DISASTER PLATFORM", fill=(255, 255, 255, 255), font=font_title)
-    draw.text((60, 78), "End-to-End Enterprise Architecture: Integrating Numerical Ocean Models & In-Situ Observations for Coastal Disaster Resilience", fill=(148, 163, 184, 255), font=font_header_sub)
+    draw.text((215, 36), "— OCEANLENS 3D PLATFORM (लहर)", fill=(255, 255, 255, 255), font=font_title)
+    draw.text((60, 78), "Web-Based Interactive 3D Platform Integrating Numerical Ocean Models & In-Situ Observations for Disaster Resilience", fill=(148, 163, 184, 255), font=font_header_sub)
 
     # Top Right SIH 2026 Official Badge
     badge_x1, badge_y1, badge_x2, badge_y2 = 1350, 28, 1860, 100
     draw.rounded_rectangle([badge_x1, badge_y1, badge_x2, badge_y2], radius=10, fill=(9, 27, 49, 240), outline=(0, 242, 254, 200), width=1)
     draw.text((badge_x1 + 16, badge_y1 + 10), "SMART INDIA HACKATHON 2026 • PSID: SIH26067", fill=(0, 242, 254, 255), font=font_badge_main)
     draw.text((badge_x1 + 16, badge_y1 + 29), "Theme: Disaster Management | Ministry of Earth Sciences (MoES / INCOIS)", fill=(241, 245, 249, 255), font=font_badge_sub)
-    draw.text((badge_x1 + 16, badge_y1 + 47), "Team: Ctrl Alt Elites | Motto: Know the Sea. Know the Way.", fill=(148, 163, 184, 255), font=font_badge_sub)
+    draw.text((badge_x1 + 16, badge_y1 + 47), "Team: Ctrl Alt Elites (SIH2654) | OceanLens 3D", fill=(148, 163, 184, 255), font=font_badge_sub)
 
     # 3. Five Architectural Columns Layout
     COL_WIDTH = 330
@@ -69,132 +69,156 @@ def create_architecture_diagram():
     columns_meta = [
         {
             "num": "01",
-            "title": "OBSERVATION & MODEL INGESTION",
+            "title": "DATA PIPELINE & SOURCES",
             "accent": (0, 242, 254),      # Cyan
             "cards": [
                 {
                     "tag": "IN-SITU OBSERVATIONS",
-                    "title": "INCOIS / ARGO GDAC",
-                    "desc": "Robotic profiling floats measuring subsurface CTD columns (0m to 2,000m depth).",
-                    "specs": ["• 646+ Arabian Sea & Bay of Bengal Profiles", "• 72,000+ Depth Telemetry Points", "• Real-time NetCDF Ingestion Engine"]
+                    "title": "Argo & Gliders (Ifremer FTP)",
+                    "desc": "Robotic profiling floats & autonomous gliders measuring depth columns (0-2000m).",
+                    "specs": ["• 646+ Arabian Sea & Bay of Bengal Profiles", "• 72,000+ CTD & BGC Telemetry Points", "• Real-time NetCDF Ingestion Engine"]
                 },
                 {
-                    "tag": "NUMERICAL SATELLITE MODELS",
-                    "title": "NOAA Multi-Scale Ultra SST",
-                    "desc": "Continuous thermal fronts & Sea Surface Temperature gridded numerical model.",
-                    "specs": ["• 0.25° & 1km Spatial Resolution", "• Daily Synoptic Cloud-Free Interpolation"]
+                    "tag": "NUMERICAL OCEAN MODELS",
+                    "title": "INCOIS LAS & ERDDAP",
+                    "desc": "Official ocean model outputs from Live Access Server & ERDDAP servers.",
+                    "specs": ["• High-Resolution Ocean State Forecast", "• 0.25° Standardized Gridded Fields"]
                 },
                 {
-                    "tag": "BIOLOGICAL OCEAN COLOR",
-                    "title": "NASA VIIRS / MODIS",
-                    "desc": "Ocean color spectrometry tracking marine phytoplankton biomass food fronts.",
-                    "specs": ["• Spectral Chlorophyll-a Grids", "• Pelagic Food Biomass Detection"]
+                    "tag": "GLOBAL OCEAN PHYSICS",
+                    "title": "Copernicus Marine Service",
+                    "desc": "Multi-layer hydrodynamics, 3D salinity, and multi-depth current velocities.",
+                    "specs": ["• 3D U/V Ocean Current Vectors", "• Subsurface Thermohaline Fields"]
                 },
                 {
-                    "tag": "HYDRODYNAMICS & WAVES",
-                    "title": "ECMWF & Open-Meteo",
-                    "desc": "High-resolution marine wave, swell, and wind dynamics forecast feeds.",
-                    "specs": ["• Significant Wave Height (Hs) & Direction", "• Real-Time Coastal Wind Vectors"]
+                    "tag": "REMOTE SENSING MODELS",
+                    "title": "NOAA MUR SST & NASA VIIRS",
+                    "desc": "Multi-scale Sea Surface Temperature grids and ocean color phytoplankton biomass.",
+                    "specs": ["• Daily Cloud-Free Ultra-High Res SST", "• Chlorophyll-a Biomass Fronts"]
                 }
             ]
         },
         {
             "num": "02",
-            "title": "STANDARDIZATION & VALIDATION",
+            "title": "PARSING, ZARR STORE & XAI",
             "accent": (45, 212, 191),     # Teal
             "cards": [
                 {
-                    "tag": "PIPELINE COMPLIANCE",
-                    "title": "Standardized 0.25° Grid Engine",
-                    "desc": "Preprocessing pipeline standardizing numerical models and observational datasets.",
-                    "specs": ["• Daily Synoptic Temporal Resampling", "• 0.25° x 0.25° (~27 km) Regular Grid", "• In-Memory Spatial KD-Tree Indexing"]
+                    "tag": "CF METADATA COMPLIANCE",
+                    "title": "xarray + PyNIO Parser",
+                    "desc": "High-throughput NetCDF parser compliant with international CF-1.8 conventions.",
+                    "specs": ["• Modular Multi-Variable Ingestion Layer", "• Sub-second Dimensional Slicing", "• Zero Data Corruption Validation"]
                 },
                 {
-                    "tag": "SCIENTIFIC REPUTATION",
+                    "tag": "STANDARDIZED SPATIAL GRID",
+                    "title": "0.25° Resampling Engine",
+                    "desc": "Harmonizes heterogeneous satellite models and observational float tracks.",
+                    "specs": ["• 0.25° x 0.25° (~27 km) Regular Grid", "• In-Memory Spatial KD-Tree Indexing", "• Daily Synoptic Time-Step Sync"]
+                },
+                {
+                    "tag": "SCIENTIFIC VERIFICATION",
                     "title": "Model vs In-Situ Validation",
-                    "desc": "Automated verification comparing numerical ocean models against ground-truth ARGO floats.",
-                    "specs": ["• Real-Time Residual Delta (|Model - Float|)", "• Root Mean Square Error (RMSE) Calculus", "• Historical Drift & Calibration Tracking"]
+                    "desc": "Rigorous verification comparing numerical model predictions against ground-truth floats.",
+                    "specs": ["• Real-Time Residual Delta (|Model - Float|)", "• Root Mean Square Error (RMSE) Calculus", "• Historical Calibration & Sensor Drift"]
                 },
                 {
-                    "tag": "DATA PERSISTENCE",
-                    "title": "High-Performance SQLite WAL",
-                    "desc": "Optimized geospatial store with sub-millisecond query execution and zero bloat.",
-                    "specs": ["• Write-Ahead Logging (WAL) Mode", "• <5ms Read Latency for 72k+ Points", "• Zero-Bloat Edge-Compatible Store"]
+                    "tag": "CLOUD-NATIVE PERSISTENCE",
+                    "title": "NetCDF Store (xarray / Zarr)",
+                    "desc": "Chunked array storage backed by high-speed SQLite Write-Ahead Logging (WAL).",
+                    "specs": ["• Optimized Cloud Zarr Chunks", "• <5ms Read Latency for 72k+ Points", "• Edge-Compatible Lightweight Footprint"]
                 }
             ]
         },
         {
             "num": "03",
-            "title": "DISASTER & OCEAN INTELLIGENCE",
-            "accent": (251, 146, 60),     # Coral/Orange
+            "title": "FASTAPI, OPENDAP & OGC",
+            "accent": (59, 130, 246),     # Blue
             "cards": [
                 {
-                    "tag": "DISASTER EARLY WARNING",
-                    "title": "Marine Heatwave Detector",
-                    "desc": "Hierarchical thermal anomaly classification preventing fish kills and coral bleaching.",
-                    "specs": ["• Hobday et al. (2016) Categorization", "• 3D Depth Heat Penetration to 60m", "• Proactive Alert Broadcast Engine"]
+                    "tag": "RESTFUL MICROSERVICES",
+                    "title": "FastAPI (Python 3.12) + Uvicorn",
+                    "desc": "Asynchronous high-performance API backend powering interactive web queries.",
+                    "specs": ["• Sub-50ms Microservice Response Time", "• Asynchronous Non-Blocking Workers", "• Auto-Generated OpenAPI / Swagger Docs"]
                 },
                 {
-                    "tag": "DISASTER RISK REDUCTION",
-                    "title": "Cyclone Fuel & TCHP Engine",
-                    "desc": "Tropical Cyclone Heat Potential modeled via deep 26°C isotherm integration.",
-                    "specs": ["• Cyclone Fuel Energy Index", "• Automated Storm Surge Geofencing", "• PFZ Hazard Suppression Protocol"]
+                    "tag": "SCIENTIFIC INTEROPERABILITY",
+                    "title": "OPeNDAP Data Server",
+                    "desc": "Standard scientific protocol for direct remote array data slicing and retrieval.",
+                    "specs": ["• Remote NetCDF Array Subsetting", "• Zero-Download In-Browser Streaming", "• Direct Python & R Client Compatibility"]
                 },
                 {
-                    "tag": "LIFE-SAVING GUARDIAN",
-                    "title": "Autonomous SOS Rescue Mesh",
-                    "desc": "Sub-second emergency distress pipeline bypassing LLMs for maximum reliability.",
-                    "specs": ["• <1.0s Direct Indian Coast Guard (1554)", "• Offshore Crowd-Rescue Radio Mesh", "• 90s Inactivity Fail-Safe Escalation"]
+                    "tag": "GEOSPATIAL COMPLIANCE",
+                    "title": "OGC WMS / WCS Engine",
+                    "desc": "Open Geospatial Consortium standard Web Map & Coverage Services layer.",
+                    "specs": ["• Standardized Map Tiles (WMS 1.3.0)", "• Gridded Coverage Data Slices (WCS)", "• GIS Interoperability (QGIS / ArcGIS)"]
+                },
+                {
+                    "tag": "0% HALLUCINATION GUARANTEE",
+                    "title": "AST Sandboxed NL2SQL",
+                    "desc": "Deterministic Python calculation engine wrapped with Groq LLaMA 70B.",
+                    "specs": ["• AST Grammar Syntax Whitelist", "• Read-Only Mathematical Verification", "• Facts-In, Narration-Out AI Delivery"]
                 }
             ]
         },
         {
             "num": "04",
-            "title": "INTERACTIVE 3D WEBGL ENGINE",
+            "title": "THREE.JS / CESIUM 3D HERO",
             "accent": (168, 85, 247),     # Purple
             "cards": [
                 {
-                    "tag": "SIH26067 CORE HERO",
-                    "title": "Three.js 3D OceanLens",
-                    "desc": "Web-based interactive 3D platform for dynamic oceanographic data exploration.",
-                    "specs": ["• Volumetric Depth Stratification (0-2000m)", "• Client-side 60 FPS WebGL Rendering", "• Browser-Native (Zero Desktop Software)"]
+                    "tag": "CORE SIH26067 SOLUTION",
+                    "title": "3D Volumetric Ocean Renderer",
+                    "desc": "Browser-native Three.js / Cesium.js WebGL engine running at 60 FPS.",
+                    "specs": ["• Full Water Column Stratification (0-2000m)", "• Zero-Client Install (Pure Web Browser)", "• GPU Instancing & Dynamic LOD Meshes"]
                 },
                 {
                     "tag": "VOLUMETRIC SLICING",
-                    "title": "Dynamic Thermocline Cross-Section",
-                    "desc": "Interactive volumetric slicing across temperature and salinity isosurfaces.",
-                    "specs": ["• Mixed Layer Depth (MLD) Boundary", "• Thermocline Gradient (dT/dz) Profiling", "• Interactive Depth Cutter Tool"]
+                    "title": "Thermocline Isosurface Slicer",
+                    "desc": "Interactive depth-slicing and thermocline gradient (dT/dz) analysis tool.",
+                    "specs": ["• Dynamic Depth-Slice Navigation", "• Mixed Layer Depth (MLD) Boundary", "• Customizable Colormap & Exaggeration"]
                 },
                 {
-                    "tag": "VECTOR FLUID DYNAMICS",
-                    "title": "3D Current Streamlines",
-                    "desc": "Real-time particle advection displaying surface and subsurface current vectors.",
-                    "specs": ["• Directional Flow Particle Field", "• Multi-Depth Current Shear Vectors", "• Interactive Probe Hover Telemetry"]
+                    "tag": "3D VECTOR FLUID DYNAMICS",
+                    "title": "Current Streamlines & Particles",
+                    "desc": "Real-time particle advection showing surface and subsurface ocean currents.",
+                    "specs": ["• Directional Flow Velocity Particles", "• Multi-Depth Shear Vector Fields", "• Interactive Spatial Probe Hover Tool"]
+                },
+                {
+                    "tag": "INSTRUMENT OVERLAY",
+                    "title": "Float & Glider Marker Engine",
+                    "desc": "Interactive 3D markers for Argo, Gliders, CTD & BGC observation stations.",
+                    "specs": ["• Click-to-Inspect Depth Profile Charts", "• Recharts Telemetry Visualizations", "• Historical Trajectory Track Overlay"]
                 }
             ]
         },
         {
             "num": "05",
-            "title": "MULTIMODAL LAST-MILE CITIZEN ACCESS",
-            "accent": (52, 211, 153),     # Emerald
+            "title": "DISASTER INTELLIGENCE & ACCESS",
+            "accent": (251, 146, 60),     # Coral/Orange
             "cards": [
                 {
-                    "tag": "0% HALLUCINATION GUARANTEE",
-                    "title": "Facts-In Narration-Out AI",
-                    "desc": "Deterministic Python calculation with Groq LLaMA 70B wrapping and AST validation.",
-                    "specs": ["• Regex Numeric Verification Gate", "• Multi-Model Cascading (2.0s Cap)", "• Zero Fabricated Ocean Physics"]
+                    "tag": "DISASTER EARLY WARNING",
+                    "title": "Marine Heatwave (MHW) Radar",
+                    "desc": "Hierarchical thermal anomaly detector preventing fish mortality and coral bleaching.",
+                    "specs": ["• Hobday et al. (2016) Cat I-IV Classifier", "• 3D Heat Penetration Depth Slicing", "• Proactive INCOIS Advisory Alerts"]
                 },
                 {
-                    "tag": "VOICE DEMOCRATIZATION",
-                    "title": "9 Indian Languages Voice Gateway",
-                    "desc": "High-accuracy regional voice interaction for coastal fishing communities.",
-                    "specs": ["• Groq Whisper Large v3 (<300ms STT)", "• Edge-TTS Neural Dialect Synthesis", "• Native Indic Scripts & Romanized"]
+                    "tag": "CYCLONE DISASTER MITIGATION",
+                    "title": "Cyclone Fuel & TCHP Engine",
+                    "desc": "Tropical Cyclone Heat Potential calculated by integrating 26°C isotherm depth.",
+                    "specs": ["• Cyclone Fuel Energy Index", "• Automated Storm Surge Geofencing", "• Rapid Coastal Evacuation Advisories"]
                 },
                 {
-                    "tag": "CITIZEN ACCESS CHANNELS",
-                    "title": "Omnichannel Deployment",
-                    "desc": "Zero-app download delivery for traditional mariners and coastal officers.",
-                    "specs": ["• Responsive Web 3D Dashboard", "• Live Telegram Bot (@LeharAIBot)", "• WhatsApp Business API Ready"]
+                    "tag": "LIFE-SAVING GUARDIAN",
+                    "title": "Coast Guard 1554 SOS Mesh",
+                    "desc": "Sub-second emergency distress pipeline bypassing LLM latencies.",
+                    "specs": ["• <1.0s Direct Indian Coast Guard (1554)", "• Offshore Radio Mesh Emergency Relay", "• 90s Inactivity Fail-Safe Escalation"]
+                },
+                {
+                    "tag": "OMNICHANNEL OUTREACH",
+                    "title": "9 Indian Languages Gateway",
+                    "desc": "Public science communication, e-learning and field access across coastal India.",
+                    "specs": ["• Groq Whisper v3 (<300ms STT) + TTS", "• Telegram Bot (@LeharAIBot) & WebGIS", "• INCOIS Outreach & Exhibition Ready"]
                 }
             ]
         }
@@ -266,13 +290,13 @@ def create_architecture_diagram():
     draw.rounded_rectangle([START_X, footer_y1, WIDTH - START_X, footer_y2], radius=8, fill=(7, 18, 33, 245), outline=(22, 53, 87, 230), width=1)
 
     items = [
-        "[+] Docker Compose Containerized",
-        "[+] AST Read-Only SQL Sandboxing",
+        "[+] Browser-Native WebGL 60 FPS",
+        "[+] CF-1.8 & OGC WMS/WCS Compliant",
         "[+] 0.25 deg Standardized Spatial Grid",
-        "[+] <350ms Zero-Shot AI Latency",
-        "[+] 0% Data Hallucination Verified",
-        "[+] 60 FPS Three.js WebGL Engine",
-        "[+] 19/19 Pytest Test Suite Passed"
+        "[+] <5ms Telemetry Read Latency",
+        "[+] Zero-Client Desktop Install",
+        "[+] Docker Compose Containerized",
+        "[+] 19/19 Pytest Suite Passed"
     ]
     item_gap = (WIDTH - 2 * START_X) // len(items)
     for i, item in enumerate(items):
